@@ -228,13 +228,19 @@ static int fan54015_charger_set_safety_cur(struct fan54015_charger_info *info, u
 				    reg_val << FAN54015_REG_CURRENT_MASK_SHIFT);
 }
 
+extern int sc27xx_fgu_bat_id;
+
 static int fan54015_charger_hw_init(struct fan54015_charger_info *info)
 {
 	struct sprd_battery_info bat_info = {};
 	int voltage_max_microvolt;
 	int ret;
+	int num = 0;
 
-	ret = sprd_battery_get_battery_info(info->psy_usb, &bat_info);
+	if (sc27xx_fgu_bat_id == 2)
+		num = 1;
+
+	ret = sprd_battery_get_battery_info(info->psy_usb, &bat_info, num);
 	if (ret) {
 		dev_warn(info->dev, "no battery information is supplied\n");
 
