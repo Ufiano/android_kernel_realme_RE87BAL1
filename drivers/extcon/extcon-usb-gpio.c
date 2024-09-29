@@ -91,7 +91,7 @@ static void usb_extcon_detect_cable(struct work_struct *work)
 			extcon_set_state_sync(info->edev, EXTCON_USB, true);
 	}
 #endif
-	//ODM_HQ_EDIT 2021.11.09 Add OTG control
+	//OPLUS_EDIT 2021.11.09 Add OTG control
 	id = gpiod_get_value_cansleep(info->id_gpiod);
 	vbus = gpiod_get_value_cansleep(info->vbus_gpiod);
 	if (info->id_gpiod && cur_irq == info->id_irq) {
@@ -235,7 +235,7 @@ static int usb_extcon_probe(struct platform_device *pdev)
 			dev_err(dev, "failed to request handler for ID IRQ\n");
 			return ret;
 		}*/
-		//ODM_HQ_EDIT 2021.11.09 Add OTG control
+		//OPLUS_EDIT 2021.11.09 Add OTG control
 #ifdef VENDOR_KERNEL
 		addr = ioremap(0x647105c8, 128);
 #else
@@ -280,7 +280,7 @@ static int usb_extcon_probe(struct platform_device *pdev)
 	return 0;
 }
 
-//ODM_HQ_EDIT 2021.11.09 Add OTG control
+//OPLUS_EDIT 2021.11.09 Add OTG control
 void otg_switch_mode(int value)
 {
 	int ret = 0;

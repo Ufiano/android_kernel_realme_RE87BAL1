@@ -1,6 +1,6 @@
 /***********************************************************
 ** Copyright (C), 2008-2016, OPPO Mobile Comm Corp., Ltd.
-** ODM_WT_EDIT
+** OPLUS_EDIT
 ** File: - hardware_info.h
 ** Description: headerfile  for hardware infomation
 **
@@ -29,7 +29,7 @@ enum{
 #ifdef OPLUS_FEATURE_CAMERA_COMMON
 	HARDWARE_BACK_MACRO_CAM,
 #endif
-#ifdef ODM_WT_EDIT
+#ifdef OPLUS_EDIT
 	HARDWARE_WIDE_ANGLE_CAM,
 	HARDWARE_MONO_CAM,
 #endif
@@ -51,7 +51,7 @@ enum{
 	HARDWARE_BACK_MACRO_CAM_MOUDULE_ID,
 #endif
 	HARDWARE_FRONT_SUB_CAM_MOUDULE_ID,
-#ifdef ODM_WT_EDIT
+#ifdef OPLUS_EDIT
 	HARDWARE_WIDE_ANGLE_CAM_MOUDULE_ID,
 	HARDWARE_MONO_CAM_MOUDULE_ID,
 #endif
@@ -61,7 +61,7 @@ enum{
 	HARDWARE_BACK_CAM_SENSORID,
 	HARDWARE_BACK_SUBCAM_SENSORID,
 	HARDWARE_FRONT_CAM_SENSORID,
-#ifdef ODM_WT_EDIT
+#ifdef OPLUS_EDIT
 	HARDWARE_MONO_CAM_SENSORID,
 	HARDWARE_WIDE_ANGLE_CAM_SENSORID,
 #endif
@@ -116,7 +116,7 @@ enum{
 #define HARDWARE_MACRO_CAM_EFUSEID_GET              _IOWR(HARDWARE_ID, 0x3E, char[HARDWARE_MAX_ITEM_LONGTH])
 #define HARDWARE_MACRO_CAM_SENSORID_GET             _IOWR(HARDWARE_ID, 0x3F, char[HARDWARE_MAX_ITEM_LONGTH])
 #else
-#ifdef ODM_WT_EDIT
+#ifdef OPLUS_EDIT
 #define HARDWARE_WIDE_ANGLE_CAM_GET                 _IOWR(HARDWARE_ID, 0x34, char[HARDWARE_MAX_ITEM_LONGTH])            //  wide_angle
 #define HARDWARE_WIDE_ANGLE_CAM_MOUDULE_ID_GET      _IOWR(HARDWARE_ID, 0x35, char[HARDWARE_MAX_ITEM_LONGTH])            //  wide_angle module
 #define HARDWARE_WIDE_ANGLE_CAM_SENSORID_GET        _IOWR(HARDWARE_ID, 0x37, char[HARDWARE_MAX_ITEM_LONGTH])            //  wide_angle sensorId

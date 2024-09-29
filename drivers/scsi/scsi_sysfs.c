@@ -51,8 +51,6 @@
 #define WT_GET_UFS_SIZE_2TB              2048
 
 struct gendisk *ufs_disk[SD_NUM];
-
-
 static struct device_type scsi_dev_type;
 
 static const struct {
@@ -901,6 +899,14 @@ store_state_field(struct device *dev, struct device_attribute *attr,
 	}
 
 	mutex_lock(&sdev->state_mutex);
+	switch (sdev->sdev_state) {
+	case SDEV_RUNNING:
+	case SDEV_OFFLINE:
+		break;
+	default:
+		mutex_unlock(&sdev->state_mutex);
+		return -EINVAL;
+	}
 	if (sdev->sdev_state == SDEV_RUNNING && state == SDEV_RUNNING) {
 		ret = 0;
 	} else {

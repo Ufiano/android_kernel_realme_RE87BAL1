@@ -83,7 +83,6 @@
   clk_disable
   clk_enable
   clk_fixed_factor_ops
-  clk_get
   clk_get_rate
   __clk_is_enabled
   clk_prepare
@@ -138,6 +137,8 @@
   __crypto_xor
   csum_ipv6_magic
   csum_partial
+  debugfs_attr_read
+  debugfs_attr_write
   debugfs_create_bool
   debugfs_create_dir
   debugfs_create_file
@@ -349,7 +350,6 @@
   handle_edge_irq
   handle_level_irq
   have_governor_per_policy
-  hex_dump_to_buffer
   hdmi_drm_infoframe_pack_only
   i2c_del_driver
   i2c_register_driver
@@ -459,8 +459,8 @@
   kernel_kobj
   kernel_neon_begin
   kernel_neon_end
+  kernel_sock_shutdown
   kern_mount
-  kern_path
   kern_unmount
   __kfifo_alloc
   __kfifo_free
@@ -575,6 +575,7 @@
   of_device_is_available
   of_device_is_compatible
   of_dev_put
+  of_dma_is_coherent
   of_find_compatible_node
   of_find_device_by_node
   of_find_node_by_name
@@ -612,6 +613,7 @@
   page_endio
   page_get_link
   page_mapping
+  PageMovable
   panic
   param_ops_charp
   param_ops_uint
@@ -753,7 +755,6 @@
   regmap_read
   regmap_update_bits_base
   regmap_write
-  regmap_bulk_write
   regulator_disable
   regulator_disable_regmap
   regulator_enable
@@ -762,7 +763,6 @@
   regulator_is_enabled_regmap
   regulator_list_voltage_linear
   regulator_map_voltage_linear
-  regulator_set_load
   regulator_set_voltage_sel_regmap
   release_firmware
   remap_pfn_range
@@ -856,7 +856,6 @@
   softnet_data
   __spi_alloc_controller
   spi_setup
-  spi_unregister_device
   sprintf
   sscanf
   __stack_chk_fail
@@ -875,7 +874,6 @@
   strncpy_from_user
   strnlen
   strnstr
-  strrchr
   strstr
   submit_bio
   __sw_hweight32
@@ -1022,14 +1020,11 @@
   vm_map_ram
   vm_unmap_aliases
   vm_unmap_ram
-  vprintk
-  vscnprintf
   vsnprintf
   vunmap
   wait_for_completion
   wait_for_completion_interruptible
   wait_for_completion_interruptible_timeout
-  wait_for_completion_killable_timeout
   wait_for_completion_timeout
   __wake_up
   wake_up_bit
@@ -1490,10 +1485,8 @@
   mmc_send_tuning
   mmc_cmdq_enable
   mmc_cqe_post_req
-  mmc_cqe_request_done
   mmc_hw_reset
   mmc_put_card
-  mmc_send_tuning
   mmc_switch
   mmc_wait_for_cmd
 
@@ -1505,7 +1498,6 @@
   drm_dp_get_adjust_request_voltage
   drm_dp_link_train_channel_eq_delay
   extcon_get_property
-  mmc_cmdq_disable
   raw_notifier_call_chain
   raw_notifier_chain_register
   send_sig_info
@@ -1912,11 +1904,6 @@
 # required by sc9863a-clk.ko
   device_get_match_data
   devm_reset_controller_register
-# required by mmc_health.ko
-  mmc_send_status
-  __mmc_claim_host
-  mmc_release_host
-  __tracepoint_android_rvh_mmc_health
 
 # required by sdhci-sprd.ko
   clk_round_rate
@@ -1978,6 +1965,7 @@
   unregister_netdev
 
 # required by sfp_core.ko
+  br_fdb_find_port
   csum_tcpudp_nofold
   dev_get_by_index_rcu
   ip_send_check
@@ -2818,6 +2806,7 @@
 
 # required by wcn_bsp.ko
   gpiod_set_value
+  in_aton
   memdup_user
   pci_disable_device
   pci_disable_msi
@@ -2878,47 +2867,5 @@
   set_blocksize
   submit_bio_wait
 
-# required by sprd_usb_f_rndis.ko
-  alloc_etherdev_mqs
-  dev_get_stats
-  dev_set_mac_address
-  eth_mac_addr
-  eth_validate_addr
-  ethtool_op_get_link
-  hex_to_bin
-  usb_assign_descriptors
-  usb_free_all_descriptors
-  usb_gstrings_attach
-
-# required by sprd_apdu_r3p0.ko
-  __netlink_kernel_create
-  __nlmsg_put
-  netlink_kernel_release
-  of_get_address
-  of_get_compatible_child
-
-# required by sprd_tcpm.ko
-  typec_altmode_attention
-  typec_altmode_notify
-  typec_altmode_update_active
-  typec_altmode_vdm
-  typec_find_port_data_role
-  typec_find_port_power_role
-  typec_find_power_role
-  typec_get_drvdata
-  typec_match_altmode
-  typec_partner_set_identity
-  typec_partner_register_altmode
-  typec_port_register_altmode
-  typec_set_mode
-  typec_set_orientation
-  typec_unregister_altmode
-  usb_role_switch_get
-  usb_role_switch_put
-  usb_role_switch_set_role
-
-# required by beidouB tp
-  kstrtoint_from_user
 # required by zsmalloc.ko
   wait_on_page_bit
- of_find_matching_node_and_match

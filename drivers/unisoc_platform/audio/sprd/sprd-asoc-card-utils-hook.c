@@ -55,10 +55,10 @@ static struct sprd_asoc_hook_spk_priv hook_spk_priv;
 #define EN_LEVEL 1
 
 static int select_mode;
-//#ifdef ODM_HQ_EDIT
+//#ifdef OPLUS_EDIT
 //liyunfan@ODM.HQ.Multimeida.Audio,algorithm compatible of second pa,2021/9/23
 static int det_type;
-//#endif /* ODM_HQ_EDIT */
+//#endif /* OPLUS_EDIT */
 static u32 extral_iic_pa_en;
 #ifdef CONFIG_SND_SOC_UNISOC_CODEC_SIA81XX
 extern void sia81xx_resume_for_sprd(void);
@@ -88,14 +88,14 @@ static ssize_t select_mode_store(struct kobject *kobj,
 
 	return len;
 }
-//#ifdef ODM_HQ_EDIT
+//#ifdef OPLUS_EDIT
 //liyunfan@ODM.HQ.Multimeida.Audio,algorithm compatible of second pa,2021/9/23
 static ssize_t pa_info_show(struct kobject *kobj,
 				struct kobj_attribute *attr, char *buff)
 {
 	return sprintf(buff, "%s\n", det_type?"awxxx":"siaxx");
 }
-//#endif /* ODM_HQ_EDIT */
+//#endif /* OPLUS_EDIT */
 
 static int ext_debug_sysfs_init(void)
 {
@@ -105,13 +105,13 @@ static int ext_debug_sysfs_init(void)
 		__ATTR(select_mode, 0644,
 		select_mode_show,
 		select_mode_store);
-    //#ifdef ODM_HQ_EDIT
+    //#ifdef OPLUS_EDIT
     //liyunfan@ODM.HQ.Multimeida.Audio,algorithm compatible of second pa,2021/9/23
     static struct kobj_attribute ext_info_attr =
         __ATTR(pa_info, 0644,
         pa_info_show,
         NULL);
-    //#endif /* ODM_HQ_EDIT */
+    //#endif /* OPLUS_EDIT */
 
 	if (ext_debug_kobj)
 		return 0;
@@ -127,14 +127,14 @@ static int ext_debug_sysfs_init(void)
 		pr_err("create sysfs failed. ret = %d\n", ret);
 		return ret;
 	}
-    //#ifdef ODM_HQ_EDIT
+    //#ifdef OPLUS_EDIT
     //liyunfan@ODM.HQ.Multimeida.Audio,algorithm compatible of second pa,2021/9/23
     ret = sysfs_create_file(ext_debug_kobj, &ext_info_attr.attr);
     if (ret) {
         pr_err("create sysfs failed. ret = %d\n", ret);
         return ret;
     }
-    //#endif /* ODM_HQ_EDIT */
+    //#endif /* OPLUS_EDIT */
 	return ret;
 }
 
@@ -376,7 +376,7 @@ static int sprd_asoc_card_parse_hook(struct device *dev,
 			ext_hook->ext_ctrl[ext_ctrl_type] = NULL;
 			return ret;
 		}
-        //#ifdef ODM_HQ_EDIT
+        //#ifdef OPLUS_EDIT
         //liyunfan@ODM.HQ.Multimeida.Audio,algorithm compatible of second pa,2021/9/23
         // det
         det_gpio = of_get_named_gpio_flags(np, prop_pa_det, i, NULL);
@@ -396,16 +396,16 @@ static int sprd_asoc_card_parse_hook(struct device *dev,
                 dev_info(dev, "det_gpio det:%d\n", det_type);
             }
         }
-        //#endif /* ODM_HQ_EDIT */
+        //#endif /* OPLUS_EDIT */
 	}
-    //#ifdef ODM_HQ_EDIT
+    //#ifdef OPLUS_EDIT
     //liyunfan@ODM.HQ.Multimeida.Audio,algorithm compatible of second pa,2021/9/23
     dev_info(dev, "det_gpio det :%d,mode = %d\n", det_type,hook_spk_priv.priv_data[0]);
     if(!det_type){
         hook_spk_priv.priv_data[0] = 2;
         dev_info(dev, "det_gpio det2 :%d,mode = %d\n", det_type,hook_spk_priv.priv_data[0]);
     }
-    //#endif /* ODM_HQ_EDIT */
+    //#endif /* OPLUS_EDIT */
     msleep(2);
 	return 0;
 }

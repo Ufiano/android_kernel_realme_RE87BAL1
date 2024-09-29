@@ -900,5 +900,5 @@ device_info_init(void)
 fs_initcall(device_info_init);
 
 MODULE_LICENSE("GPL v2");
-MODULE_AUTHOR("Ming.He@ODM_WT");
+MODULE_AUTHOR("Ming.He@OPLUS");
 MODULE_DESCRIPTION("deviceinfo");

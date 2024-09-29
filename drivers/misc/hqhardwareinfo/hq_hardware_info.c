@@ -58,10 +58,10 @@ const char *dfy;
 //int sim2_card_slot = -1;
 int sdcard_gpio_value = -1;
 int nicky_gpio_value = -1;
-#define HARDWARE_INFO_NICO_A "realme C31"
+#define HARDWARE_INFO_NICO_A "oplus C31"
 #define HARDWARE_INFO_NICO_B "narzo 50i Prime"
-#define HARDWARE_INFO_NICO_C "realme C30"
-#define HARDWARE_INFO_NICKY "realme C35"
+#define HARDWARE_INFO_NICO_C "oplus C30"
+#define HARDWARE_INFO_NICKY "oplus C35"
 #define HARDWARE_INFO_NICKY_A "narzo 50A Prime"
 char emmc_buf_size[16];
 static char hw_info_prj_name[15];

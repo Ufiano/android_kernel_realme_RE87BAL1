@@ -10,7 +10,7 @@
  * Locking overview
  *
  * There are 3 main spinlocks which must be acquired in the
- * order shown////:
+ * order shown:
  *
  * 1) proc->outer_lock : protects binder_ref
  *    binder_proc_lock() and binder_proc_unlock() are
@@ -1809,8 +1809,10 @@ static size_t binder_get_object(struct binder_proc *proc,
 	size_t object_size = 0;
 
 	read_size = min_t(size_t, sizeof(*object), buffer->data_size - offset);
-	if (offset > buffer->data_size || read_size < sizeof(*hdr))
+	if (offset > buffer->data_size || read_size < sizeof(*hdr) ||
+	    !IS_ALIGNED(offset, sizeof(u32)))
 		return 0;
+
 	if (u) {
 		if (copy_from_user(object, u + offset, read_size))
 			return 0;
@@ -6663,6 +6665,7 @@ err_init_binder_device_failed:
 
 err_alloc_device_names_failed:
 	debugfs_remove_recursive(binder_debugfs_dir_entry_root);
+	binder_alloc_shrinker_exit();
 
 	return ret;
 }

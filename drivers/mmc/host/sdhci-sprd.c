@@ -38,7 +38,6 @@ static int sd_gpio = 0;
 #define SEND_TUNING_BLOCK 19
 #define SEND_TUNING_BLOCK_HS200 21
 
-
 /* SDHCI_ARGUMENT2 register high 16bit */
 #define SDHCI_SPRD_ARG2_STUFF		GENMASK(31, 16)
 
@@ -290,7 +289,7 @@ static inline void _sdhci_sprd_set_clock(struct sdhci_host *host,
 	div = ((div & 0x300) >> 2) | ((div & 0xFF) << 8);
 	sdhci_enable_clk(host, div);
 
-	/* enable auto gate sdhc_enable_auto_gate */
+	/* Enable CLK_AUTO when the clock is greater than 400K. */
 	if (clk > 400000) {
 		val = sdhci_readl(host, SDHCI_SPRD_REG_32_BUSY_POSI);
 		mask = SDHCI_SPRD_BIT_OUTR_CLK_AUTO_EN |
@@ -1009,9 +1008,10 @@ static int sdhci_sprd_voltage_switch(struct mmc_host *mmc, struct mmc_ios *ios)
 		break;
 	}
 
-reset:
 	/* Wait for 300 ~ 500 us for pin state stable */
 	usleep_range(300, 500);
+
+reset:
 	sdhci_reset(host, SDHCI_RESET_CMD | SDHCI_RESET_DATA);
 
 	return 0;
@@ -1150,8 +1150,6 @@ static void sd_card_tray_remove_proc(void)
 {
 	remove_proc_entry("sd_tray_gpio_value", NULL);
 }
-//wt_liuhaiqing,20220531,Add proc file for sdcard slot detect
-
 static int sdhci_sprd_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
@@ -1357,7 +1355,6 @@ static int sdhci_sprd_probe(struct platform_device *pdev)
 			pr_err("create proc sd_card_status successed\n");
 		}
 	}
-//wt_liuhaiqing,20220531,Add proc file for sdcard slot detect
 	return 0;
 
 err_cleanup_host:
@@ -1386,12 +1383,10 @@ static int sdhci_sprd_remove(struct platform_device *pdev)
 {
 	struct sdhci_host *host = platform_get_drvdata(pdev);
 	struct sdhci_sprd_host *sprd_host = TO_SPRD_HOST(host);
-
 //wt_liuhaiqing,20220531,Add proc file for sdcard slot detect
 	if((strcmp(mmc_hostname(host->mmc), "mmc1") == 0)){
 		sd_card_tray_remove_proc();
 	}
-//wt_liuhaiqing,20220531,Add proc file for sdcard slot detect
 
 	sdhci_remove_host(host, 0);
 

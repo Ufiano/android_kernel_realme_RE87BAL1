@@ -1,6 +1,6 @@
 /*******************************************************************************
 ** Copyright (C), 2008-2016, OPPO Mobile Comm Corp., Ltd.
-** ODM_WT_EDIT
+** OPLUS_EDIT
 ** FILE: - ilitek_v3.c
 ** Description : This program is for iliteck tp ic suspend & resume by lcd notifier
 ** Version: 1.0

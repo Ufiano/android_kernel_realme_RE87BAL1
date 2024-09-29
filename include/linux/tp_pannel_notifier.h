@@ -1,6 +1,6 @@
 /*******************************************************************************
 ** Copyright (C), 2008-2016, OPPO Mobile Comm Corp., Ltd.
-** ODM_WT_EDIT
+** OPLUS_EDIT
 ** FILE: - Tp_suspend_notifier.h
 ** Description : This program is for Tp_suspend_notifier
 ** Version: 1.0

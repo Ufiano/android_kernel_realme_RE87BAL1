@@ -1,6 +1,6 @@
 /***********************************************************
 ** Copyright (C), 2008-2016, OPPO Mobile Comm Corp., Ltd.
-** ODM_WT_EDIT
+** OPLUS_EDIT
 ** File: - hardware_info.c
 ** Description: source  for hardware infomation
 **
@@ -560,6 +560,6 @@ fs_initcall(hardwareinfo_init_module);
 module_exit(hardwareinfo_exit_module);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Ming.He@ODM_WT");
+MODULE_AUTHOR("Ming.He@OPLUS");
 MODULE_DESCRIPTION("hardwareinfo");
 

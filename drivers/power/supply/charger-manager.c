@@ -5253,6 +5253,7 @@ static void misc_event_handler(struct charger_manager *cm, enum cm_event_types t
 		g_is_fast_charge = false;
 		cm->desc->ir_comp.ir_compensation_en = false;
 		cm->desc->enable_fast_charge = false;
+		i_ovp = 0;
 		cm->desc->fast_charge_enable_count = 0;
 		cm->desc->fast_charge_disable_count = 0;
 		cm->desc->fixed_fchg_running = false;
@@ -9257,6 +9258,8 @@ static void charger_manager_shutdown(struct platform_device *pdev)
 #ifndef VENDOR_KERNEL
 	cancel_delayed_work_sync(&cm->get_charger_type_work);
 #endif //not defined VENDOR_KERNEL
+	cancel_delayed_work_sync(&cm->ir_compensation_work);
+
 }
 
 static const struct platform_device_id charger_manager_id[] = {

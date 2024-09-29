@@ -480,10 +480,10 @@ int sc27xx_fgu_get_bat_id_vol(struct sc27xx_fgu_data *data)
 	batid_volt = id_vol;
 
 	if ((id_vol >= ATL_BATTERY_VOLTAGE_MIN_5000)&&(id_vol <= ATL_BATTERY_VOLTAGE_MAX_5000)) {
-		hardwareinfo_set_prop(HARDWARE_BATTERY_ID, "realme-atl-4V45-5000mAh");
+		hardwareinfo_set_prop(HARDWARE_BATTERY_ID, "oplus-atl-4V45-5000mAh");
 		sc27xx_fgu_bat_id = 1;
 	} else if((id_vol >= GUANYU_BATTERY_VOLTAGE_MIN_5000)&&(id_vol <= GUANYU_BATTERY_VOLTAGE_MAX_5000)){
-		hardwareinfo_set_prop(HARDWARE_BATTERY_ID, "realme-lwn-4V45-5000mAh");
+		hardwareinfo_set_prop(HARDWARE_BATTERY_ID, "oplus-lwn-4V45-5000mAh");
 		sc27xx_fgu_bat_id = 0;
 	}else{
 		sc27xx_fgu_bat_id = 2;
@@ -2936,18 +2936,6 @@ error:
 	return ret;
 }
 
-static void sc27xx_fgu_external_power_changed(struct power_supply *psy)
-{
-	struct sc27xx_fgu_data *data = power_supply_get_drvdata(psy);
-
-	if (!data) {
-		pr_err("%s:line%d: NULL pointer!!!\n", __func__, __LINE__);
-		return;
-	}
-
-	power_supply_changed(data->battery);
-}
-
 static int sc27xx_fgu_property_is_writeable(struct power_supply *psy,
 					    enum power_supply_property psp)
 {
@@ -2999,7 +2987,7 @@ static const struct power_supply_desc sc27xx_fgu_desc = {
 	.num_properties		= ARRAY_SIZE(sc27xx_fgu_props),
 	.get_property		= sc27xx_fgu_get_property,
 	.set_property		= sc27xx_fgu_set_property,
-	.external_power_changed	= sc27xx_fgu_external_power_changed,
+	.external_power_changed	= power_supply_changed,
 	.property_is_writeable	= sc27xx_fgu_property_is_writeable,
 	.no_thermal		= true,
 };

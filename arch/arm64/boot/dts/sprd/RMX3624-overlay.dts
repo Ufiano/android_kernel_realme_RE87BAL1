@@ -19,8 +19,8 @@
 #include "lcd/lcd_NT36672C_tm_mipi_hd.dtsi"
 #include "lcd/lcd_g40396_truly_mipi_fhd.dtsi"
 #include "lcd/lcd_dummy_mipi.dtsi"
-#include "battery/RMX3624_REALME_LWN_4V45_5000mah.dtsi"
-#include "battery/RMX3624_REALME_ATL_4V45_5000mah.dtsi"
+#include "battery/RMX3624_OPLUS_LWN_4V45_5000mah.dtsi"
+#include "battery/RMX3624_OPLUS_ATL_4V45_5000mah.dtsi"
 / {
 
 	model = "Spreadtrum RMX3624 Board";
