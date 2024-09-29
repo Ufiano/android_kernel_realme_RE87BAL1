@@ -686,7 +686,7 @@
 					<&aon_clk CLK_PWM1>,
 					<&aon_clk CLK_PWM2>;
 				assigned-clock-parents = <&ext_26m>,
-					<&ext_26m>,
+					<&pll CLK_TWPLL_48M>,
 					<&ext_26m>;
 				#pwm-cells = <2>;
 			};
@@ -813,6 +813,7 @@
 				compatible = "sprd,sharkl3-hwdvfs";
 				sprd,syscon-enable = <&aon_apb_regs>;
 				sprd,anlg-phy-g4-ctrl = <&anlg_phy_g4_regs>;
+				sprd,syscon-pmu-apb = <&pmu_apb_regs>;
 				reg = <0 0x40300000 0 0x1000>;
 				interrupts = <GIC_SPI 121 IRQ_TYPE_LEVEL_HIGH>;
 				#address-cells = <2>;
@@ -1408,7 +1409,8 @@
 
 			dmc_controller: dmc-controller@300001a8 {
 				compatible = "sprd,pub-dmc-original";
-				reg = <0x0 0x300001a8 0x0 0x100>;
+				reg = <0x0 0x300001a8 0x0 0x100>,
+				    <0x0 0x30000000 0x0 0x12c>;/* dmc res */
 			};
 		};
 	};

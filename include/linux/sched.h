@@ -1310,9 +1310,10 @@ struct task_struct {
 #endif
 
 	_ANDROID_KABI_REPLACE(ANDROID_VENDOR_DATA_ARRAY(1, 2), struct{ u64 last_enqueue_ts; u64 last_sleep_ts; });
-
-	ANDROID_OEM_DATA_ARRAY(1, 3);
-
+//odm alm_id:5321993 struk to reboot function ; build-in oem_data for gki 2023/3/17 wangshuaishuai start
+	_ANDROID_KABI_REPLACE(ANDROID_OEM_DATA_ARRAY(1, 3), struct{ unsigned long last_switch_count; unsigned long last_switch_time; unsigned long used_for_hung_task; });
+//	ANDROID_OEM_DATA_ARRAY(1, 3);
+//odm alm_id:5321993 struk to reboot function ; build-in oem_data for gki 2023/3/17 wangshuaishuai end
 	ANDROID_KABI_RESERVE(1);
 	ANDROID_KABI_RESERVE(2);
 	ANDROID_KABI_RESERVE(3);
@@ -1321,6 +1322,7 @@ struct task_struct {
 	ANDROID_KABI_RESERVE(6);
 	ANDROID_KABI_RESERVE(7);
 	ANDROID_KABI_RESERVE(8);
+
 
 	/*
 	 * New fields for task_struct should be added above here, so that
@@ -1508,7 +1510,6 @@ extern struct pid *cad_pid;
 #define PF_MEMALLOC		0x00000800	/* Allocating memory */
 #define PF_NPROC_EXCEEDED	0x00001000	/* set_user() noticed that RLIMIT_NPROC was exceeded */
 #define PF_USED_MATH		0x00002000	/* If unset the fpu must be initialized before use */
-#define PF_USED_ASYNC		0x00004000	/* Used async_schedule*(), used by module init */
 #define PF_NOFREEZE		0x00008000	/* This thread should not be frozen */
 #define PF_FROZEN		0x00010000	/* Frozen for system suspend */
 #define PF_KSWAPD		0x00020000	/* I am kswapd */
@@ -1554,7 +1555,7 @@ extern struct pid *cad_pid;
 #define tsk_used_math(p)			((p)->flags & PF_USED_MATH)
 #define used_math()				tsk_used_math(current)
 
-static inline bool is_percpu_thread(void)
+static __always_inline bool is_percpu_thread(void)
 {
 #ifdef CONFIG_SMP
 	return (current->flags & PF_NO_SETAFFINITY) &&

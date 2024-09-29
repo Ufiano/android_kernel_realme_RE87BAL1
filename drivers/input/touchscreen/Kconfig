@@ -1353,7 +1353,33 @@ config TOUCHSCREEN_FTS_CHIPSET
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called bu21023_ts.
+	  
+	  
+source "drivers/input/touchscreen/focaltech_touch_milan/Kconfig"
 
+config TOUCHSCREEN_FTS_MILAN_CHIPSET
+	tristate "choice focaltech_touch_milan chipset"
+	depends on SPI
+	help
+	  Say Y here if you have a touchscreen using ROHM BU21023/24.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called bu21023_ts.
+
+source "drivers/input/touchscreen/icnl9911_milan/Kconfig"
+
+config TOUCHSCREEN_CHIPONE_MILAN_CHIPSET
+	tristate "choice icnl9911_milan chipset"
+	depends on SPI
+	help
+	  Say Y here if you have a touchscreen using chipe one.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called chipe one.
 	  
 source "drivers/input/touchscreen/nt36xxx/Kconfig"
 
@@ -1365,5 +1391,17 @@ config TOUCHSCREEN_NT36xxx_HOSTDL_SPI
 	  to your system by SPI bus.
 
 	  If unsure, say N.
+	  
+config TOUCHSCREEN_CHIPONE
+	tristate "Chipone TDDI touchscreen for QualComm package"
+	depends on SPI
+	default y
+	help
+	  Say y here if you have chipone TDDI touch panel.
+	
+	  If unsure, say N.
+	
+	  To compile this driver as a module, choose M here: the
+	  module will be called chipone-tddi.
 
 endif

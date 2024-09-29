@@ -398,6 +398,10 @@ void sc2355_queue_rx_buff_work(struct sprd_priv *priv, unsigned char id)
 	struct sprd_vif *tmp_vif;
 
 	misc_work = sprd_alloc_work(0);
+	if (!misc_work) {
+		pr_err("%s out of memory\n", __func__);
+		return;
+	}
 	spin_lock_bh(&priv->list_lock);
 	list_for_each_entry(tmp_vif, &priv->vif_list, vif_node) {
 		if (tmp_vif->state & VIF_STATE_OPEN) {

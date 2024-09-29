@@ -29,3 +29,6 @@ obj-$(CONFIG_PLAT_VERSATILE)	+= versatile/
 obj-y				+= xilinx/
 obj-$(CONFIG_ARCH_ZX)		+= zte/
 obj-$(CONFIG_ARCH_SPRD)		+= sprd/
+obj-m	+= oppo/
+obj-$(CONFIG_OPLUS_FEATURE_PHOENIX) += oplus/system/oppo_phoenix/
+obj-$(CONFIG_OPLUS_FEATURE_HUNG_TASK_ENHANCE) += oplus/system/hung_task_enhance/

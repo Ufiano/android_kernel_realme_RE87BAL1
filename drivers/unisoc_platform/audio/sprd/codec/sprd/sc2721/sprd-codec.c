@@ -2350,6 +2350,17 @@ static int ana_loop_event(struct snd_soc_dapm_widget *w,
 	return ret;
 }
 
+static void sprd_codec_micbias_set(struct snd_soc_component *codec, int v_sel)
+{
+	int mask;
+	int val;
+
+	pr_info("micbias set %d\n", v_sel);
+	mask = MICBIAS_V_MASK << MICBIAS_V;
+	val = (v_sel << MICBIAS_V) & mask;
+	snd_soc_component_update_bits(codec, SOC_REG(ANA_PMU1), mask, val);
+}
+
 static int mic_bias_event(struct snd_soc_dapm_widget *w,
 			  struct snd_kcontrol *kcontrol, int event)
 {
@@ -2367,6 +2378,9 @@ static int mic_bias_event(struct snd_soc_dapm_widget *w,
 	switch (reg) {
 	case SPRD_CODEC_MIC_BIAS:
 		regu = &sprd_codec->main_mic;
+		if (on != 0) {
+			sprd_codec_micbias_set(codec, 0x4); /* 0x4 means 0b100, 2.7V */
+		}
 		break;
 	case SPRD_CODEC_HEADMIC_BIAS:
 		regu = &sprd_codec->head_mic;

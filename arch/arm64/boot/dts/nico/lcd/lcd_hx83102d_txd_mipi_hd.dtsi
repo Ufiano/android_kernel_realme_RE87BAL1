@@ -24,6 +24,8 @@
 					sprd,video-lp-cmd-enable = <1>;
 					sprd,hporch-lp-disable = <1>;
 					sprd,dpi-clk-div = <6>;
+					sprd,last-brightness = <0>;
+					sprd,backlight-first-delay = <34>;
 
 
 					sprd,width-mm = <68>;

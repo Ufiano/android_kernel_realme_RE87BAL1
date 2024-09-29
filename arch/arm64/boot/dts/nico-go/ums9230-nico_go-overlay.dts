@@ -399,6 +399,7 @@
 				status = "okay";
 			};
 
+			/*Used to check the RF antenna*/
 			op_rf_cable {
 				compatible = "op,rf_cable";
 				status = "okay";
@@ -590,6 +591,7 @@
 		reg = <0x1b>;
 		chg_pump_en_gpio = <&ap_gpio 147 GPIO_ACTIVE_HIGH>;
 	};
+/*odm.hq.bsp.licheng@huaqin.com 2021.9.21 modify for bring up lcd*/
 /*
 	nu1619_rx: charger@61 {
 		compatible = "nuvolta,wl_charger_nu1619";
@@ -635,7 +637,7 @@
 	#size-cells = <0>;
 
 	touchscreen@0 {
-			compatible = "oplus,touchscreen";
+			compatible = "oppo,touchscreen";
 			spi-max-frequency = <9600000>;
 			reg = <0>;
 			/*touch,irq-gpio = <&ap_gpio 144 GPIO_ACTIVE_HIGH>;*/
@@ -644,7 +646,7 @@
 			touch,panel-coords = <0 720 0 1600>;
 			chipone,x-res = <720>;
 			chipone,y-res = <1600>;
-
+			
 			chipone,test-reset-pin;
  
 			  chipone,test-rawdata;

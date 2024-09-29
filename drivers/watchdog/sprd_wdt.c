@@ -64,6 +64,8 @@ struct sprd_wdt {
 	struct clk *rtc_enable;
 	bool reset_en;
 	int irq;
+	u32 wdt_ctrl;
+	u64 wdt_load;
 };
 
 static bool sprd_wdt_en(void)
@@ -139,6 +141,9 @@ static int sprd_wdt_load_value(struct sprd_wdt *wdt, u32 timeout,
 	u32 tmr_step = timeout * SPRD_WDT_CNT_STEP;
 	u32 prtmr_step = pretimeout * SPRD_WDT_CNT_STEP;
 
+	pr_err("sprd_wdt: sprd wdt load value timeout =%d, pretimeout =%d\n",
+	       timeout, pretimeout);
+	wdt->wdt_load = jiffies;
 	/*
 	 * Waiting the load value operation done,
 	 * it needs two or three RTC clock cycles.
@@ -208,8 +213,6 @@ static int sprd_wdt_start(struct watchdog_device *wdd)
 	u32 val;
 	int ret;
 
-	pr_err("ap watchdog sprd_wdt start: timeout = %d, pretimeout = %d\n",
-	       wdd->timeout, wdd->pretimeout);
 	ret = sprd_wdt_load_value(wdt, wdd->timeout, wdd->pretimeout);
 	if (ret)
 		return ret;
@@ -223,6 +226,7 @@ static int sprd_wdt_start(struct watchdog_device *wdd)
 		val |= SPRD_WDT_CNT_EN_BIT | SPRD_WDT_INT_EN_BIT;
 	writel_relaxed(val, wdt->base + SPRD_WDT_CTRL);
 	sprd_wdt_lock(wdt->base);
+	wdt->wdt_ctrl = readl_relaxed(wdt->base + SPRD_WDT_CTRL);
 	set_bit(WDOG_HW_RUNNING, &wdd->status);
 
 	return 0;

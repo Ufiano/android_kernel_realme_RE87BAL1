@@ -86,7 +86,7 @@ struct sprd_pmic_wdt {
 	struct kthread_worker wdt_kworker;
 	struct kthread_work wdt_kwork;
 	struct task_struct *wdt_thread;
-
+	u32 wdt_flag;
 };
 
 static int sprd_pmic_wdt_enable(struct sprd_pmic_wdt *wdt, bool en)
@@ -118,10 +118,24 @@ static void sprd_pimc_wdt_init(int event, void *data)
 {
 	struct sprd_pmic_wdt *pmic_wdt = data;
 
-	dev_info(pmic_wdt->dev, "sprd pimc wdt init enter!\n");
-
-	pm_wakeup_event(pmic_wdt->dev, PMIC_WDT_WAKE_UP_MS);
-	kthread_queue_work(&pmic_wdt->wdt_kworker, &pmic_wdt->wdt_kwork);
+ 	switch (event) {
+		case SBUF_NOTIFY_READY:
+			dev_info(pmic_wdt->dev, "sbuf ready for pmic wdt init!\n");
+			pm_wakeup_event(pmic_wdt->dev, PMIC_WDT_WAKE_UP_MS);
+			kthread_queue_work(&pmic_wdt->wdt_kworker, &pmic_wdt->wdt_kwork);
+			pmic_wdt->wdt_flag = 1;
+			break;
+		case SBUF_NOTIFY_READ:
+			if (!pmic_wdt->wdt_flag) {
+				dev_info(pmic_wdt->dev, "sbuf read for pmic wdt init!\n");
+				pm_wakeup_event(pmic_wdt->dev, PMIC_WDT_WAKE_UP_MS);
+				kthread_queue_work(&pmic_wdt->wdt_kworker, &pmic_wdt->wdt_kwork);
+				pmic_wdt->wdt_flag = 1;
+			}
+			break;
+		default:
+			return;
+ 	}
 }
 
 static void sprd_pimc_wdt_work(struct kthread_work *work)
@@ -179,7 +193,7 @@ static int sprd_pmic_wdt_probe(struct platform_device *pdev)
 	int ret, rval;
 	struct device_node *node = pdev->dev.of_node;
 	struct sprd_pmic_wdt *pmic_wdt;
-	struct sched_param param = { .sched_priority = 1 };
+	struct sched_param param = { .sched_priority =  MAX_RT_PRIO - 1 };
 
 	pmic_wdt = devm_kzalloc(&pdev->dev, sizeof(*pmic_wdt), GFP_KERNEL);
 	if (!pmic_wdt)
@@ -197,13 +211,6 @@ static int sprd_pmic_wdt_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	rval = sbuf_register_notifier(SIPC_ID_PM_SYS, SMSG_CH_TTY, 0,
-				      sprd_pimc_wdt_init, pmic_wdt);
-	if (rval) {
-		dev_err(&pdev->dev, "sbuf notifier failed rval = %d\n", rval);
-		return rval;
-	}
-
 	device_init_wakeup(pmic_wdt->dev, true);
 
 	kthread_init_worker(&pmic_wdt->wdt_kworker);
@@ -213,12 +220,20 @@ static int sprd_pmic_wdt_probe(struct platform_device *pdev)
 	if (IS_ERR(pmic_wdt->wdt_thread)) {
 		pmic_wdt->wdt_thread = NULL;
 		dev_err(&pdev->dev, "failed to run pmic_wdt_thread:\n");
+		return PTR_ERR(pmic_wdt->wdt_thread);
 	} else {
 		sched_setscheduler(pmic_wdt->wdt_thread, SCHED_FIFO, &param);
 	}
 
 	pmic_wdt->wdten = sprd_pimc_wdt_en();
 	pmic_wdt->dev = &pdev->dev;
+	rval = sbuf_register_notifier(SIPC_ID_PM_SYS, SMSG_CH_TTY, 0,
+				      sprd_pimc_wdt_init, pmic_wdt);
+	if (rval) {
+		dev_err(&pdev->dev, "sbuf notifier failed rval = %d\n", rval);
+		return EPROBE_DEFER; //depends on UNISOC_SIPC_SPIPE for SP9863-GO
+		//return rval;
+	}
 	platform_set_drvdata(pdev, pmic_wdt);
 
 	return ret;

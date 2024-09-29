@@ -15,7 +15,9 @@
 #include <linux/platform_device.h>
 #include <linux/reboot.h>
 #include <linux/spi/spi.h>
+#include <linux/spi/spi_sprd_adi.h>
 #include <linux/sizes.h>
+
 
 /* Registers definitions for ADI controller */
 #define REG_ADI_CTRL0			0x4
@@ -121,6 +123,7 @@
 
 /* Definition of PMIC reset status register */
 #define HWRST_STATUS_SECURITY		0x02
+#define HWRST_STATUS_SML_PANIC		0x04
 #define HWRST_STATUS_RECOVERY		0x20
 #define HWRST_STATUS_NORMAL		0x40
 #define HWRST_STATUS_ALARM		0x50
@@ -165,7 +168,17 @@ struct sprd_adi {
 	unsigned long		slave_pbase;
 	struct notifier_block	restart_handler;
 	const struct sprd_adi_variant_data *data;
+	void (*panic_callback)(void);
 };
+
+struct sprd_adi *g_sadi;
+
+void sprd_adi_panic_prepare_register(void *callback)
+{
+	if (g_sadi != NULL)
+		g_sadi->panic_callback = callback;
+}
+EXPORT_SYMBOL(sprd_adi_panic_prepare_register);
 
 static int sprd_adi_check_paddr(struct sprd_adi *sadi, u32 paddr)
 {
@@ -422,7 +435,7 @@ static int sprd_adi_restart_handler(struct notifier_block *this,
 {
 	struct sprd_adi *sadi = container_of(this, struct sprd_adi,
 					     restart_handler);
-	u32 val = 0, reboot_mode = 0;
+	u32 val = 0, reboot_mode = 0, sml_mode;
 
 	if (!cmd)
 		reboot_mode = HWRST_STATUS_NORMAL;
@@ -434,9 +447,11 @@ static int sprd_adi_restart_handler(struct notifier_block *this,
 		reboot_mode = HWRST_STATUS_SLEEP;
 	else if (!strncmp(cmd, "bootloader", 10))
 		reboot_mode = HWRST_STATUS_FASTBOOT;
-	else if (!strncmp(cmd, "panic", 5))
+	else if (!strncmp(cmd, "panic", 5)) {
+		if (sadi->panic_callback != NULL)
+			sadi->panic_callback();
 		reboot_mode = HWRST_STATUS_PANIC;
-	else if (!strncmp(cmd, "special", 7))
+	} else if (!strncmp(cmd, "special", 7))
 		reboot_mode = HWRST_STATUS_SPECIAL;
 	else if (!strncmp(cmd, "cftreboot", 9))
 		reboot_mode = HWRST_STATUS_CFTREBOOT;
@@ -457,9 +472,12 @@ static int sprd_adi_restart_handler(struct notifier_block *this,
 
 	/* Record the reboot mode */
 	sprd_adi_read(sadi, sadi->slave_pbase + sadi->data->rst_sts, &val);
-	val &= ~HWRST_STATUS_WATCHDOG;
-	val |= reboot_mode;
-	sprd_adi_write(sadi, sadi->slave_pbase + sadi->data->rst_sts, val);
+	sml_mode = val & 0xFF;
+	if (sml_mode != HWRST_STATUS_SML_PANIC && sml_mode != HWRST_STATUS_SECURITY) {
+		val &= ~0xFF;
+		val |= reboot_mode;
+		sprd_adi_write(sadi, sadi->slave_pbase + sadi->data->rst_sts, val);
+	}
 
 	/*enable register reboot mode*/
 	sprd_adi_read(sadi, sadi->slave_pbase + sadi->data->swrst_base, &val);
@@ -600,6 +618,7 @@ static int sprd_adi_probe(struct platform_device *pdev)
 	sadi->slave_pbase = res->start + data->channel_offset;
 	sadi->ctlr = ctlr;
 	sadi->dev = &pdev->dev;
+	sadi->panic_callback = NULL;
 	sadi->data = data;
 	ret = of_hwspin_lock_get_id(np, 0);
 	if (ret > 0 || (IS_ENABLED(CONFIG_HWSPINLOCK) && ret == 0)) {
@@ -647,6 +666,7 @@ static int sprd_adi_probe(struct platform_device *pdev)
 		goto put_ctlr;
 	}
 
+	g_sadi = sadi;
 	return 0;
 
 put_ctlr:

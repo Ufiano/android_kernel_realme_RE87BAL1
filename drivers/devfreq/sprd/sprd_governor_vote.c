@@ -30,9 +30,11 @@ static ssize_t scaling_force_ddr_freq_store(struct device *dev,
 	struct device_attribute *attr,
 	const char *buf, size_t count)
 {
-	int err;
+	int err, pid = -1;
 	struct devfreq *devfreq = to_devfreq(dev);
-
+	struct governor_callback *gov_callback =
+		(struct governor_callback *)devfreq->last_status.private_data;
+	struct task_struct *dfs_task;
 	err = sscanf(buf, "%u\n", &force_freq);
 	if (err < 1) {
 		dev_warn(dev->parent, "get scaling force ddr freq err: %d", err);
@@ -41,8 +43,17 @@ static ssize_t scaling_force_ddr_freq_store(struct device *dev,
 	mutex_lock(&devfreq->lock);
 	err = update_devfreq(devfreq);
 	mutex_unlock(&devfreq->lock);
+	dfs_task = get_current();
+	if (dfs_task)
+		pid = dfs_task->pid;
 	if (err)
-		dev_err(dev->parent, "force freq %u fail: %d", force_freq, err);
+		dev_err(dev->parent, "force freq %u fail: %d, PID: %d",
+			force_freq, err, pid);
+	else
+		dev_info(dev->parent, "force ddr freq %u, PID: %d",
+			 force_freq, pid);
+	gov_callback->ddr_dfs_step_add(scaling_force_ddr_freq,
+				       err, NULL, force_freq, pid);
 	return count;
 }
 static DEVICE_ATTR_RW(scaling_force_ddr_freq);
@@ -51,7 +62,7 @@ static ssize_t scaling_overflow_show(struct device *dev,
 				     struct device_attribute *attr, char *buf)
 {
 	ssize_t count = 0;
-	unsigned int i, freq_num;
+	unsigned int i, freq_num = 0;
 	unsigned int data;
 	struct devfreq *devfreq = to_devfreq(dev);
 	struct governor_callback *gov_callback =
@@ -216,9 +227,10 @@ static ssize_t auto_dfs_on_off_store(struct device *dev,
 {
 	unsigned int enable;
 	struct devfreq *devfreq = to_devfreq(dev);
+	struct task_struct *dfs_task;
 	struct governor_callback *gov_callback =
 		(struct governor_callback *)devfreq->last_status.private_data;
-	int err;
+	int err, pid = -1;
 
 	err = sscanf(buf, "%u\n", &enable);
 	if (err < 1) {
@@ -231,8 +243,19 @@ static ssize_t auto_dfs_on_off_store(struct device *dev,
 		err = gov_callback->dvfs_auto_disable();
 	else
 		err = -EINVAL;
+	dfs_task = get_current();
+	if (dfs_task)
+		pid = dfs_task->pid;
 	if (err)
-		dev_err(dev->parent, "ddr auto dfs enable[%u] fail: %d", enable, err);
+		dev_err(dev->parent,
+			"ddr auto dfs enable[%u] fail: %d, PID: %d",
+			enable, err, pid);
+	else
+		dev_info(dev->parent,
+			 "ddr auto dfs enable[%u], PID: %d",
+			 enable, pid);
+	gov_callback->ddr_dfs_step_add(auto_dfs_on_off,
+				       err, NULL, enable, pid);
 	return count;
 }
 static DEVICE_ATTR_RW(auto_dfs_on_off);
@@ -261,7 +284,7 @@ static ssize_t ddrinfo_freq_table_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
 	ssize_t count = 0;
-	unsigned int i, freq_num;
+	unsigned int i, freq_num = 0;
 	unsigned int data;
 	struct devfreq *devfreq = to_devfreq(dev);
 	struct governor_callback *gov_callback =
@@ -285,10 +308,11 @@ static ssize_t scenario_dfs_store(struct device *dev,
 					struct device_attribute *attr,
 					const char *buf, size_t count)
 {
-	int err;
+	int err, pid = -1;
 	unsigned int name_len;
 	char *arg;
 	struct devfreq *devfreq = to_devfreq(dev);
+	struct task_struct *dfs_task;
 	struct governor_callback *gov_callback =
 		(struct governor_callback *)devfreq->last_status.private_data;
 
@@ -303,8 +327,12 @@ static ssize_t scenario_dfs_store(struct device *dev,
 		return -EINVAL;
 	memcpy(arg, buf, name_len);
 	err = gov_callback->governor_vote(arg);
+	dfs_task = get_current();
+	if (dfs_task)
+		pid = dfs_task->pid;
 	if (err)
-		dev_err(dev->parent, "scene %s enter fail: %d", arg, err);
+		dev_err(dev->parent, "scene %s enter fail: %d, PID: %d", arg, err, pid);
+	gov_callback->ddr_dfs_step_add(scenario_dfs_enter, err, arg, name_len, pid);
 	kfree(arg);
 	return count;
 }
@@ -314,10 +342,11 @@ static ssize_t exit_scene_store(struct device *dev,
 					struct device_attribute *attr,
 					const char *buf, size_t count)
 {
-	int err;
+	int err, pid = -1;
 	unsigned int name_len;
 	char *arg;
 	struct devfreq *devfreq = to_devfreq(dev);
+	struct task_struct *dfs_task;
 	struct governor_callback *gov_callback =
 		(struct governor_callback *)devfreq->last_status.private_data;
 
@@ -332,8 +361,12 @@ static ssize_t exit_scene_store(struct device *dev,
 		return -EINVAL;
 	memcpy(arg, buf, name_len);
 	err = gov_callback->governor_unvote(arg);
+	dfs_task = get_current();
+	if (dfs_task)
+		pid = dfs_task->pid;
 	if (err)
-		dev_err(dev->parent, "scene %s exit fail: %d", arg, err);
+		dev_err(dev->parent, "scene %s exit fail: %d, PID: %d", arg, err, pid);
+	gov_callback->ddr_dfs_step_add(exit_scene, err, arg, name_len, pid);
 	kfree(arg);
 	return count;
 }
@@ -384,9 +417,10 @@ static ssize_t scene_boost_dfs_store(struct device *dev,
 	unsigned int enable;
 	unsigned int freq;
 	struct devfreq *devfreq = to_devfreq(dev);
+	struct task_struct *dfs_task;
 	struct governor_callback *gov_callback =
 		(struct governor_callback *)devfreq->last_status.private_data;
-	int err;
+	int err, pid = -1;
 
 	err = sscanf(buf, "%u %u\n", &enable, &freq);
 	if (err < 2) {
@@ -399,8 +433,13 @@ static ssize_t scene_boost_dfs_store(struct device *dev,
 		err = gov_callback->governor_unvote("boost");
 	else
 		err = -EINVAL;
+	dfs_task = get_current();
+	if (dfs_task)
+		pid = dfs_task->pid;
 	if (err)
-		dev_err(dev->parent, "scene boost enter[%u] fail: %d", enable, err);
+		dev_err(dev->parent, "scene boost enter[%u] fail: %d",
+			enable, err);
+	gov_callback->ddr_dfs_step_add(scene_boost_enter, err, NULL, enable, pid);
 	return count;
 }
 static DEVICE_ATTR_WO(scene_boost_dfs);
@@ -416,9 +455,10 @@ static ssize_t backdoor_store(struct device *dev,
 					struct device_attribute *attr,
 					const char *buf, size_t count)
 {
-	int err;
+	int err, pid = -1;
 	int backdoor;
 	struct devfreq *devfreq = to_devfreq(dev);
+	struct task_struct *dfs_task;
 	struct governor_callback *gov_callback =
 		(struct governor_callback *)devfreq->last_status.private_data;
 
@@ -437,12 +477,19 @@ static ssize_t backdoor_store(struct device *dev,
 		err = gov_callback->governor_unvote("top");
 	else
 		err = -EINVAL;
-
-	if (err)
-		dev_err(dev->parent, "set backdoor %d fail: %d", backdoor, err);
-	else
+	dfs_task = get_current();
+	if (dfs_task)
+		pid = dfs_task->pid;
+	if (err) {
+		dev_err(dev->parent, "set backdoor %d fail: %d, PID: %d",
+			backdoor, err, pid);
+	} else {
 		backdoor_status  = backdoor;
-
+		dev_info(dev->parent, "set backdoor %d, PID: %d",
+			 backdoor, pid);
+	}
+	gov_callback->ddr_dfs_step_add(set_backdoor, err, NULL,
+				       backdoor, pid);
 	return count;
 }
 static DEVICE_ATTR_RW(backdoor);
@@ -473,6 +520,40 @@ static ssize_t scene_dfs_list_show(struct device *dev,
 }
 static DEVICE_ATTR_RO(scene_dfs_list);
 
+static ssize_t ddrinfo_dfs_step_show(struct device *dev,
+				     struct device_attribute *attr, char *buf)
+{
+	ssize_t count = 0;
+	unsigned int i = 0;
+	char *arg = "NONE_STEP";
+	char *step_status = "NONE_STATUS";
+	char *scene = NULL;
+	int err = 0, pid = -1;
+	int buff = 0;
+	struct devfreq *devfreq = to_devfreq(dev);
+	struct governor_callback *gov_callback =
+		(struct governor_callback *)devfreq->last_status.private_data;
+
+	mutex_lock(&devfreq->lock);
+	do {
+		err = gov_callback->ddrinfo_dfs_step_show(&arg, &step_status,
+							  &scene, &buff, &pid, i);
+
+		if (scene == NULL)
+			count += sprintf(&buf[count],
+					 "dfs_dbg_log: DDR_DFS_STEP: %s %s, buff: %u, pid: %d\n",
+					 arg, step_status, buff, pid);
+		else
+			count += sprintf(&buf[count],
+					 "dfs_dbg_log: DDR_DFS_STEP: %s %s, scene: %s, pid: %d\n",
+					 arg, step_status, scene, pid);
+		i++;
+	} while (!err);
+	mutex_unlock(&devfreq->lock);
+	return count;
+}
+static DEVICE_ATTR_RO(ddrinfo_dfs_step);
+
 static struct attribute *dev_entries[] = {
 	&dev_attr_scaling_force_ddr_freq.attr,
 	&dev_attr_scaling_overflow.attr,
@@ -487,6 +568,7 @@ static struct attribute *dev_entries[] = {
 	&dev_attr_scene_boost_dfs.attr,
 	&dev_attr_scene_dfs_list.attr,
 	&dev_attr_backdoor.attr,
+	&dev_attr_ddrinfo_dfs_step.attr,
 	NULL,
 };
 

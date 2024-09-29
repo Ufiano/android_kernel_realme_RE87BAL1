@@ -493,8 +493,8 @@ TRACE_EVENT(sched_pi_setprio,
 			__entry->comm, __entry->pid,
 			__entry->oldprio, __entry->newprio)
 );
-
-#ifdef CONFIG_DETECT_HUNG_TASK
+//odm alm_id:5321993 struk to reboot function ; build-in  for gki 2023/3/17 wangshuaishuai start
+//#ifdef CONFIG_DETECT_HUNG_TASK
 TRACE_EVENT(sched_process_hang,
 	TP_PROTO(struct task_struct *tsk),
 	TP_ARGS(tsk),
@@ -511,7 +511,8 @@ TRACE_EVENT(sched_process_hang,
 
 	TP_printk("comm=%s pid=%d", __entry->comm, __entry->pid)
 );
-#endif /* CONFIG_DETECT_HUNG_TASK */
+//#endif /* CONFIG_DETECT_HUNG_TASK */
+//odm alm_id:5321993 struk to reboot function ; build-in  for gki 2023/3/17 wangshuaishuai end
 
 DECLARE_EVENT_CLASS(sched_move_task_template,
 

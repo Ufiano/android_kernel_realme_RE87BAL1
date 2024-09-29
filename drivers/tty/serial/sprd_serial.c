@@ -27,10 +27,11 @@
 #include <linux/slab.h>
 #include <linux/tty.h>
 #include <linux/tty_flip.h>
+#include <linux/pinctrl/consumer.h>
 
 /* device name */
 #define UART_NR_MAX		8
-#define SPRD_TTY_NAME		"ttySPRD"
+#define SPRD_TTY_NAME		"ttyS"
 #define SPRD_FIFO_SIZE		128
 #define SPRD_DEF_RATE		26000000
 #define SPRD_BAUD_IO_LIMIT	3000000
@@ -135,6 +136,7 @@ struct sprd_uart_port {
 	struct clk *clk;
 	unsigned int is_console;
 	unsigned int cflag_old;
+	struct pinctrl *pctrl;
 };
 
 static struct sprd_uart_port *sprd_port[UART_NR_MAX];
@@ -725,6 +727,7 @@ static int sprd_startup(struct uart_port *port)
 	unsigned int timeout;
 	struct sprd_uart_port *sp;
 	unsigned long flags;
+	struct pinctrl_state *state;
 
 	serial_out(port, SPRD_CTL2,
 		   THLD_TX_EMPTY << THLD_TX_EMPTY_SHIFT | THLD_RX_FULL);
@@ -759,6 +762,20 @@ static int sprd_startup(struct uart_port *port)
 	fc = serial_in(port, SPRD_CTL1);
 	fc |= RX_TOUT_THLD_DEF | RX_HFC_THLD_DEF;
 	serial_out(port, SPRD_CTL1, fc);
+	/*change pin matrix when use ap_uart0, conect inf1 to ap_uart0*/
+	if (port->line == 0) {
+		state = pinctrl_lookup_state(sp->pctrl, "ap_uart0_1");
+		if (IS_ERR(state)) {
+			dev_err(port->dev, "fail to get pin state\n");
+			return PTR_ERR(state);
+		}
+
+		ret = pinctrl_select_state(sp->pctrl, state);
+		if (ret != 0) {
+			dev_err(port->dev, "fail to select pin state\n");
+			return ret;
+		}
+	}
 
 	/* enable interrupt */
 	spin_lock_irqsave(&port->lock, flags);
@@ -774,10 +791,26 @@ static int sprd_startup(struct uart_port *port)
 
 static void sprd_shutdown(struct uart_port *port)
 {
+	int ret;
+	struct pinctrl_state *state;
+	struct sprd_uart_port *sp;
+
+	sp = container_of(port, struct sprd_uart_port, port);
 	sprd_release_dma(port);
 	serial_out(port, SPRD_IEN, 0);
 	serial_out(port, SPRD_ICLR, ~0);
 	devm_free_irq(port->dev, port->irq, port);
+	if (port->line == 0) {
+		state = pinctrl_lookup_state(sp->pctrl, "ap_uart1_1");
+		if (IS_ERR(state)) {
+			dev_err(port->dev, "fail to get pin state\n");
+		}
+
+		ret = pinctrl_select_state(sp->pctrl, state);
+		if (ret != 0) {
+			dev_err(port->dev, "fail to select pin state\n");
+		}
+	}
 }
 
 static void sprd_set_termios(struct uart_port *port,
@@ -1013,7 +1046,7 @@ static void sprd_console_write(struct console *co, const char *s,
 		spin_unlock_irqrestore(&port->lock, flags);
 }
 
-static int __init sprd_console_setup(struct console *co, char *options)
+static int sprd_console_setup(struct console *co, char *options)
 {
 	struct sprd_uart_port *sprd_uart_port;
 	int ret;
@@ -1190,6 +1223,8 @@ static int sprd_clk_init(struct uart_port *uport)
 		return -EINVAL;
 
 	iomem_regs = ioremap_nocache(clk_base, 0x100);
+            if(iomem_regs == NULL)
+                   return -EINVAL;
 	switch (sel) {
 	case 0:
 		uport->uartclk = SPRD_DEFAULT_SOURCE_CLK;
@@ -1220,6 +1255,7 @@ static int sprd_probe(struct platform_device *pdev)
 	int irq;
 	int index;
 	int ret;
+	struct pinctrl *p;
 
 	for (index = 0; index < ARRAY_SIZE(sprd_port); index++)
 		if (sprd_port[index] == NULL)
@@ -1261,6 +1297,15 @@ static int sprd_probe(struct platform_device *pdev)
 		return irq;
 	up->irq = irq;
 
+	/*get pinctrl to change matrix when use uart0*/
+	if (index == 0) {
+		p = devm_pinctrl_get(&pdev->dev);
+		if (IS_ERR(p)) {
+			dev_err(&pdev->dev, "get pinctrl failed!\n");
+			return PTR_ERR(p);
+		}
+		sprd_port[index]->pctrl = p;
+	}
 	/*
 	 * Allocate one dma buffer to prepare for receive transfer, in case
 	 * memory allocation failure at runtime.

@@ -145,6 +145,7 @@ void hq_register_sensor_info(int type, char ic_name[])
 	int i;
 	if (type >= 0 && type < 3) {
 		for (i = 0; i < sizeof(sensordevinfo) / sizeof(struct sensor_devinfo); i++) {
+			/* Jianmin.Niu@ODM.HQ.BSP.Sensors.Config 2019/2/1 Update string compare */
 			if (!strncmp(ic_name, sensordevinfo[i].ic_name, strlen(ic_name))) {
 				hq_parse_sensor_devinfo(type, sensordevinfo[i].ic_name, sensordevinfo[i].vendor_name);
 				break;

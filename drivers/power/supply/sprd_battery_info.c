@@ -89,6 +89,79 @@ int sprd_battery_parse_battery_id(struct power_supply *psy)
 }
 EXPORT_SYMBOL_GPL(sprd_battery_parse_battery_id);
 
+static int charger_id = 0xFF;
+static int sprd_charger_parse_cmdline_match(char *match_str, char *result, int size)
+{
+	struct device_node *cmdline_node = NULL;
+	const char *cmdline;
+	char *match, *match_end;
+	int len, match_str_len, ret;
+
+	if (!result || !match_str)
+		return -EINVAL;
+
+	memset(result, '\0', size);
+	match_str_len = strlen(match_str);
+
+	cmdline_node = of_find_node_by_path("/chosen");
+	if (!cmdline_node) {
+		printk("%s:line%d: NULL pointer!!!\n", __func__, __LINE__);
+		return -EINVAL;
+	}
+
+	ret = of_property_read_string(cmdline_node, "bootargs", &cmdline);
+	if (ret) {
+		printk("%s failed to read bootargs\n", __func__);
+		return -EINVAL;
+	}
+
+	match = strstr(cmdline, match_str);
+	if (!match) {
+		printk("Mmatch: %s fail in cmdline\n", match_str);
+		return -EINVAL;
+	}
+
+	match_end = strstr((match + match_str_len), " ");
+	if (!match_end) {
+		printk("Match end of : %s fail in cmdline\n", match_str);
+		return -EINVAL;
+	}
+
+	len = match_end - (match + match_str_len);
+	if (len < 0 || len > size) {
+		printk("Match cmdline :%s fail, len = %d\n", match_str, len);
+		return -EINVAL;
+	}
+
+	memcpy(result, (match + match_str_len), len);
+
+	return 0;
+}
+
+int sprd_charger_parse_charger_id(void)
+{
+	char *str = "chargeridinfo=";
+	char result[32] = {};
+	int id = 0, ret;
+
+	printk("In ... charger_id = %d\n", charger_id);
+	if (charger_id != 0xFF)return charger_id;
+
+	ret = sprd_charger_parse_cmdline_match(str, result, sizeof(result));
+	if (!ret) {
+		ret = kstrtoint(result, 10, &id);
+		if (ret) {
+			id = 0;
+			printk("Covert charger_id fail, ret = %d, result = %s\n", ret, result);
+		}
+	}
+	printk("End ... charger_id = %d\n", id);
+	charger_id = id;
+
+	return charger_id;
+}
+EXPORT_SYMBOL_GPL(sprd_charger_parse_charger_id);
+
 static bool sprd_battery_ocv_cap_table_check(struct power_supply *psy,
 					     struct sprd_battery_ocv_table *table,
 					     int table_len)
@@ -274,6 +347,35 @@ static int sprd_battery_parse_battery_temp_capacity_table(struct sprd_battery_in
 		battery_temp_cap_table[index].temp = be32_to_cpu(*list++);
 		battery_temp_cap_table[index].cap = be32_to_cpu(*list++);
 	}
+
+
+	return 0;
+}
+
+static int sprd_battery_parse_dischg_battery_temp_capacity_table(struct sprd_battery_info *info,
+							  struct device_node *battery_np,
+							  struct power_supply *psy)
+{
+	struct sprd_battery_temp_cap_table *dischg_battery_temp_cap_table;
+	const __be32 *list;
+	int index, len;
+
+	list = of_get_property(battery_np, "dischg-capacity-temp-table", &len);
+	if (!list || !len)
+		return 0;
+
+	info->dischg_battery_temp_cap_table_len = len / (2 * sizeof(__be32));
+	dischg_battery_temp_cap_table = info->dischg_battery_temp_cap_table =
+		devm_kcalloc(&psy->dev, info->battery_temp_cap_table_len,
+			     sizeof(*dischg_battery_temp_cap_table), GFP_KERNEL);
+	if (!info->dischg_battery_temp_cap_table)
+		return -ENOMEM;
+
+	for (index = 0; index < info->dischg_battery_temp_cap_table_len; index++) {
+		dischg_battery_temp_cap_table[index].temp = be32_to_cpu(*list++);
+		dischg_battery_temp_cap_table[index].cap = be32_to_cpu(*list++);
+	}
+
 
 	return 0;
 }
@@ -834,6 +936,12 @@ int sprd_battery_get_battery_info(struct power_supply *psy, struct sprd_battery_
 	err = sprd_battery_parse_battery_temp_capacity_table(info, battery_np, psy);
 	if (err) {
 		dev_err(&psy->dev, "Fail to get battery temp capacity table, ret = %d\n", err);
+		return err;
+	}
+
+	err = sprd_battery_parse_dischg_battery_temp_capacity_table(info, battery_np, psy);
+	if (err) {
+		dev_err(&psy->dev, "Fail to get dischg battery temp capacity table, ret = %d\n", err);
 		return err;
 	}
 

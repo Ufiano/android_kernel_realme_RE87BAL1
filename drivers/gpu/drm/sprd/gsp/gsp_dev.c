@@ -123,7 +123,7 @@ static struct of_device_id gsp_dt_ids[] = {
 };
 MODULE_DEVICE_TABLE(of, gsp_dt_ids);
 
-int boot_mode_check(void)
+static int boot_mode_check(void)
 {
 	struct device_node *np;
 	const char *cmd_line;
@@ -1145,7 +1145,7 @@ static int __init gsp_drv_init(void)
 
 	if (boot_mode_check()) {
 		GSP_WARN("Calibration Mode! Don't register sprd gsp driver");
-		//return 0;
+		return 0;
 	}
 
 	GSP_INFO("gsp device init begin\n");

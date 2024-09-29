@@ -22,7 +22,7 @@
 /*#define HX_ACT_IDLE_TEST*/
 
 /*#define HX_INSPT_DBG*/
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 #if defined(HX_SMART_WAKEUP)
 #define HX_BLACK_RSLT_OUT_FILE "hx_black_test_result.txt"
 #endif

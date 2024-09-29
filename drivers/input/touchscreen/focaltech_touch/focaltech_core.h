@@ -240,7 +240,7 @@ struct fts_ts_data {
 #elif defined(CONFIG_HAS_EARLYSUSPEND)
     struct early_suspend early_suspend;
 #endif
-	struct proc_dir_entry *oplus_touchpanel_proc;
+	struct proc_dir_entry *oppo_touchpanel_proc;
 };
 
 enum _FTS_BUS_TYPE {
@@ -254,7 +254,6 @@ enum _FTS_BUS_TYPE {
 * Global variable or extern global variabls/functions
 *****************************************************************************/
 extern struct fts_ts_data *fts_data;
-extern unsigned long tp_gesture;
 
 /* communication interface */
 int fts_read(u8 *cmd, u32 cmdlen, u8 *data, u32 datalen);

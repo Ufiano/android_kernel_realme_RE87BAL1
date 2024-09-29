@@ -28,6 +28,9 @@
 #include <linux/of_irq.h>
 #include <linux/spinlock.h>
 #include <dt-bindings/input/gpio-keys.h>
+//wt_huangxiaotian,20210305,Add cable key detect for modem
+#include <uapi/linux/input-event-codes.h>
+//wt_huangxiaotian,20210305,Add cable key detect for modem
 
 struct gpio_button_data {
 	const struct gpio_keys_button *button;
@@ -331,6 +334,25 @@ static ssize_t gpio_keys_store_##name(struct device *dev,		\
 ATTR_STORE_FN(disabled_keys, EV_KEY);
 ATTR_STORE_FN(disabled_switches, EV_SW);
 
+static ssize_t show_cutkey(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct gpio_keys_drvdata *ddata = platform_get_drvdata(pdev);
+	int i = 0;
+	int cutkeyvalue = 0;
+
+	for (i = 0; i < ddata->pdata->nbuttons; i++) {
+		struct gpio_button_data *bdata = &ddata->data[i];
+		if(*bdata->code == 756 ) {
+			cutkeyvalue = gpiod_get_value_cansleep(bdata->gpiod);
+			break; 
+		}
+	}
+		
+	return sprintf(buf, "%d", cutkeyvalue);
+}
+
 /*
  * ATTRIBUTES:
  *
@@ -343,12 +365,17 @@ static DEVICE_ATTR(disabled_keys, S_IWUSR | S_IRUGO,
 static DEVICE_ATTR(disabled_switches, S_IWUSR | S_IRUGO,
 		   gpio_keys_show_disabled_switches,
 		   gpio_keys_store_disabled_switches);
+		   
+static DEVICE_ATTR(cutkey, S_IWUSR | S_IRUGO,
+		   show_cutkey,
+		   NULL);
 
 static struct attribute *gpio_keys_attrs[] = {
 	&dev_attr_keys.attr,
 	&dev_attr_switches.attr,
 	&dev_attr_disabled_keys.attr,
 	&dev_attr_disabled_switches.attr,
+	&dev_attr_cutkey.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(gpio_keys);
@@ -371,7 +398,17 @@ static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 		if (state)
 			input_event(input, type, button->code, button->value);
 	} else {
-		input_event(input, type, *bdata->code, state);
+#ifdef CONFIG_WT_COMPILE_FACTORY_VERSION
+		if(button->code==114 || button->code==115)
+		{
+		  pr_err("****volumedown or volumeup pressed,start dump ****");
+		  dump_stack();
+  		  pr_err("*****volumedown or volumeup pressed,end dump ****");
+		}
+#endif
+		if(button->code != KEY_TV){
+			input_event(input, type, *bdata->code, state);
+		}
 	}
 	input_sync(input);
 }
@@ -380,8 +417,25 @@ static void gpio_keys_gpio_work_func(struct work_struct *work)
 {
 	struct gpio_button_data *bdata =
 		container_of(work, struct gpio_button_data, work.work);
+       //wt_huangxiaotian,20210305,Add cable key detect for modem
+	const struct gpio_keys_button *button = bdata->button;
+	struct input_dev *input = bdata->input;
+	unsigned int type = button->type ?: EV_KEY;
 
 	gpio_keys_gpio_report_event(bdata);
+
+	if (type != EV_ABS){
+                pr_err("shaokang EV_ABS is %d\n", EV_ABS);
+		if(button->code == KEY_TV){
+			input_event(input, type, KEY_TV, 1);
+			input_sync(input);
+                pr_err("shaokang input_sync1 is %d\n", KEY_TV);
+			input_event(input, type, KEY_TV, 0);
+			input_sync(input);
+                pr_err("shaokang input_event0 is %d\n", KEY_TV);
+		}
+	}
+//wt_huangxiaotian,20210305,Add cable key detect for modem
 
 	if (bdata->button->wakeup)
 		pm_relax(bdata->input->dev.parent);
@@ -537,7 +591,16 @@ static int gpio_keys_setup_key(struct platform_device *pdev,
 
 	if (bdata->gpiod) {
 		bool active_low = gpiod_is_active_low(bdata->gpiod);
-
+		
+	//wt_huangxiaotian,20210305,Add cable key detect for modem
+#ifdef CONFIG_GPIO_SYSFS
+		error = gpiod_export(bdata->gpiod, false);
+		if (error) {
+			dev_err(dev,"Unable to export for GPIO %d, error %d\n",button->gpio, error);
+			return error;
+		}
+#endif
+       //wt_huangxiaotian,20210305,Add cable key detect for modem
 		if (button->debounce_interval) {
 			error = gpiod_set_debounce(bdata->gpiod,
 					button->debounce_interval * 1000);
@@ -564,7 +627,13 @@ static int gpio_keys_setup_key(struct platform_device *pdev,
 		INIT_DELAYED_WORK(&bdata->work, gpio_keys_gpio_work_func);
 
 		isr = gpio_keys_gpio_isr;
-		irqflags = IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING;
+//wt_huangxiaotian,20210305,Add cable key detect for modem
+		if(button->code == KEY_TV){
+			irqflags = IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING | IRQF_ONESHOT;
+		} else{
+			irqflags = IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING;
+		}
+//wt_huangxiaotian,20210305,Add cable key detect for modem
 
 		switch (button->wakeup_event_action) {
 		case EV_ACT_ASSERTED:

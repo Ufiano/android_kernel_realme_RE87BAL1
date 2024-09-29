@@ -66,10 +66,10 @@ extern int touch_black_test;
 extern int fts_ic_type;
 extern int ft8006saa;
 
-/* oplus_tp_limit_enable */
+/* oppo_tp_limit_enable */
 
-#define OPLUS_TP_LIMIT_ENABLE "oplus_tp_limit_enable"
-static struct proc_dir_entry *oplus_tp_limit_enable;
+#define OPPO_TP_LIMIT_ENABLE "oppo_tp_limit_enable"
+static struct proc_dir_entry *oppo_tp_limit_enable;
 
 
 /* add for hq test*/
@@ -2738,7 +2738,7 @@ static const struct file_operations fts_black_screen_test_fops = {
 	//.release = seq_release,
 };
 
-static ssize_t oplus_tp_limit_write(struct file *filp, const char __user *buf,
+static ssize_t oppo_tp_limit_write(struct file *filp, const char __user *buf,
 		size_t count, loff_t *ppos)
 {
 	unsigned int tmp = 0;
@@ -2782,7 +2782,7 @@ static ssize_t oplus_tp_limit_write(struct file *filp, const char __user *buf,
 	return count;
 };
 
-static ssize_t oplus_tp_limit_read(struct file *filp, char __user *buf, size_t count, loff_t *ppos)
+static ssize_t oppo_tp_limit_read(struct file *filp, char __user *buf, size_t count, loff_t *ppos)
 {
 	char tmp[8] = {0};
 	struct fts_ts_data *ts_data = fts_data;
@@ -2795,14 +2795,14 @@ static ssize_t oplus_tp_limit_read(struct file *filp, char __user *buf, size_t c
 	return simple_read_from_buffer(buf, count, ppos, tmp, strlen(tmp));
 }
 
-static const struct file_operations oplus_tp_limit_fops =
+static const struct file_operations oppo_tp_limit_fops =
 {
-	.write = oplus_tp_limit_write,
-	.read = oplus_tp_limit_read,
+	.write = oppo_tp_limit_write,
+	.read = oppo_tp_limit_read,
 	.owner = THIS_MODULE,
 };
 
-int FTS_oplus_proc_node_init(void)
+int FTS_oppo_proc_node_init(void)
 {
      fts_proc_touchpanel_dir = proc_mkdir(FTS_PROC_TOUCHPANEL_FOLDER, NULL);
      printk("kaoshan %s %d ###\n",__func__,__LINE__);
@@ -2812,21 +2812,21 @@ int FTS_oplus_proc_node_init(void)
      }
 	 printk("kaoshan %s %d ###\n",__func__,__LINE__);
 
-    oplus_tp_limit_enable = proc_create(OPLUS_TP_LIMIT_ENABLE, 0666,fts_proc_touchpanel_dir, &oplus_tp_limit_fops);
-	if (oplus_tp_limit_enable == NULL) {
-		FTS_ERROR("create proc/touchpanel/oplus_tp_limit_enable Failed!\n");
-		goto fail_oplus_tp_limit_enable;	
+    oppo_tp_limit_enable = proc_create(OPPO_TP_LIMIT_ENABLE, 0666,fts_proc_touchpanel_dir, &oppo_tp_limit_fops);
+	if (oppo_tp_limit_enable == NULL) {
+		FTS_ERROR("create proc/touchpanel/oppo_tp_limit_enable Failed!\n");
+		goto fail_oppo_tp_limit_enable;	
 		} 
 	 
      fts_proc_baseline_test_file = proc_create(FTS_PROC_BASELINE_TEST_FILE, (S_IRUGO),fts_proc_touchpanel_dir, &fts_proc_baseline_test_ops);
      if (fts_proc_baseline_test_file == NULL) {
          FTS_TEST_SAVE_ERR(" %s: proc baseline_test file create failed!\n", __func__);
-         goto fail_oplus_proc_test_file;
+         goto fail_oppo_proc_test_file;
      }
      fts_proc_backscreen_baseline_file = proc_create(FTS_PROC_BACKSCREEN_BASELINE_FILE, (S_IRUGO | S_IWUGO), fts_proc_touchpanel_dir, &fts_black_screen_test_fops);
      if (fts_proc_backscreen_baseline_file == NULL) {
          FTS_TEST_SAVE_ERR(" %s create proc/touchpanel/blackscreen_test Failed!\n", __func__);
-         goto fail_oplus_proc_baseline_file;
+         goto fail_oppo_proc_baseline_file;
      }
 
 
@@ -2837,32 +2837,32 @@ int FTS_oplus_proc_node_init(void)
 									  fts_proc_debug_infor_dir, &tp_differ_proc_fops);
 		if (fts_proc_delta_o_file == NULL) {
 			FTS_TEST_SAVE_ERR(" %s: proc dbg_info file create failed!\n", __func__);
-			goto fail_oplus_proc_delta_file;
+			goto fail_oppo_proc_delta_file;
 		}
 		fts_proc_data_limit_file = proc_create(FTS_PROC_DATA_LIMIT_FILE, (S_IWUSR | S_IRUGO),
 									  fts_proc_debug_infor_dir, &tp_rawdata_proc_fops);
 		if (fts_proc_data_limit_file == NULL) {
 			FTS_TEST_SAVE_ERR(" %s: proc data_limit file create failed!\n", __func__);
-			goto fail__oplus_proc_litmit_file;
+			goto fail__oppo_proc_litmit_file;
 		}
 	}
 	 
 	return 0;
-fail_oplus_tp_limit_enable:
-	remove_proc_entry(OPLUS_TP_LIMIT_ENABLE, fts_proc_touchpanel_dir);
-fail_oplus_proc_test_file:
+fail_oppo_tp_limit_enable:
+	remove_proc_entry(OPPO_TP_LIMIT_ENABLE, fts_proc_touchpanel_dir);
+fail_oppo_proc_test_file:
 	remove_proc_entry(FTS_PROC_BASELINE_TEST_FILE, fts_proc_touchpanel_dir);	
-fail_oplus_proc_baseline_file:
+fail_oppo_proc_baseline_file:
 	remove_proc_entry(FTS_PROC_BACKSCREEN_BASELINE_FILE, fts_proc_touchpanel_dir);
-fail_oplus_proc_delta_file:
+fail_oppo_proc_delta_file:
 	remove_proc_entry(FTS_PROC_DELTA_O_FILE, fts_proc_debug_infor_dir);
-fail__oplus_proc_litmit_file:
+fail__oppo_proc_litmit_file:
 	remove_proc_entry(FTS_PROC_DATA_LIMIT_FILE, fts_proc_debug_infor_dir);
 
 	return -ENOMEM;
 }
 
-static int OPLUS_proc_node_deinit(void)
+static int OPPO_proc_node_deinit(void)
 {
     remove_proc_entry(FTS_PROC_BASELINE_TEST_FILE, fts_proc_touchpanel_dir);	
     remove_proc_entry(FTS_PROC_BACKSCREEN_BASELINE_FILE, fts_proc_touchpanel_dir);	
@@ -3039,7 +3039,7 @@ int fts_test_init(struct fts_ts_data *ts_data)
 int fts_test_exit(struct fts_ts_data *ts_data)
 {
     FTS_TEST_FUNC_ENTER();
-	OPLUS_proc_node_deinit();
+	OPPO_proc_node_deinit();
 
     sysfs_remove_group(&ts_data->dev->kobj, &fts_test_attribute_group);
     fts_free(fts_ftest);

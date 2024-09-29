@@ -40,6 +40,11 @@ void mmc_run_bkops(struct mmc_card *card);
 int mmc_flush_cache(struct mmc_card *card);
 int mmc_cmdq_enable(struct mmc_card *card);
 int mmc_cmdq_disable(struct mmc_card *card);
-
+#ifdef CONFIG_MMC_SPRD_MMCHEALTH
+#define FORESEE_32G_eMMC1 1 //FORESEE 32G
+#define Phison_32G_eMMC 2 //qunlian 32G
+int mmc_health(struct mmc_card *card);
+int get_emmc_mode(void);
+#endif
 #endif
 

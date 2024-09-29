@@ -661,7 +661,7 @@ int sc2355_hif_tx_list(struct sprd_hif *hif,
 #endif
 		INIT_LIST_HEAD(tx_list_head);
 		tx_packets += tx_count;
-		pr_info("%s,tx_count=%d,total=%lu,mbuf=%lu,%lu\n",
+		wl_debug("%s,tx_count=%d,total=%lu,mbuf=%lu,%lu\n",
 			__func__, tx_count, tx_packets, mbufalloc, mbufpop);
 		sc2355_add_topop_list(hif->tx_data_port, head, tail, tx_count);
 	}
@@ -969,7 +969,7 @@ int sc2355_tx_cmd_pop_list(int channel, struct mbuf_t *head,
 	struct tx_mgmt *tx_mgmt;
 	struct sprd_msg *pos_buf, *temp_buf;
 
-	pr_debug("%s yuanjiang x channel: %d, head: %p, tail: %p num: %d\n",
+	pr_debug("%s channel: %d, head: %p, tail: %p num: %d\n",
 		 __func__, channel, head, tail, num);
 
 	tx_mgmt = (struct tx_mgmt *)hif->tx_mgmt;
@@ -1463,7 +1463,7 @@ int sc2355_fc_get_send_num(struct sprd_hif *hif,
 			     shared_flow_num, data_num);
 			return -ENOMEM;
 		}
-		pr_info("%s,mode:%d,e_n:%d,s_n:%d,d_n:%d,{%d,%d,%d,%d}\n",
+		wl_debug("%s,mode:%d,e_n:%d,s_n:%d,d_n:%d,{%d,%d,%d,%d}\n",
 			__func__, mode, excusive_flow_num,
 			shared_flow_num, data_num,
 			tx_mgmt->color_num[0], tx_mgmt->color_num[1],
@@ -1655,7 +1655,6 @@ static struct sprd_hif_ops sc2355_sdio_ops = {
 	.download_hw_param = sc2355_download_hw_param,
 	.reset = sc2355_reset,
 	.throughput_ctl_pd = sc2355_sdio_throughput_ctl_core_pd,
-	.tx_flush = sc2355_tx_flush,
 };
 
 extern struct sprd_chip_ops sc2355_chip_ops;

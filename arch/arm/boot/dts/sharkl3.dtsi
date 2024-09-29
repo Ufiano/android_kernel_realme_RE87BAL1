@@ -794,6 +794,7 @@
 				compatible = "sprd,sharkl3-hwdvfs";
 				sprd,syscon-enable = <&aon_apb_regs>;
 				sprd,anlg-phy-g4-ctrl = <&anlg_phy_g4_regs>;
+				sprd,syscon-pmu-apb = <&pmu_apb_regs>;
 				reg = <0x40300000 0x1000>;
 				interrupts = <GIC_SPI 121 IRQ_TYPE_LEVEL_HIGH>;
 				#address-cells = <2>;

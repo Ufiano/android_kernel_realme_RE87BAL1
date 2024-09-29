@@ -988,7 +988,7 @@ config SPRD_WATCHDOG
 
 config SPRD_WATCHDOG_PMIC
 	tristate "SPRD PMIC WDT Watchdog timer"
-	depends on ARCH_SPRD && SPI_SPRD_ADI && SPRD_SIPC
+	depends on ARCH_SPRD && SPI_SPRD_ADI && SPRD_SIPC_SPIPE
 	help
 	  If you have a PMIC  watchdog board, say Y here, When PMIC watchdog
 	  is triggered, PMIC system, AP system and modem systemare both reset
@@ -1702,7 +1702,7 @@ config SIBYTE_WDOG
 
 config AR7_WDT
 	tristate "TI AR7 Watchdog Timer"
-	depends on AR7 || (MIPS && COMPILE_TEST)
+	depends on AR7 || (MIPS && 32BIT && COMPILE_TEST)
 	help
 	  Hardware driver for the TI AR7 Watchdog Timer.
 

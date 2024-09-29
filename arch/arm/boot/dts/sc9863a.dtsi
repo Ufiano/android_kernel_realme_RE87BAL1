@@ -11,7 +11,7 @@
 #include "sc9863a-modem.dtsi"
 
 / {
-	cpuinfo_hardware = "Unisoc SC9863A";
+	cpuinfo_hardware = "Unisoc SC9899A";
 	soc-module = "SC9863A";
 	soc-manufacturer = "Spreadtrum";
 

@@ -1792,6 +1792,9 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 	 */
 	mmc_select_powerclass(card);
 
+#ifdef CONFIG_MMC_SPRD_MMCHEALTH
+	mmc_health(card);
+#endif
 	/*
 	 * Enable HPI feature (if supported)
 	 */

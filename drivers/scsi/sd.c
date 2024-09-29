@@ -72,6 +72,8 @@
 #include "sd.h"
 #include "scsi_priv.h"
 #include "scsi_logging.h"
+#define SD_NUM                 3
+extern struct gendisk *ufs_disk[];
 
 MODULE_AUTHOR("Eric Youngdale");
 MODULE_DESCRIPTION("SCSI disk (sd) driver");
@@ -3301,6 +3303,8 @@ static int sd_probe(struct device *dev)
 	struct gendisk *gd;
 	int index;
 	int error;
+	static int num = 0;
+	struct Scsi_Host *host = sdp->host;
 
 	scsi_autopm_get_device(sdp);
 	error = -ENODEV;
@@ -3319,6 +3323,8 @@ static int sd_probe(struct device *dev)
 /* add start by wt_gaoyuhang*/
 	sdev_printk(KERN_INFO, sdp, "sd_probe\n");
 /* add end  by wt_gaoyuhang */
+	if (!host)
+        	goto out;
 	error = -ENOMEM;
 	sdkp = kzalloc(sizeof(*sdkp), GFP_KERNEL);
 	if (!sdkp)
@@ -3339,12 +3345,13 @@ static int sd_probe(struct device *dev)
 		sdev_printk(KERN_WARNING, sdp, "SCSI disk (sd) name length exceeded.\n");
 		goto out_free_index;
 	}
-
-	if(sdp->lun == 1){
+	if(sdp->lun == 1 && host->host_no == 0){
 		gd->disk_name[2] = 'b';
-	}else if(sdp->lun == 2){
+	}else if(sdp->lun == 2 && host->host_no == 0){
 		gd->disk_name[2] = 'c';
 	}
+	if(num < SD_NUM)
+		ufs_disk[num++] = gd;
 	sdkp->device = sdp;
 	sdkp->driver = &sd_template;
 	sdkp->disk = gd;
@@ -3361,15 +3368,16 @@ static int sd_probe(struct device *dev)
 	}
 
 	device_initialize(&sdkp->dev);
-	sdkp->dev.parent = dev;
+	sdkp->dev.parent = get_device(dev);
 	sdkp->dev.class = &sd_disk_class;
 	dev_set_name(&sdkp->dev, "%s", dev_name(dev));
 
 	error = device_add(&sdkp->dev);
-	if (error)
-		goto out_free_index;
+	if (error) {
+		put_device(&sdkp->dev);
+		goto out;
+	}
 
-	get_device(dev);
 	dev_set_drvdata(dev, sdkp);
 
 	gd->major = sd_major((index & 0xf0) >> 4);

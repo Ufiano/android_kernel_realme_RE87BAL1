@@ -565,9 +565,6 @@ static int dpu_init(struct dpu_context *ctx)
 
 	dpu_write_back_config(ctx);
 
-	ctx->base_offset[0] = 0x0;
-	ctx->base_offset[1] = DPU_MAX_REG_OFFSET;
-
 	return 0;
 }
 
@@ -1037,7 +1034,7 @@ static void disable_vsync(struct dpu_context *ctx)
 static int dpu_context_init(struct dpu_context *ctx)
 {
 	ctx->base_offset[0] = 0x0;
-	ctx->base_offset[1] = DPU_MAX_REG_OFFSET;
+	ctx->base_offset[1] = DPU_MAX_REG_OFFSET / 4;
 
 	return 0;
 }

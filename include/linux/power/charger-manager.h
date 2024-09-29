@@ -113,7 +113,9 @@ enum cm_fast_charge_command {
 	CM_DUMP_CHARGER_REGISTER_CMD,
 	CM_HIZ_ENABLE_CMD,
 	CM_HIZ_DISABLE_CMD,
+#ifndef VENDOR_KERNEL
 	CM_FEED_WATCHDOG_CMD,
+#endif //not defined VENDOR_KERNEL
 };
 
 enum cm_present_command {
@@ -323,19 +325,35 @@ struct charger_regulator {
 	struct device_attribute attr_charge_pump_current;
 	struct device_attribute attr_enable_power_path;
 	struct device_attribute attr_notify_code;
+#ifndef VENDOR_KERNEL
 	struct device_attribute attr_otg_enable;
+#endif //not defined VENDOR_KERNEL
+	struct device_attribute attr_batt_param_noplug;
 	struct device_attribute attr_cool_down;
+#ifndef VENDOR_KERNEL
 	struct device_attribute attr_usb_type_role;
 	struct device_attribute attr_typec_cc_polarity;
+#endif //not defined VENDOR_KERNEL
 	struct device_attribute attr_fast_charge_support;
 	struct device_attribute attr_runin_stop;
 	struct device_attribute attr_ship_mode;
+#ifndef VENDOR_KERNEL
 	struct device_attribute attr_is_fast_charge;
+#endif //not defined VENDOR_KERNEL
 	struct device_attribute attr_batid_volt;
+#ifndef VENDOR_KERNEL
 	struct device_attribute attr_main_charger_current;
 	struct device_attribute attr_second_charger_current;
+#endif //not defined VENDOR_KERNEL
+	struct device_attribute attr_temp_debug;
+	struct device_attribute attr_uart_switch;
+	struct device_attribute attr_type;
+#ifdef VENDOR_KERNEL
+	struct attribute *attrs[20];
+#else
 	struct device_attribute attr_is_factory_mode;
 	struct attribute *attrs[23];
+#endif //defined VENDOR_KERNEL
 
 	struct charger_manager *cm;
 };
@@ -809,15 +827,16 @@ struct charger_desc {
  */
 
 /*odm.hq.bsp.luowenjiang@huaqin.com 2021.12.03 modify for usb temp protection start*/
+#ifdef USB_TEMP_CHECK_ENABLE
 #define CONFIG_HQ_USB_TEMP_CHECK
+#endif // defined USB_TEMP_CHECK_ENABLE
 /*odm.hq.bsp.luowenjiang@huaqin.com 2021.12.03 modify for usb temp protection end*/
-#define CONFIG_USB_TEMP_CHECK
 struct charger_manager {
 	struct list_head entry;
 	struct device *dev;
 	struct charger_desc *desc;
 
-#ifdef CONFIG_THERMAL
+#if IS_ENABLED(CONFIG_THERMAL)
 	struct thermal_zone_device *tzd_batt;
 #endif
 	bool charger_enabled;
@@ -853,18 +872,20 @@ struct charger_manager {
 	struct delayed_work cc_vbus_check_work;
 #endif
 	/*odm.hq.bsp.luowenjiang@huaqin.com 2021.11.04 modify for usb temp protection end*/
+#ifndef VENDOR_KERNEL
 	struct delayed_work get_charger_type_work;
+#endif //not defined VENDOR_KERNEL
 };
-#define CHG_VBUS_OV_STATUS				(1 << 1)
-#define CHG_BAT_HIG_TEMP_STATUS			(1 << 3)
-#define CHG_BAT_LOW_TEMP_STATUS			(1 << 4)
-#define CHG_BAT_ID_STATUS				(1 << 5)
-#define CHG_BAT_OV_STATUS				(1 << 6)
-#define CHG_BAT_FULL_STATUS				(1 << 7)
-#define CHG_BAT_TIMEOUT_STATUS			(1 << 9)
-#define CHG_BAT_TEMP_HIG_FULL_STATUS	(1 << 10)
-#define CHG_BAT_TEMP_LOW_FULL_STATUS	(1 << 11)
-#define CHG_BAT_TEMP_HIG_STOP_STATUS	(1 << 12)
+#define CHG_VBUS_OV_STATUS				(1 << 6)
+#define CHG_BAT_HIG_TEMP_STATUS				(1 << 5)
+#define CHG_BAT_LOW_TEMP_STATUS				(1 << 8)
+#define CHG_BAT_ID_STATUS				(1 << 7)
+#define CHG_BAT_OV_STATUS				(1 << 0)
+#define CHG_BAT_FULL_STATUS				(1 << 1)
+#define CHG_BAT_TIMEOUT_STATUS				(1 << 9)
+#define CHG_BAT_TEMP_HIG_FULL_STATUS			(1 << 10)
+#define CHG_BAT_TEMP_LOW_FULL_STATUS			(1 << 11)
+#define CHG_BAT_TEMP_HIG_STOP_STATUS			(1 << 12)
 /*odm.hq.bsp.luowenjiang@huaqin.com 2021.11.04 modify for usb temp protection start*/
 #ifdef CONFIG_HQ_USB_TEMP_CHECK
 #define CHG_USB_TEMP_HIGH	(1 << 13)

@@ -2508,7 +2508,7 @@ int himax_self_test_data_init(void)
 	} else if (strstr(lcd_himax_name_for_tp, "hx83112a")) {
 		err = request_firmware(&file_entry, file_name_3, ts->dev);
 		curScreen = file_name_3;
-	} else if (strstr(lcd_himax_name_for_tp, "hx83102d_txd")) {
+		} else if (strstr(lcd_himax_name_for_tp, "hx83102d_txd")) {
 		err = request_firmware(&file_entry, file_name_4, ts->dev);
 		curScreen = file_name_4;
 	} else {
@@ -2651,7 +2651,7 @@ static int himax_chip_self_test(struct seq_file *s, void *v)
 	if(strstr(lcd_himax_name_for_tp, "hx83112a")){
 		E("%s: MPAP_FWNAME_FIVE\n", __func__);
 		g_core_fp.fp_0f_op_file_dirly(MPAP_FWNAME_FIVE);
-	}else if(strstr(lcd_himax_name_for_tp, "hx83102d_txd")){
+		}else if(strstr(lcd_himax_name_for_tp, "hx83102d_txd")){
 		E("%s: MPAP_FWNAME_FOUR\n", __func__);
 		g_core_fp.fp_0f_op_file_dirly(MPAP_FWNAME_FOUR);
 	}else{
@@ -2814,7 +2814,7 @@ END:
 	return ret;
 }
 
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 #if defined(HX_SMART_WAKEUP)
 int himax_black_chip_self_test(struct seq_file *s, void *v)
 {
@@ -2849,7 +2849,7 @@ int himax_black_chip_self_test(struct seq_file *s, void *v)
 	mutex_lock(&private_ts->fw_update_lock);	
 	if(strstr(lcd_himax_name_for_tp, "hx83112a")){
 		g_core_fp.fp_0f_op_file_dirly(MPAP_FWNAME_FIVE);
-	}else if(strstr(lcd_himax_name_for_tp, "hx83102d_txd")){
+		}else if(strstr(lcd_himax_name_for_tp, "hx83102d_txd")){
 		g_core_fp.fp_0f_op_file_dirly(MPAP_FWNAME_FOUR);
 	}else{
 		g_core_fp.fp_0f_op_file_dirly(MPAP_FWNAME);

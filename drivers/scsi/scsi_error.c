@@ -70,6 +70,7 @@ void scsi_eh_wakeup(struct Scsi_Host *shost)
 	if (scsi_host_busy(shost) == shost->host_failed) {
 		trace_scsi_eh_wakeup(shost);
 		wake_up_process(shost->ehandler);
+		dump_stack();
 		SCSI_LOG_ERROR_RECOVERY(5, shost_printk(KERN_INFO, shost,
 			"Waking error handler thread\n"));
 	}
@@ -1490,9 +1491,12 @@ static int scsi_eh_bus_device_reset(struct Scsi_Host *shost,
 		if (!bdr_scmd)
 			continue;
 
-		SCSI_LOG_ERROR_RECOVERY(3,
-			sdev_printk(KERN_INFO, sdev,
-				     "%s: Sending BDR\n", current->comm));
+		sdev_printk(KERN_ERR, sdev,
+			"%s: Sending BDR\n", current->comm);
+		scsi_print_command(bdr_scmd);
+		if (status_byte(bdr_scmd->result) & CHECK_CONDITION)
+			scsi_print_sense(bdr_scmd);
+
 		rtn = scsi_try_bus_device_reset(bdr_scmd);
 		if (rtn == SUCCESS || rtn == FAST_IO_FAIL) {
 			if (!scsi_device_online(sdev) ||

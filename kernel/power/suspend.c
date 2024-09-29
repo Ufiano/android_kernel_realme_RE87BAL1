@@ -33,6 +33,9 @@
 #include <linux/wakeup_reason.h>
 
 #include "power.h"
+#ifdef CONFIG_ENABLE_SPRD_DEEP_SLEEP_TRACING
+#include <sprd_past_record.h>
+#endif
 
 const char * const pm_labels[] = {
 	[PM_SUSPEND_TO_IDLE] = "freeze",
@@ -139,9 +142,7 @@ static void s2idle_loop(void)
 			break;
 		}
 
-		pm_wakeup_clear(false);
 		clear_wakeup_reasons();
-
 		s2idle_enter();
 	}
 
@@ -451,6 +452,9 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 			trace_suspend_resume(TPS("machine_suspend"),
 				state, true);
 			error = suspend_ops->enter(state);
+#ifdef CONFIG_ENABLE_SPRD_DEEP_SLEEP_TRACING
+			sprd_system_deep_state_enter(SPRD_DEEP_STATE_RESUME_ON_GOING);
+#endif
 			trace_suspend_resume(TPS("machine_suspend"),
 				state, false);
 		} else if (*wakeup) {
@@ -577,6 +581,10 @@ static int enter_state(suspend_state_t state)
 	if (!mutex_trylock(&system_transition_mutex))
 		return -EBUSY;
 
+#ifdef CONFIG_ENABLE_SPRD_DEEP_SLEEP_TRACING
+	sprd_system_deep_state_enter(SPRD_DEEP_STATE_SUSPEND_ON_GOING);
+#endif
+
 	if (state == PM_SUSPEND_TO_IDLE)
 		s2idle_begin();
 
@@ -607,6 +615,9 @@ static int enter_state(suspend_state_t state)
 	suspend_finish();
  Unlock:
 	mutex_unlock(&system_transition_mutex);
+#ifdef CONFIG_ENABLE_SPRD_DEEP_SLEEP_TRACING
+	sprd_system_deep_state_enter(SPRD_DEEP_STATE_NOT_IN_DEEP);
+#endif
 	return error;
 }
 

@@ -1101,19 +1101,12 @@ static int musb_gadget_disable(struct usb_ep *ep)
 	epnum = musb_ep->current_epnum;
 	epio = musb->endpoints[epnum].regs;
 
-	spin_lock_irqsave(&musb->lock, flags);
-	if (!musb_ep->desc) {
-		dev_err(musb->controller, "%s already disabled\n", ep->name);
-		spin_unlock_irqrestore(&musb->lock, flags);
-		return 0;
-	}
-
 	if (pm_runtime_suspended(dev)) {
-		spin_unlock_irqrestore(&musb->lock, flags);
 		WARN(1, "cann't access musb in suspended\n");
 		return -EINVAL;
 	}
 
+	spin_lock_irqsave(&musb->lock, flags);
 	musb_ep_select(musb->mregs, epnum);
 
 	/* zero the endpoint sizes */
@@ -1290,9 +1283,11 @@ static int musb_gadget_queue(struct usb_ep *ep, struct usb_request *req,
 		status = musb_queue_resume_work(musb,
 						musb_ep_restart_resume_work,
 						request);
-		if (status < 0)
+		if (status < 0) {
 			dev_err(musb->controller, "%s resume work: %i\n",
 				__func__, status);
+			list_del(&request->list);
+		}
 	}
 
 unlock:
@@ -1317,21 +1312,14 @@ static int musb_gadget_dequeue(struct usb_ep *ep, struct usb_request *request)
 	if (!ep || !request || req->ep != musb_ep)
 		return -EINVAL;
 
-	spin_lock_irqsave(&musb->lock, flags);
-	if (!musb_ep->desc) {
-		dev_err(musb->controller, "request %p queued to %s already disabled\n",
-				request, ep->name);
-		status = 0;
-		goto done;
-	}
-
 	if (pm_runtime_suspended(dev)) {
 		WARN(1, "cann't access musb in suspended\n");
-		status = -EINVAL;
-		goto done;
+		return -EINVAL;
 	}
 
 	trace_musb_req_deq(req);
+
+	spin_lock_irqsave(&musb->lock, flags);
 
 	if (list_empty(&musb_ep->req_list) && musb_ep->dma) {
 		struct dma_controller	*c = musb->dma_controller;
@@ -1361,19 +1349,10 @@ static int musb_gadget_dequeue(struct usb_ep *ep, struct usb_request *request)
 				break;
 		}
 
-		/* If found in dma reqlist, then stop dma transfer*/
 		if (r == req) {
-			struct dma_controller	*c = musb->dma_controller;
-
-			musb_ep_select(musb->mregs, musb_ep->current_epnum);
-			if (c->channel_abort)
-				status = c->channel_abort(musb_ep->dma);
-			else
-				status = -EBUSY;
-			/* musb_g_giveback will be called in channel_abort*/
-
 			dev_info(musb->controller, "request %p queued to %s startlist\n",
 				request, ep->name);
+			status = 0;
 		} else {
 			dev_err(musb->controller, "request %p queued to %s already processed\n",
 				request, ep->name);

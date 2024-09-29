@@ -24,6 +24,9 @@
 					sprd,video-lp-cmd-enable = <1>;
 					sprd,hporch-lp-disable = <1>;
 					sprd,dpi-clk-div = <6>;
+					sprd,power-on-avee-delay = <15>;
+					sprd,last-brightness = <0>;
+					sprd,start-frame-rate-flag = <1>;//0 default 1 60Mhz
 
 					sprd,width-mm = <67>;
 					sprd,height-mm = <153>;

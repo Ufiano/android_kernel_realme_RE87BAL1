@@ -2775,7 +2775,7 @@ END:
 	return ret;
 }
 
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 #if defined(HX_SMART_WAKEUP)
 int himax_black_chip_self_test(struct seq_file *s, void *v)
 {

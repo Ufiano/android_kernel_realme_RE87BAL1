@@ -15,6 +15,7 @@
 
 #include <linux/atomic.h>
 #include <asm/cacheflush.h>
+#include <linux/atomic.h>
 #include <linux/delay.h>
 #include <linux/elf.h>
 #include <linux/elfcore.h>
@@ -146,7 +147,7 @@ static int prepare_minidump_info(struct pt_regs *regs);
 static struct info_desc minidump_info_desc_g;
 static int prepare_exception_info(struct pt_regs *regs,
 			struct task_struct *tsk, const char *reason);
-static char *ylog_buffer;
+char *ylog_buffer;
 #endif /*	minidump code end	*/
 typedef char note_buf_t[SYSDUMP_NOTE_BYTES];
 
@@ -249,7 +250,7 @@ static struct sysdump_config sysdump_conf = {
 static int sprd_sysdump_init;
 static int sprd_sysdump_shash_init;
 
-int sysdump_status;
+atomic_t sysdump_status;
 struct regmap *regmap;
 static int set_sysdump_enable(int on);
 
@@ -285,8 +286,17 @@ void sprd_debug_check_crash_key(unsigned int code, int value)
 				pr_info("%s: Crash key count : %d,vol_pressed:%ld\n", __func__,
 					++loopcount, vol_pressed);
 				if (time_before(jiffies, vol_pressed + 5 * HZ)) {
-					if (loopcount == 2)
+					if (loopcount == 2) {
+#ifndef CONFIG_SPRD_DEBUG
+						if (atomic_read(&sysdump_status) == 0) {
+							pr_info("On user version and sysdump is disabled, crash key do not trigger panic.\n");
+						} else {
+							panic("Crash Key");
+						}
+#else
 						panic("Crash Key");
+#endif
+					}
 				} else {
 					pr_info("%s: exceed 5s(%u) between power key and volup/voldn key\n",
 						__func__, jiffies_to_msecs(jiffies - vol_pressed));
@@ -879,7 +889,7 @@ static void sysdump_disconnect(struct input_handle *handle)
 
 static int sprd_sysdump_read(struct seq_file *s, void *v)
 {
-	seq_printf(s, "sysdump_status = %d\n", sysdump_status);
+	seq_printf(s, "sysdump_status = %d\n", atomic_read(&sysdump_status));
 	return 0;
 }
 
@@ -893,7 +903,6 @@ static ssize_t sprd_sysdump_write(struct file *file, const char __user *buf,
 				size_t count, loff_t *data)
 {
 	char sysdump_buf[SYSDUMP_PROC_BUF_LEN] = {0};
-	int *test = NULL;
 
 	pr_debug("%s: start!!!\n", __func__);
 	if (count && (count < SYSDUMP_PROC_BUF_LEN)) {
@@ -911,12 +920,6 @@ static ssize_t sprd_sysdump_write(struct file *file, const char __user *buf,
 			pr_info("%s: disable user version sysdump!!!\n",
 				__func__);
 			set_sysdump_enable(0);
-		} else if (!strncmp(sysdump_buf, "bug", 3)) {
-			pr_info("%s  bug-on !!\n", __func__);
-			BUG_ON(1);
-		} else if (!strncmp(sysdump_buf, "null", 4)) {
-			pr_info("%s  null pointer !!\n", __func__);
-			count = *test;
 		}
 	}
 
@@ -1037,28 +1040,29 @@ error_pmic_node:
 
 static int set_sysdump_enable(int on)
 {
-	unsigned int val = 0;
+//	unsigned int val = 0;
 
-
+#if 0
 	if (!regmap) {
 		pr_err("can not %s sysdump because of regmap is NULL\n",
 			on ? "enable" : "disable");
 		return -1;
 	}
+#endif
 
-	regmap_read(regmap, pmic_reg, &val);
-	pr_info("%s: get rst mode  value is = %x\n", __func__, val);
+//	regmap_read(regmap, pmic_reg, &val);
+//	pr_info("%s: get rst mode  value is = %x\n", __func__, val);
 
 	if (on) {
 		pr_info("%s: enable sysdump!\n", __func__);
-		val |= HWRST_STATUS_SYSDUMP;
-		regmap_write(regmap, pmic_reg, val);
-		sysdump_status = 1;
+//		val |= HWRST_STATUS_SYSDUMP;
+//		regmap_write(regmap, pmic_reg, val);
+		atomic_set(&sysdump_status, 1);
 	} else {
 		pr_info("%s: disable sysdump!\n", __func__);
-		val &= ~(HWRST_STATUS_SYSDUMP);
-		regmap_write(regmap, pmic_reg, val);
-		sysdump_status = 0;
+//		val &= ~(HWRST_STATUS_SYSDUMP);
+//		regmap_write(regmap, pmic_reg, val);
+		atomic_set(&sysdump_status, 0);
 	}
 
 	return 0;
@@ -1659,6 +1663,20 @@ static void minidump_addr_convert(int i)
 		(int)(minidump_info_g.section_info_total.section_info[i].section_end_paddr -
 		minidump_info_g.section_info_total.section_info[i].section_start_paddr);
 }
+static void update_vmcoreinfo_data(void)
+{
+	if (!sprd_sysdump_info)
+		return;
+	vmcoreinfo_append_str("SYMBOL(%s)=%d\n", "processor_id",
+		smp_processor_id());
+	vmcoreinfo_append_str("SYMBOL(%s)=%d\n", "per_cpu_offset",
+		sprd_sysdump_info->sprd_mmuregs_info.sprd_pcpu_offset);
+	vmcoreinfo_append_str("SYMBOL(%s)=0x%llx\n", "core_regs_id",
+		sprd_sysdump_info->sprd_coreregs_info.paddr_core_regs_t);
+	vmcoreinfo_append_str("SYMBOL(%s)=0x%llx\n", "per_cpu_start",
+		sprd_sysdump_info->sprd_coreregs_info.pcpu_start_paddr);
+
+}
 static void minidump_info_init(void)
 {
 	int i;
@@ -1731,6 +1749,9 @@ static __init int sysdump_early_init(void)
 
 	minidump_info_init();
 
+	/* last kmsg init */
+	last_kmsg_init();
+
 	return 0;
 }
 early_initcall(sysdump_early_init);
@@ -1775,6 +1796,7 @@ static int sysdump_sysctl_init(void)
 #ifdef CONFIG_SPRD_MINI_SYSDUMP
 	minidump_init();
 #endif
+	update_vmcoreinfo_data();
 	return 0;
 }
 void sysdump_sysctl_exit(void)
@@ -1791,6 +1813,9 @@ void sysdump_sysctl_exit(void)
 #ifdef CONFIG_SPRD_MINI_SYSDUMP
 	ylog_buffer_exit();
 #endif
+
+	/* last kmsg exit */
+	last_kmsg_exit();
 }
 
 late_initcall_sync(sysdump_sysctl_init);

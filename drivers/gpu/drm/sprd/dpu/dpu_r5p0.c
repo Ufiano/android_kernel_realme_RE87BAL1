@@ -405,6 +405,7 @@ static struct dpu_cfg1 qos_cfg = {
 	.awqos_high = 0x7,
 };
 
+extern u32 flag_start_frame_rate;
 static void dpu_sr_config(struct dpu_context *ctx);
 static void dpu_clean_all(struct dpu_context *ctx);
 static void dpu_layer(struct dpu_context *ctx,
@@ -870,6 +871,7 @@ static int dpu_write_back_config(struct dpu_context *ctx)
 static int dpu_init(struct dpu_context *ctx)
 {
 	u32 reg_val, size;
+	u32 dvfs_freq;
 	struct dpu_enhance *enhance = ctx->enhance;
 
 	DPU_REG_WR(ctx->base + REG_BG_COLOR, 0x00);
@@ -900,6 +902,11 @@ static int dpu_init(struct dpu_context *ctx)
 	dpu_write_back_config(ctx);
 
 	enhance->frame_no = 0;
+
+	dvfs_freq = 384000000;
+
+	dpu_dvfs_notifier_call_chain(&dvfs_freq);
+
 	return 0;
 }
 
@@ -1283,6 +1290,13 @@ static void dpu_framerate(struct dpu_context *ctx, u8 *count)
 	if(enhance->mode_changed) {
 		mutex_lock(&ctx->vrr_lock);
 		dpu_stop(ctx);
+		//Set the default startup refresh frame rate
+		//flag_start_frame_rate  0 default 1 60Mhz
+		if(flag_start_frame_rate == 1)
+		{
+			ctx->vrr_vfp = 12;
+			flag_start_frame_rate = 0;
+		}
 		pr_info("change frame rate, ctx->vrr_vfp:%d\n", ctx->vrr_vfp);
 
 		/* set dpi vertical timing */
@@ -1576,7 +1590,7 @@ static int dpu_context_init(struct dpu_context *ctx)
 	INIT_WORK(&ctx->cabc_bl_update, dpu_cabc_bl_update_func);
 
 	ctx->base_offset[0] = 0x0;
-	ctx->base_offset[1] = DPU_MAX_REG_OFFSET;
+	ctx->base_offset[1] = DPU_MAX_REG_OFFSET / 4;
 
 	ctx->wb_configed = false;
 

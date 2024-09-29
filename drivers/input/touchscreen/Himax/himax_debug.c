@@ -81,12 +81,12 @@ struct proc_dir_entry *himax_proc_pen_pos_file;
 
 struct timespec timeStart, timeEnd, timeDelta;
 int g_switch_mode;
-#if defined(OPLUS_PROC_NODE)	
+#if defined(OPPO_PROC_NODE)	
 uint8_t g_log_pt_cnt = 0;
 #define LOG_POINT_CNT_MAX 150
-extern uint32_t g_oplus_debug_level;
-int oplus_baseline_read( struct seq_file *s );
-int oplus_delta_read_sub( struct seq_file *s );
+extern uint32_t g_oppo_debug_level;
+int oppo_baseline_read( struct seq_file *s );
+int oppo_delta_read_sub( struct seq_file *s );
 #endif
 /*
  *	Segment : Himax PROC Debug Function
@@ -966,12 +966,12 @@ void himax_ts_dbg_func(struct himax_ts_data *ts, int start)
 		/* I("debug level 1\n"); */
 		himax_log_touch_data(start);
 	}
-#if defined(OPLUS_PROC_NODE)	
+#if defined(OPPO_PROC_NODE)	
 	if ((ts->debug_log_level & BIT(1)) 
-		|| (g_oplus_debug_level == 0) 
-		|| (g_oplus_debug_level == 1)
-		|| (g_oplus_debug_level == 2)){
-			if((g_oplus_debug_level == 0) || (g_oplus_debug_level == 1)){
+		|| (g_oppo_debug_level == 0) 
+		|| (g_oppo_debug_level == 1)
+		|| (g_oppo_debug_level == 2)){
+			if((g_oppo_debug_level == 0) || (g_oppo_debug_level == 1)){
 				if(g_log_pt_cnt < LOG_POINT_CNT_MAX ){
 					g_log_pt_cnt++;
 				}else if(g_log_pt_cnt == LOG_POINT_CNT_MAX ){
@@ -995,10 +995,10 @@ void himax_ts_dbg_func(struct himax_ts_data *ts, int start)
 		/* I("debug level 4\n"); */
 		himax_log_touch_int_devation(start);
 	}
-#if defined(OPLUS_PROC_NODE)	
+#if defined(OPPO_PROC_NODE)	
 	if ((ts->debug_log_level & BIT(3)) 
-		||(g_oplus_debug_level == 1)
-		||(g_oplus_debug_level == 2)){
+		||(g_oppo_debug_level == 1)
+		||(g_oppo_debug_level == 2)){
 #else
 	if (ts->debug_log_level & BIT(3)) {
 #endif
@@ -3067,8 +3067,8 @@ int himax_debug_remove(void)
 	return 0;
 }
 EXPORT_SYMBOL(himax_debug_remove);
-#if defined(OPLUS_PROC_NODE)	
-static void himax_oplus_raw_data_read(int ts_diag_cmd)
+#if defined(OPPO_PROC_NODE)	
+static void himax_oppo_raw_data_read(int ts_diag_cmd)
 {
 	struct himax_ts_data *ts = private_ts;
 	uint8_t diag_cmd = 0;
@@ -3085,11 +3085,11 @@ static void himax_oplus_raw_data_read(int ts_diag_cmd)
 	g_core_fp.fp_diag_register_set(diag_cmd, 0, false);
 }
 
-int oplus_baseline_read( struct seq_file *s )
+int oppo_baseline_read( struct seq_file *s )
 {
 	int x_channel = ic_data->HX_RX_NUM;
 	int y_channel = ic_data->HX_TX_NUM;
-	himax_oplus_raw_data_read(52); /*sram type = 5 for oplus test*/
+	himax_oppo_raw_data_read(52); /*sram type = 5 for oppo test*/
 
 	/* start to show out the raw data in adb shell */
 	seq_printf(s, "ChannelStart: %4d, %4d\n\n", x_channel, y_channel );
@@ -3112,11 +3112,11 @@ int oplus_baseline_read( struct seq_file *s )
 	
 }
 
-int oplus_delta_read_sub( struct seq_file *s )
+int oppo_delta_read_sub( struct seq_file *s )
 {
 	int x_channel = ic_data->HX_RX_NUM;
 	int y_channel = ic_data->HX_TX_NUM;
-	himax_oplus_raw_data_read(51); /*sram type = 5 for oplus test*/
+	himax_oppo_raw_data_read(51); /*sram type = 5 for oppo test*/
 
 	/* start to show out the raw data in adb shell */
 	seq_printf(s, "ChannelStart: %4d, %4d\n\n", x_channel,  y_channel);

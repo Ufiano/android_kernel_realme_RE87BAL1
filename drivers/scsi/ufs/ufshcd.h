@@ -1262,6 +1262,22 @@ static inline void ufshcd_vops_config_scaling_param(struct ufs_hba *hba,
 		hba->vops->config_scaling_param(hba, profile, data);
 }
 
+static inline void ufshcd_vops_linkup_start_tstamp(struct ufs_hba *hba,
+						   struct uic_command *ucmmd)
+{
+	typedef void (*func)(struct ufs_hba *, struct uic_command *);
+	if (hba->vops && hba->vops->android_kabi_reserved1)
+		((func)(hba->vops->android_kabi_reserved1))(hba, ucmmd);
+}
+
+static inline void ufshcd_vops_dco_calibration(struct ufs_hba *hba,
+					       struct uic_command *ucmmd)
+{
+	typedef void (*func)(struct ufs_hba *, struct uic_command *);
+	if (hba->vops && hba->vops->android_kabi_reserved2)
+		((func)(hba->vops->android_kabi_reserved2))(hba, ucmmd);
+}
+
 extern struct ufs_pm_lvl_states ufs_pm_lvl_states[];
 
 /*

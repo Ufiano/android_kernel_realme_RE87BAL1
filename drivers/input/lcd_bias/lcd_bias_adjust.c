@@ -60,8 +60,6 @@ int set_lcm_bias_voltage_for_sprd(void){
             ret = regmap_write(lcd_bias_data->map, set_reg[i], set_val[i]); 
             if(ret){
                 printk("[drm] lcd write bias fail at reg = 0x%x;val = 0x%x \n",set_reg[i],set_val[i]);
-            }else{
-                printk("[drm] lcd write bias ok at reg = 0x%x;val = 0x%x \n",set_reg[i],set_val[i]);
             }
         }
 		}
@@ -128,7 +126,7 @@ static int lcd_bias_probe(struct i2c_client *client, const struct i2c_device_id 
         struct voltage_adjust_drvdata *data;
         struct regmap *regmap; 
 		int ret = 0;
-
+		printk("[drm] lcd_bias_probe  enter\n");
         data = devm_kzalloc(&client->dev,
 			sizeof(struct voltage_adjust_drvdata), GFP_KERNEL);
         regmap = devm_regmap_init_i2c(client, &lcd_bias_i2c_regmap_conf);

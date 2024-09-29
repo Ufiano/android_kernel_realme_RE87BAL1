@@ -7,6 +7,7 @@
 #include <asm/unaligned.h>
 
 #include "ufs.h"
+#include "unipro.h"
 #include "ufs-sysfs.h"
 
 #ifdef CONFIG_UFS_SPRD_UFSHEALTH
@@ -181,6 +182,22 @@ static ssize_t auto_hibern8_store(struct device *dev,
 	return count;
 }
 
+static ssize_t ufs_utrdl_addr_show(struct device *dev,
+                                 struct device_attribute *attr, char *buf)
+{
+
+	struct ufs_hba *hba = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%lx\n", hba->utrdl_dma_addr);
+}
+
+static ssize_t ufs_ucdl_addr_show(struct device *dev,
+                                 struct device_attribute *attr, char *buf)
+{
+
+	struct ufs_hba *hba = dev_get_drvdata(dev);
+	return snprintf(buf, PAGE_SIZE, "%lx\n", hba->ucdl_dma_addr);
+}
+
 static DEVICE_ATTR_RW(rpm_lvl);
 static DEVICE_ATTR_RO(rpm_target_dev_state);
 static DEVICE_ATTR_RO(rpm_target_link_state);
@@ -188,6 +205,8 @@ static DEVICE_ATTR_RW(spm_lvl);
 static DEVICE_ATTR_RO(spm_target_dev_state);
 static DEVICE_ATTR_RO(spm_target_link_state);
 static DEVICE_ATTR_RW(auto_hibern8);
+static DEVICE_ATTR_RO(ufs_utrdl_addr);
+static DEVICE_ATTR_RO(ufs_ucdl_addr);
 
 static struct attribute *ufs_sysfs_ufshcd_attrs[] = {
 	&dev_attr_rpm_lvl.attr,
@@ -197,6 +216,8 @@ static struct attribute *ufs_sysfs_ufshcd_attrs[] = {
 	&dev_attr_spm_target_dev_state.attr,
 	&dev_attr_spm_target_link_state.attr,
 	&dev_attr_auto_hibern8.attr,
+	&dev_attr_ufs_utrdl_addr.attr,
+	&dev_attr_ufs_ucdl_addr.attr,
 	NULL
 };
 
@@ -1481,6 +1502,47 @@ static const struct attribute_group ufs_sysfs_health_report_group = {
 
 #endif
 
+#define UFS_DME_GET(_name, _attr_sel, _peer)					\
+static ssize_t _name##_show(struct device *dev,					\
+	   struct device_attribute *attr, char *buf)				\
+{										\
+	struct ufs_hba *hba = dev_get_drvdata(dev);				\
+	int ret;								\
+	u32 mib_val;								\
+	ret = ufshcd_dme_get_attr(hba, UIC_ARG_MIB(_attr_sel), &mib_val, _peer);\
+	if (ret)								\
+		return -EINVAL;							\
+										\
+	return sprintf(buf, "0x%08x\n", mib_val);				\
+}										\
+static DEVICE_ATTR_RO(_name)
+
+UFS_DME_GET(host_gear_tx, PA_TXGEAR, 0);
+UFS_DME_GET(host_gear_rx, PA_RXGEAR, 0);
+UFS_DME_GET(host_lanes_tx, PA_ACTIVETXDATALANES, 0);
+UFS_DME_GET(host_lanes_rx, PA_ACTIVERXDATALANES, 0);
+UFS_DME_GET(peer_gear_tx, PA_TXGEAR, 1);
+UFS_DME_GET(peer_gear_rx, PA_RXGEAR, 1);
+UFS_DME_GET(peer_lanes_tx, PA_ACTIVETXDATALANES, 1);
+UFS_DME_GET(peer_lanes_rx, PA_ACTIVERXDATALANES, 1);
+
+static struct attribute *ufs_sysfs_power_mode[] = {
+	&dev_attr_host_gear_tx.attr,
+	&dev_attr_host_gear_rx.attr,
+	&dev_attr_host_lanes_tx.attr,
+	&dev_attr_host_lanes_rx.attr,
+	&dev_attr_peer_gear_tx.attr,
+	&dev_attr_peer_gear_rx.attr,
+	&dev_attr_peer_lanes_tx.attr,
+	&dev_attr_peer_lanes_rx.attr,
+	NULL,
+};
+
+static const struct attribute_group ufs_sysfs_power_mode_group = {
+	.name = "pwr_modes",
+	.attrs = ufs_sysfs_power_mode,
+};
+
 static const struct attribute_group *ufs_sysfs_groups[] = {
 	&ufs_sysfs_default_group,
 	&ufs_sysfs_device_descriptor_group,
@@ -1491,6 +1553,7 @@ static const struct attribute_group *ufs_sysfs_groups[] = {
 	&ufs_sysfs_string_descriptors_group,
 	&ufs_sysfs_flags_group,
 	&ufs_sysfs_attributes_group,
+	&ufs_sysfs_power_mode_group,
 #ifdef CONFIG_UFS_SPRD_UFSHEALTH
 	&ufs_sysfs_health_report_group,
 #endif

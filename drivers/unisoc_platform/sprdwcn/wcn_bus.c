@@ -236,10 +236,6 @@ int buf_list_free(int chn, struct mbuf_t *head, struct mbuf_t *tail, int num)
 	}
 
 	pool = &((chn_inf + chn)->pool);
-	if (pool->mem == NULL) {
-		pr_err("%s channel has been released\n", __func__);
-		return -1;
-	}
 	spin_lock_bh(&(pool->lock));
 	buf_list_check(pool, head, tail, num);
 	tail->next = pool->head;

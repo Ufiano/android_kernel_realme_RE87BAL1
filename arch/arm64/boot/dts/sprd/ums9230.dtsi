@@ -734,6 +734,7 @@
 	ddr_dfs: scene-frequency {
 		compatible = "sprd,ddr-dvfs";
 		freq-num = <8>;
+		info-socdump-enable-flag;
 	};
 };
 

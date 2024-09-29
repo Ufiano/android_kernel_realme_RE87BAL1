@@ -14,19 +14,18 @@
 #include "sprd_bl.h"
 #include "sprd_dpu.h"
 
-#define U_MAX_LEVEL	255
-#define U_MIN_LEVEL	0
-
 void sprd_backlight_normalize_map(struct backlight_device *bd, u16 *level)
 {
 	struct sprd_backlight *bl = bl_get_data(bd);
+	int mul;
 
-	if (!bl->num) {
-		*level = DIV_ROUND_CLOSEST_ULL((bl->max_level - bl->min_level) *
-			(bd->props.brightness - U_MIN_LEVEL),
-			U_MAX_LEVEL - U_MIN_LEVEL) + bl->min_level;
-	} else
-		*level = bl->levels[bd->props.brightness];
+	if(!bd->props.brightness) {
+		*level = 0;
+	} else {
+		mul =  bl->max_level * bd->props.brightness;
+		do_div(mul, 4095);
+		*level = mul + bl->min_level;
+	}
 }
 
 int sprd_cabc_backlight_update(struct backlight_device *bd)
@@ -104,40 +103,17 @@ static int sprd_backlight_parse_dt(struct device *dev,
 			struct sprd_backlight *bl)
 {
 	struct device_node *node = dev->of_node;
-	struct property *prop;
 	u32 value;
-	int length;
 	int ret;
 
 	if (!node)
 		return -ENODEV;
 
-	/* determine the number of brightness levels */
-	prop = of_find_property(node, "brightness-levels", &length);
-	if (prop) {
-		bl->num = length / sizeof(u32);
-
-		/* read brightness levels from DT property */
-		if (bl->num > 0) {
-			size_t size = sizeof(*bl->levels) * bl->num;
-
-			bl->levels = devm_kzalloc(dev, size, GFP_KERNEL);
-			if (!bl->levels)
-				return -ENOMEM;
-
-			ret = of_property_read_u32_array(node,
-							"brightness-levels",
-							bl->levels, bl->num);
-			if (ret < 0)
-				return ret;
-		}
-	}
-
 	ret = of_property_read_u32(node, "sprd,max-brightness-level", &value);
 	if (!ret)
 		bl->max_level = value;
 	else
-		bl->max_level = 255;
+		bl->max_level = 4095;
 
 	ret = of_property_read_u32(node, "sprd,min-brightness-level", &value);
 	if (!ret)
@@ -149,7 +125,7 @@ static int sprd_backlight_parse_dt(struct device *dev,
 	if (!ret)
 		bl->dft_level = value;
 	else
-		bl->dft_level = 25;
+		bl->dft_level = 1000;
 
 	ret = of_property_read_u32(node, "sprd,brightness-scale",
 				   &value);
@@ -158,6 +134,8 @@ static int sprd_backlight_parse_dt(struct device *dev,
 	else
 		bl->scale = bl->max_level;
 
+	DRM_INFO("brightness max:%d, min:%d, dft:%d, scale:%d",bl->max_level,
+				bl->min_level, bl->dft_level, bl->scale);
 	return 0;
 }
 
@@ -166,7 +144,7 @@ static int sprd_backlight_probe(struct platform_device *pdev)
 	struct backlight_device *bd;
 	struct pwm_state state;
 	struct sprd_backlight *bl;
-	int div, ret;
+	int ret;
 
 	bl = devm_kzalloc(&pdev->dev,
 			sizeof(struct sprd_backlight), GFP_KERNEL);
@@ -204,17 +182,11 @@ static int sprd_backlight_probe(struct platform_device *pdev)
 		return PTR_ERR(bd);
 	}
 
-	bd->props.max_brightness = 255;
+	bd->props.brightness = bl->dft_level;
+	bd->props.max_brightness = 4095;
+	bd->props.scale = BACKLIGHT_SCALE_LINEAR;
 	bd->props.state &= ~BL_CORE_FBBLANK;
 	bd->props.power = FB_BLANK_UNBLANK;
-
-	div = ((bl->max_level - bl->min_level) << 8) / 255;
-	if (div > 0) {
-		bd->props.brightness = (bl->dft_level << 8) / div;
-	} else {
-		dev_err(&pdev->dev, "failed to calc default brightness level\n");
-		return -EINVAL;
-	}
 
 	backlight_update_status(bd);
 
@@ -224,6 +196,7 @@ static int sprd_backlight_probe(struct platform_device *pdev)
 }
 
 static const struct of_device_id sprd_backlight_of_match[] = {
+	{ .compatible = "sprd,sharkl3-backlight" },
 	{ .compatible = "sprd,sharkl5pro-backlight" },
 	{ .compatible = "sprd,sharkl6-backlight" },
 	{ .compatible = "sprd,qogirn6pro-backlight"},

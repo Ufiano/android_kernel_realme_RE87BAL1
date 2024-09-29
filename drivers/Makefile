@@ -188,3 +188,11 @@ obj-$(CONFIG_INTERCONNECT)	+= interconnect/
 obj-$(CONFIG_COUNTER)		+= counter/
 obj-$(CONFIG_TRUSTY)		+= trusty/
 obj-$(CONFIG_ARCH_SPRD)         += unisoc_platform/
+
+
+#如果使用该宏定义，则选择向beidou项目方向编译
+ifeq ($(PRODUCT_NAME),RMX3624)
+#BOARDDIR := spreadtrum/RMX3624
+KBUILD_CFLAGS   += -DVENDOR_KERNEL
+endif
+

@@ -214,9 +214,9 @@ int sprd_ufs_ioctl_get_dev_info(struct scsi_device *dev, void __user *buf_user)
 {
 	struct ufs_hba *hba;
 	struct ufs_ioctl_query_device_info *idata = NULL;
-//	u8 desc_buf[QUERY_DESC_MAX_SIZE] = {0};
-//	u8 *str_desc_buf[QUERY_DESC_MAX_SIZE + 1] = {0};
-//	char *err_str = "ERR";
+	u8 desc_buf[QUERY_DESC_MAX_SIZE] = {0};
+	u8 *str_desc_buf[QUERY_DESC_MAX_SIZE + 1] = {0};
+	char *err_str = "ERR";
 	int err;
 
 	if (dev)
@@ -248,7 +248,7 @@ int sprd_ufs_ioctl_get_dev_info(struct scsi_device *dev, void __user *buf_user)
 			__func__, err);
 		goto out_release_mem;
 	}
-/*
+
 	if (!ufshcd_read_desc_param(hba, QUERY_DESC_IDN_DEVICE, 0, 0, desc_buf,
 				    QUERY_DESC_MAX_SIZE) &&
 	    !ufshcd_read_string_desc(hba, desc_buf[DEVICE_DESC_PARAM_PRDCT_REV],
@@ -261,10 +261,10 @@ int sprd_ufs_ioctl_get_dev_info(struct scsi_device *dev, void __user *buf_user)
 			__func__, err);
 		strcpy(idata->fw_rev, err_str);
 	}
-*/	
+
+	memcpy(idata->fw_rev, dev->rev, UFS_IOCTL_FFU_MAX_FW_VER_BYTES);
 	memcpy(idata->vendor, dev->vendor, UFS_IOCTL_FFU_MAX_VENDOR_BYTES);
 	memcpy(idata->model, dev->model, UFS_IOCTL_FFU_MAX_MODEL_BYTES);
-	memcpy(idata->fw_rev, dev->rev, UFS_IOCTL_FFU_MAX_FW_VER_BYTES);
 
 	idata->manid = hba->dev_info.wmanufacturerid;
 	idata->max_hw_sectors_size = (dev->request_queue->limits.max_hw_sectors << 9);

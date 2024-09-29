@@ -1933,6 +1933,7 @@
 			pwms: pwm@30000 {
 				compatible = "sprd,qogirn6pro-pwm";
 				reg = <0x30000 0x10000>;
+				status = "okay";
 				clock-names = "pwm0", "enable0",
 					      "pwm1", "enable1",
 					      "pwm2", "enable2",
@@ -1949,7 +1950,7 @@
 							 <&ext_26m>,
 							 <&ext_26m>,
 							 <&ext_26m>;
-				#pwm-cells = <2>;
+				#pwm-cells = <3>;
 			};
 
 			timer@40000 {

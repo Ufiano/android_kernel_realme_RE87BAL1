@@ -64,3 +64,4 @@ obj-$(CONFIG_HISI_HIKEY_USB)	+= hisi_hikey_usb.o
 obj-$(CONFIG_SPRD_SOCID)	+= sprd_soc_id.o
 obj-$(CONFIG_HQ_HARDWARE_INFO)	+= hqhardwareinfo/
 obj-$(CONFIG_OPLUS_DEVICE_IFNO) += device_info/
+obj-m 			        += hardware_info.o

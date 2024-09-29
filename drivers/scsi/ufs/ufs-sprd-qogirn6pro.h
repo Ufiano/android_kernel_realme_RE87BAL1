@@ -11,8 +11,8 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _UFS_SPRD_H_
-#define _UFS_SPRD_H_
+#ifndef _UFS_SPRD_QOGIRN6PRO_H_
+#define _UFS_SPRD_QOGIRN6PRO_H_
 
 struct syscon_ufs {
 	struct regmap *regmap;
@@ -114,4 +114,4 @@ struct ufs_sprd_host {
 
 #define UFSHCI_VERSION_30	0x00000300 /* 3.0 */
 
-#endif/* _UFS_SPRD_H_ */
+#endif/* _UFS_SPRD_QOGIRN6PRO_H_ */

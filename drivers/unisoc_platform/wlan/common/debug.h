@@ -124,6 +124,32 @@ static inline char *cnt_index2str(u8 index)
 	}
 }
 
+extern int sprd_dbg_level;
+
+#define wl_debug(fmt, args...) \
+	do { \
+		if (sprd_dbg_level >= L_DBG) \
+			pr_info(fmt, ##args); \
+	} while (0)
+
+#define wl_err(fmt, args...) \
+	do { \
+		if (sprd_dbg_level >= L_ERR) \
+			pr_err(fmt, ##args); \
+	} while (0)
+
+#define wl_warn(fmt, args...) \
+	do { \
+		if (sprd_dbg_level >= L_WARN) \
+			pr_err(fmt, ##args); \
+	} while (0)
+
+#define wl_info(fmt, args...) \
+	do { \
+		if (sprd_dbg_level >= L_INFO) \
+			pr_info(fmt, ##args); \
+	} while (0)
+
 int get_max_fw_tx_dscr(void);
 int get_tdls_threshold(void);
 int get_vo_ratio(void);
@@ -163,7 +189,7 @@ void sprd_debug_deinit(struct sprd_debug *dbg);
 #define sprd_debug_deinit(dbg)			do {} while (0)
 static inline int sprd_get_debug_level(void)
 {
-	return L_INFO;
+	return sprd_dbg_level;
 }
 #endif /* CONFIG_SPRD_WLAN_DEBUGFS */
 

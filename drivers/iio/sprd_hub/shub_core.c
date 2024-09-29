@@ -154,6 +154,8 @@ static void get_sensor_info(char **sensor_name,
 	memcpy(hw_sensor_id[now_order].pname, sensor_name[success_num],
 	       strlen(sensor_name[success_num]));
 	hw_sensor_id[now_order].id_status = _IDSTA_OK;
+
+#ifndef VENDOR_KERNEL
     if(sensor_type == 1)
     {
         hq_register_sensor_info(ACCEL_HQ,hw_sensor_id[now_order].pname);
@@ -167,7 +169,7 @@ static void get_sensor_info(char **sensor_name,
         hq_register_sensor_info(GYRO_HQ,hw_sensor_id[now_order].pname);
     else if(sensor_type == 5)
         hq_register_sensor_info(ALSPS_HQ, hw_sensor_id[now_order].pname);
-
+#endif
     if(sensor_type == 1)
         get_hardware_info_data(HWID_GSENSOR,hw_sensor_id[now_order].pname);
     else if(sensor_type == 2)
@@ -177,6 +179,7 @@ static void get_sensor_info(char **sensor_name,
     else if(sensor_type == 8)
         get_hardware_info_data(HWID_PS,hw_sensor_id[now_order].pname);
     get_hardware_info_data(HWID_GYROSCOPE,"virtual_gyro");
+
 }
 
 /**

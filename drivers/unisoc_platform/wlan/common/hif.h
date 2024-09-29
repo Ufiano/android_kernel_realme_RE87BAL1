@@ -229,7 +229,6 @@ struct sprd_hif_ops {
 			     bool send_now);
 	int (*reset)(struct sprd_hif *hif);
 	void (*throughput_ctl_pd)(unsigned int len);
-	void (*tx_flush)(struct sprd_hif *hif, struct sprd_vif *vif);
 };
 
 void sprd_clean_work(struct sprd_priv *priv);
@@ -351,12 +350,6 @@ static inline void sprd_hif_throughput_ctl_pd(struct sprd_hif *hif, unsigned int
 {
 	if (hif->ops->throughput_ctl_pd)
 		hif->ops->throughput_ctl_pd(len);
-}
-
-static inline void sprd_hif_tx_flush(struct sprd_hif *hif, struct sprd_vif *vif)
-{
-	if (hif->ops->tx_flush)
-		hif->ops->tx_flush(hif, vif);
 }
 
 #endif

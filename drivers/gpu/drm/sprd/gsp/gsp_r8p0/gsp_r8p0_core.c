@@ -34,7 +34,6 @@
 
 static bool tipc_init;
 static int zorder_used[R8P0_IMGL_NUM + R8P0_OSDL_NUM] = {0};
-extern int boot_mode_check(void);
 
 static void print_image_layer_cfg(struct gsp_r8p0_img_layer *layer)
 {
@@ -817,10 +816,7 @@ int gsp_r8p0_core_parse_dt(struct gsp_core *core)
 
 	gsp_r8p0_core_parse_clk(r8p0_core);
 
-	if (!boot_mode_check()) {
-		GSP_WARN(" NOT Calibration Mode! ");
-		sprd_iommu_restore(core->dev);
-	}
+	sprd_iommu_restore(core->dev);
 	/*
 	 * update dpu
 	 * gsp_core_reg_update(core->base + 4, 4, 4);

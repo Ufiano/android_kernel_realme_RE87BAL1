@@ -356,11 +356,11 @@ struct hx_guest_info {
 	#define on_fw_data_ahb_dis                     0x00
 	#define on_fw_data_ahb_en                      0x01
 	#define on_fw_addr_event_addr                  0x30
-#if defined(OPLUS_PROC_NODE)		
-	#define fw_oplus_tp_direction_0_pwd				 0xA55AA55A
-	#define fw_oplus_tp_direction_1_pwd				 0xA11AA11A
-	#define fw_oplus_tp_direction_2_pwd				 0xA33AA33A
-	#define fw_oplus_tp_direction                  0x10007f3c
+#if defined(OPPO_PROC_NODE)		
+	#define fw_oppo_tp_direction_0_pwd				 0xA55AA55A
+	#define fw_oppo_tp_direction_1_pwd				 0xA11AA11A
+	#define fw_oppo_tp_direction_2_pwd				 0xA33AA33A
+	#define fw_oppo_tp_direction                  0x10007f3c
 	#define fw_addr_fw_edge_limit		             0x10007F3C
 	#define fw_addr_fw_no_jiter_en		           0x10007FE0
 	#define fw_addr_tx_chg_test			 		 0x10007fc4
@@ -621,13 +621,13 @@ struct fw_operation {
 	uint8_t data_ulpm_22[1];
 	uint8_t data_ulpm_33[1];
 	uint8_t data_ulpm_aa[1];
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 	uint8_t  addr_tx_jump_test[4];
 	uint8_t  addr_headline[4];
 	uint8_t  addr_fw_edge_limit[4];
 	uint8_t  addr_fw_no_jiter_en[4];
 	uint8_t addr_max_dc[4];
-	uint8_t addr_oplus_tp_direction[4];
+	uint8_t addr_oppo_tp_direction[4];
 #endif
 };
 
@@ -931,7 +931,7 @@ struct himax_core_fp {
 	int (*fp_ulpm_in)(void);
 	int (*fp_black_gest_ctrl)(bool enable);
 	int	(*_diff_overlay_bin)(void);
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 	void (*fp_tx_freq_chg_test)(uint8_t cmd);
 	void (*fp_ultra_enter)(void);
 	void (*fp_black_gest_en)(bool enable);

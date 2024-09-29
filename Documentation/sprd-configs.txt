@@ -11047,6 +11047,16 @@ CONFIG_MMC_CRYPTO
 	[must]
 	[missing plat description] none
 	[function]
+CONFIG_MMC_SPRD_MMCHEALTH
+	[arch] all
+	[plat] sharkl3_32
+	[missing plat] pike2,qogirl6,qogirn6pro,sharkl5,sharkl5_32,sharkle32,sharkl5Pro,sharkl3
+	[field] make,code
+	[subsys] mmc
+	[must] user
+	[missing plat description] only two customers' requirement whom use
+				sharkl3_32
+	[function] Create a node in proc/mmchealth to display emmc health info
 CONFIG_MMC_HSQ
 	[arch] all
 	[plat] all
@@ -17104,6 +17114,33 @@ CONFIG_SPRD_NATIVE_HANG_MONITOR
 	[must] user
 	[missing plat description] none
 	[function] This functio is used to monitor native hang.
+CONFIG_SPRD_PAST_RECORD
+	[arch] all
+	[plat] all
+	[missing plat] none
+	[field] make,code
+	[subsys] soc
+	[must] user
+	[missing plat description] none
+	[function] This function is used to enable sprd tracing code.
+CONFIG_ENABLE_SPRD_DEEP_SLEEP_TRACING
+	[arch] all
+	[plat] all
+	[missing plat] none
+	[field]
+	[subsys]
+	[must]
+	[missing plat description] none
+	[function] This function is used to enable sprd deep sleep tracing.
+CONFIG_ENABLE_SPRD_IO_TRACING
+	[arch] all
+	[plat] all
+	[missing plat] none
+	[field] make,code
+	[subsys] soc
+	[must] user
+	[missing plat description] none
+	[function] This function is used to enable IO tracing feature.
 CONFIG_SPRD_NET_HELPER
 	[arch] all
 	[plat] all

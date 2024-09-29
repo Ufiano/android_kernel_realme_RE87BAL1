@@ -1,5 +1,8 @@
+#ifdef LCD_CONFIG_POWER_ESD_ON
 #include <linux/notifier.h>
-
+#else
+#include <linux/sprd_drm_notifier.h>
+#endif
 static BLOCKING_NOTIFIER_HEAD(disp_notifier_list);
 int disp_notifier_register(struct notifier_block *nb)
 {

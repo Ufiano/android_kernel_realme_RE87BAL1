@@ -303,6 +303,8 @@ struct sprdwcn_bus_ops {
 	/* for wcn chip boot and download firmware */
 	int (*start_wcn)(enum wcn_sub_sys subsys);
 	int (*stop_wcn)(enum wcn_sub_sys subsys);
+	void (*debug_point_show)(void);
+	bool (*is_suspended)(bool important);
 };
 
 extern struct atomic_notifier_head wcn_reset_notifier_list;
@@ -311,8 +313,9 @@ extern void module_bus_init(void);
 extern void module_bus_deinit(void);
 extern struct sprdwcn_bus_ops *get_wcn_bus_ops(void);
 extern void wcn_assert_interface(enum wcn_source_type, char *str);
-extern bool wcn_is_assert(void);
-extern bool wcn_is_power_busy(void);
+int sprd_wlan_power_status_sync(int option, int value);
+void mdbg_device_lock_notify(void);
+void mdbg_device_unlock_notify(void);
 
 static inline
 int sprdwcn_bus_preinit(void)
@@ -668,6 +671,17 @@ enum wcn_hard_intf_type sprdwcn_bus_get_hwintf_type(void)
 }
 
 static inline
+bool sprdwcn_bus_is_suspended(bool suspending_op)
+{
+	struct sprdwcn_bus_ops *bus_ops = get_wcn_bus_ops();
+
+	if (!bus_ops || !bus_ops->is_suspended)
+		return false;
+
+	return bus_ops->is_suspended(suspending_op);
+}
+
+static inline
 int sprdwcn_start(enum wcn_sub_sys subsys)
 {
 	struct sprdwcn_bus_ops *bus_ops = get_wcn_bus_ops();
@@ -687,6 +701,17 @@ int sprdwcn_stop(enum wcn_sub_sys subsys)
 		return -ENODEV;
 
 	return bus_ops->stop_wcn(subsys);
+}
+
+static inline
+void sprdwcn_bus_debug_point_show(void)
+{
+	struct sprdwcn_bus_ops *bus_ops = get_wcn_bus_ops();
+
+	if (!bus_ops || !bus_ops->debug_point_show)
+		return;
+
+	bus_ops->debug_point_show();
 }
 
 static inline

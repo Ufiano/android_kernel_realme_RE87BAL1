@@ -181,9 +181,11 @@
 
 				monitored-battery = <&bat &bat1>;
 				cm-capacity-track;
+/*odm.hq.bsp.luowenjiang@huaqin.com 2021.11.04 modify for  usb temp protection star*/				
 				io-channels = <&pmic_adc 4>, <&pmic_adc 6>, <&pmic_adc 3>;
 				io-channel-names = "usb-temp-1", "usb-temp-2", "bat-id-vol";
 				cm-charge-gpio = <&ap_gpio 174 0>;
+/*odm.hq.bsp.luowenjiang@huaqin.com 2021.11.04 modify for  usb temp protection end*/
 				//cm-ir-cv-offset-microvolt = <100000>;
 				//cm-ir-rc = <20>;
 				//cm-ir-us-upper-limit-microvolt = <4435000>;
@@ -348,6 +350,7 @@
 				status = "okay";
 			};
 
+			/*Used to check the RF antenna*/
 			op_rf_cable {
 				compatible = "op,rf_cable";
 				status = "okay";
@@ -548,6 +551,7 @@
 		reg = <0x1b>;
 		chg_pump_en_gpio = <&ap_gpio 147 GPIO_ACTIVE_HIGH>;
 	};
+/*odm.hq.bsp.licheng@huaqin.com 2021.9.21 modify for bring up lcd*/
 /*
 	nu1619_rx: charger@61 {
 		compatible = "nuvolta,wl_charger_nu1619";
@@ -569,7 +573,7 @@
 
 
 	touchscreen@0 {
-			compatible = "oplus,touchscreen";
+			compatible = "oppo,touchscreen";
 			spi-max-frequency = <9600000>;
 			reg = <0>;
 			/*touch,irq-gpio = <&ap_gpio 144 GPIO_ACTIVE_HIGH>;*/
@@ -2686,8 +2690,8 @@
 	sprd,calib-resistance-micro-ohms = <4850>;
 
 	phys = <&hsphy>;
-	io-channels = <&pmic_adc 0>, <&pmic_adc 14>;
-	io-channel-names = "bat-temp", "charge-vol";
+	io-channels = <&pmic_adc 0>, <&pmic_adc 14>, <&pmic_adc 3>;
+	io-channel-names = "bat-temp", "charge-vol", "bat-id-vol";
 };
 
 &panel {

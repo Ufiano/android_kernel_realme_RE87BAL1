@@ -39,10 +39,10 @@ void sdio_record_power_notify(bool notify_cb_sts)
 	sdio_power_notify = notify_cb_sts;
 }
 
-void sdio_wait_pub_int_done(void)
+bool sdio_wait_pub_int_done(void)
 {
 	struct slp_mgr_t *slp_mgr;
-	int wait_cnt = 0;
+	long ret = -1;
 
 	slp_mgr = slp_get_info();
 
@@ -57,16 +57,17 @@ void sdio_wait_pub_int_done(void)
 		mutex_unlock(&(slp_mgr->drv_slp_lock));
 
 		/* wait pub_int handle finish */
-		while ((atomic_read(&flag_pub_int_done) == 0) &&
-		       (wait_cnt < 10)) {
-			wait_cnt++;
-			WCN_INFO("wait pub_int_done:%d\n", wait_cnt);
-			usleep_range(1500, 3000);
-		}
-		WCN_INFO("flag_pub_int_done-%d\n",
-			 atomic_read(&flag_pub_int_done));
+		if (unlikely(atomic_read(&flag_pub_int_done) == 0))
+			WCN_INFO("wait pub_int_done\n");
+		ret = wait_event_killable_timeout(sdio_int.pub_int_done,
+			atomic_read(&flag_pub_int_done), usecs_to_jiffies(3000 * 10));
+
+		WCN_INFO("flag_pub_int_done(%s)-%d\n", ret == 0 ? "timeout" : "success",
+			atomic_read(&flag_pub_int_done));
 	} else
 		WCN_INFO("sdio power_notify is NULL\n");
+
+	return !!ret;
 }
 EXPORT_SYMBOL(sdio_wait_pub_int_done);
 
@@ -74,6 +75,7 @@ static int pub_int_handle_thread(void *data)
 {
 	union PUB_INT_STS0_REG pub_int_sts0 = {0};
 	int bit_num, ret;
+	bool do_cb = false;
 
 	set_user_nice(current, -20);
 	while (!kthread_should_stop()) {
@@ -85,22 +87,31 @@ static int pub_int_handle_thread(void *data)
 		if (ret < 0)
 			WCN_INFO("sdio cmd52 fail, ret-%d\n", ret);
 		else {
-			WCN_INFO("PUB_INT_STS0-0x%x\n", pub_int_sts0.reg);
+			if (pub_int_sts0.reg & BIT(REQ_SLP))
+				WCN_DBG("PUB_INT_STS0-0x%x\n", pub_int_sts0.reg);
+			else
+				WCN_INFO("PUB_INT_STS0-0x%x\n", pub_int_sts0.reg);
+
 			sdio_pub_int_clr0(pub_int_sts0.reg);
 
-		bit_num = 0;
-		do {
-			if ((pub_int_sts0.reg & BIT(bit_num)) &&
-				sdio_int.pub_int_cb[bit_num]) {
-				sdio_int.pub_int_cb[bit_num]();
-			}
-			bit_num++;
-		} while (bit_num < PUB_INT_MAX);
+			bit_num = 0;
+			do {
+				if ((pub_int_sts0.reg & BIT(bit_num)) &&
+					sdio_int.pub_int_cb[bit_num]) {
+						sdio_int.pub_int_cb[bit_num]();
+						do_cb = true;
+					}
+				bit_num++;
+			} while (bit_num < PUB_INT_MAX);
 		}
 
-		if (sdio_power_notify)
+		if (unlikely(do_cb == false))
+			WCN_INFO("unprocessable PUB int type 0x%x", pub_int_sts0.reg);
+
+		if (sdio_power_notify) {
 			atomic_set(&flag_pub_int_done, 1);
-		else
+			wake_up_all(&sdio_int.pub_int_done);
+		} else
 			__pm_relax(sdio_int.pub_int_wakelock);
 
 		enable_irq(sdio_int.pub_int_num);
@@ -124,7 +135,7 @@ static irqreturn_t pub_int_isr(int irq, void *para)
 		__pm_stay_awake(sdio_int.pub_int_wakelock);
 
 	irq_cnt++;
-	WCN_INFO("irq_cnt%d!!\n", irq_cnt);
+	WCN_DBG("irq_cnt%d!!\n", irq_cnt);
 
 	complete(&(sdio_int.pub_int_completion));
 
@@ -287,6 +298,7 @@ int sdio_pub_int_init(int irq)
 	sdio_int.pub_int_wakelock = wakeup_source_create("pub_int_wakelock");
 	wakeup_source_add(sdio_int.pub_int_wakelock);
 	init_completion(&(sdio_int.pub_int_completion));
+	init_waitqueue_head(&(sdio_int.pub_int_done));
 
 	sdio_pub_int_register(irq);
 

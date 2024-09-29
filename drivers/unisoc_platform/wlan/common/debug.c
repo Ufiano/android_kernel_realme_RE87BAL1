@@ -16,6 +16,7 @@
 #include "debug.h"
 #include "iface.h"
 #include "tcp_ack.h"
+#include "common.h"
 
 static unsigned int max_fw_tx_dscr;
 static unsigned int tdls_threshold;
@@ -24,6 +25,9 @@ static unsigned int vi_ratio = 90;
 static unsigned int be_ratio = 81;
 static unsigned int wmmac_ratio = 10;
 static atomic_t tcp_ack_enable;
+
+int sprd_dbg_level = L_WARN;
+EXPORT_SYMBOL(sprd_dbg_level);
 
 int get_max_fw_tx_dscr(void)
 {
@@ -103,8 +107,6 @@ static struct debug_ctrl dbg_ctrl;
 static struct debug_time_stamp dbg_ts[MAX_DEBUG_TS_INDEX];
 static struct debug_cnt dbg_cnt[MAX_DEBUG_CNT_INDEX];
 static struct debug_record dbg_record[MAX_RECORD_NUM];
-
-int sprd_dbg_level = L_INFO;
 
 int sprd_get_debug_level(void)
 {
@@ -247,6 +249,7 @@ static void debug_adjust_tcpack_delay(char *buf, unsigned char offset)
 	unsigned int cnt = 0;
 	unsigned int i = 0;
 	struct sprd_tcp_ack_manage *ack_m = NULL;
+	struct sprd_priv *priv = NULL;
 
 	for (i = 0; i < MAX_LEN; (cnt *= 10), i++) {
 		if ((buf[offset + i] >= '0') && (buf[offset + i] <= '9')) {
@@ -262,9 +265,13 @@ static void debug_adjust_tcpack_delay(char *buf, unsigned char offset)
 	if (cnt >= 100)
 		cnt = SPRD_TCP_ACK_DROP_CNT;
 
-	atomic_set(&ack_m->max_drop_cnt, cnt);
-	pr_err("drop time: %d, atomic drop time: %d\n", cnt,
-	       atomic_read(&ack_m->max_drop_cnt));
+	if (sprd_dbg) {
+		priv = container_of(sprd_dbg, struct sprd_priv, debug);
+		ack_m = &priv->ack_m;
+		atomic_set(&ack_m->max_drop_cnt, cnt);
+		pr_err("drop time: %d, atomic drop time: %d\n", cnt,
+		       atomic_read(&ack_m->max_drop_cnt));
+	}
 #undef MAX_LEN
 }
 
@@ -274,6 +281,7 @@ static void debug_adjust_tcpack_delay_win(char *buf, unsigned char offset)
 	unsigned int i = 0;
 	unsigned int len = strlen(buf) - strlen("tcpack_delay_win=");
 	struct sprd_tcp_ack_manage *ack_m = NULL;
+	struct sprd_priv *priv = NULL;
 
 	for (i = 0; i < len; (value *= 10), i++) {
 		if ((buf[offset + i] >= '0') && (buf[offset + i] <= '9')) {
@@ -283,8 +291,13 @@ static void debug_adjust_tcpack_delay_win(char *buf, unsigned char offset)
 			break;
 		}
 	}
-	ack_m->ack_winsize = value;
-	pr_err("%s, change tcpack_delay_win to %dKB\n", __func__, value);
+
+	if (sprd_dbg) {
+		priv = container_of(sprd_dbg, struct sprd_priv, debug);
+		ack_m = &priv->ack_m;
+		ack_m->ack_winsize = value;
+		pr_err("%s, change tcpack_delay_win to %dKB\n", __func__, value);
+	}
 }
 
 static void debug_adjust_tdls_threshold(char *buf, unsigned char offset)
@@ -550,6 +563,7 @@ EXPORT_SYMBOL(sprd_debug_record_add);
 void sprd_debug_init(struct sprd_debug *dbg)
 {
 	sprd_dbg = dbg;
+	sprd_dbg_level = L_INFO;
 	/* create debugfs */
 	dbg->dir = debugfs_create_dir("sprd_wlan", NULL);
 	if (IS_ERR(dbg->dir)) {

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+﻿// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  *  linux/drivers/mmc/core/mmc_ops.h
  *
@@ -18,8 +18,19 @@
 #include "card.h"
 #include "host.h"
 #include "mmc_ops.h"
+#ifdef CONFIG_MMC_SPRD_MMCHEALTH
+#include <linux/mmc/sprd-mmc-health.h>
+static int emmc_flag;
+/*cjcc zhaoxin zhaoxin zhaoxin zhaoxin sandisk FORESEE*/
+//static unsigned int emmc_manfid[] = {0xd6, 0x32, 0x6b, 0x32, 0x6b, 0x45, 0xd6};
+//static char *emmc_prod_name[] = {"Y2P032", "MMC32G", "MMC32G", "MMC64G", "MMC64G", "DA4032", "A3A551"};
+static unsigned int emmc_manfid[] = {0xd6, 0x32};
+static char *emmc_prod_name[] = {"A3A551", "MMC32G"};
+#endif
 
-#define MMC_OPS_TIMEOUT_MS	(10 * 60 * 1000) /* 10 minute timeout */
+#define MMC_OPS_TIMEOUT_MS		(10 * 60 * 1000) /* 10min*/
+#define MMC_BKOPS_TIMEOUT_MS		(120 * 1000) /* 120s */
+#define MMC_CACHE_FLUSH_TIMEOUT_MS	(30 * 1000) /* 30s */
 
 static const u8 tuning_blk_pattern_4bit[] = {
 	0xff, 0x0f, 0xff, 0x00, 0xff, 0xcc, 0xc3, 0xcc,
@@ -454,13 +465,10 @@ static int mmc_poll_for_busy(struct mmc_card *card, unsigned int timeout_ms,
 	struct mmc_host *host = card->host;
 	int err;
 	unsigned long timeout;
+	unsigned int udelay = 32, udelay_max = 32768;
 	u32 status = 0;
 	bool expired = false;
 	bool busy = false;
-
-	/* We have an unspecified cmd timeout, use the fallback value. */
-	if (!timeout_ms)
-		timeout_ms = MMC_OPS_TIMEOUT_MS;
 
 	/*
 	 * In cases when not allowed to poll by using CMD13 or because we aren't
@@ -502,6 +510,13 @@ static int mmc_poll_for_busy(struct mmc_card *card, unsigned int timeout_ms,
 				mmc_hostname(host), __func__);
 			return -ETIMEDOUT;
 		}
+
+		/* Throttle the polling rate to avoid hogging the CPU*/
+		if (busy) {
+			usleep_range(udelay, udelay * 2);
+			if (udelay < udelay_max)
+				udelay *= 2;
+		}
 	} while (busy);
 
 	return 0;
@@ -534,6 +549,12 @@ int __mmc_switch(struct mmc_card *card, u8 set, u8 index, u8 value,
 
 	mmc_retune_hold(host);
 
+	if (!timeout_ms) {
+		pr_warn("%s: unspecified timeout for CMD6 - use generic\n",
+			mmc_hostname(host));
+		timeout_ms = card->ext_csd.generic_cmd6_time;
+	}
+
 	/*
 	 * If the cmd timeout and the max_busy_timeout of the host are both
 	 * specified, let's validate them. A failure means we need to prevent
@@ -542,7 +563,7 @@ int __mmc_switch(struct mmc_card *card, u8 set, u8 index, u8 value,
 	 * which also means they are on their own when it comes to deal with the
 	 * busy timeout.
 	 */
-	if (!(host->caps & MMC_CAP_NEED_RSP_BUSY) && timeout_ms &&
+	if (!(host->caps & MMC_CAP_NEED_RSP_BUSY) &&
 	    host->max_busy_timeout && (timeout_ms > host->max_busy_timeout))
 		use_r1b_resp = false;
 
@@ -554,10 +575,6 @@ int __mmc_switch(struct mmc_card *card, u8 set, u8 index, u8 value,
 	cmd.flags = MMC_CMD_AC;
 	if (use_r1b_resp) {
 		cmd.flags |= MMC_RSP_SPI_R1B | MMC_RSP_R1B;
-		/*
-		 * A busy_timeout of zero means the host can decide to use
-		 * whatever value it finds suitable.
-		 */
 		cmd.busy_timeout = timeout_ms;
 	} else {
 		cmd.flags |= MMC_RSP_SPI_R1 | MMC_RSP_R1;
@@ -607,6 +624,156 @@ int mmc_switch(struct mmc_card *card, u8 set, u8 index, u8 value,
 			true, true, false);
 }
 EXPORT_SYMBOL_GPL(mmc_switch);
+/***************************************************************************************/
+#ifdef CONFIG_MMC_SPRD_MMCHEALTH
+int set_emmc_mode(struct mmc_card *card)
+{
+  int i;
+  unsigned int current_cid_manfid = card->cid.manfid;
+  char *current_prod_name = &card->cid.prod_name[0];
+
+  for (i = 0 ; i < sizeof(emmc_manfid)/sizeof(unsigned int); i++)
+  {
+      if ((current_cid_manfid == emmc_manfid[i]) && (!strncmp(current_prod_name, emmc_prod_name[i], 6)))
+       return emmc_flag = i+1;  //emmc num
+  }
+  return 0;
+}
+int get_emmc_mode(void)
+{
+    return emmc_flag;
+}
+static int mmc_send_health_data(struct mmc_card *card, struct mmc_host *host,
+		u32 opcode, void *buf, unsigned len, u32 arg)
+{
+	struct mmc_request mrq = {};
+	struct mmc_command cmd = {};
+	struct mmc_data data = {};
+	struct scatterlist sg;
+
+	mrq.cmd = &cmd;
+	mrq.data = &data;
+
+	cmd.opcode = opcode;
+	cmd.arg = arg;
+
+	cmd.flags = MMC_RSP_R1 | MMC_CMD_ADTC;
+
+	data.blksz = len;
+	data.blocks = 1;
+	data.flags = MMC_DATA_READ;
+	data.sg = &sg;
+	data.sg_len = 1;
+
+	sg_init_one(&sg, buf, len);
+
+	mmc_set_data_timeout(&data, card);
+
+	mmc_wait_for_req(host, &mrq);
+
+	if (cmd.error) {
+		pr_err("cmd%d, cmd error: %d\n", opcode, cmd.error);
+		return cmd.error;
+	}
+
+	if (data.error) {
+		pr_err("cmd%d, data error: %d\n", opcode, data.error);
+		return data.error;
+	}
+
+	return 0;
+}
+
+/* FORESEE 32G eMMC */
+static int mmc_get_health_data1(struct mmc_card *card)
+{
+	int err;
+	u8 *health_data;
+
+	if (!card)
+		return -EINVAL;
+
+	health_data = kzalloc(512, GFP_KERNEL);
+	if (!health_data)
+		return -ENOMEM;
+    /*CMD 56*/
+	err = mmc_send_health_data(card, card->host, MMC_GEN_CMD,
+				health_data, 512, 0x200005F1);
+	if (err)
+		goto out;
+    /*CMD 13*/
+	err = mmc_send_status(card, NULL);
+	if (err)
+		goto out;
+
+	set_mmchealth_data(health_data);
+out:
+	kfree(health_data);
+	return err;
+}
+
+/* Phison(qunlian) 32G eMMC */
+static int mmc_get_health_data2(struct mmc_card *card)
+{
+	int err;
+	u8 *health_data;
+
+	if (!card)
+		return -EINVAL;
+
+	health_data = kzalloc(512, GFP_KERNEL);
+	if (!health_data)
+		return -ENOMEM;
+    /*CMD 56*/
+	err = mmc_send_health_data(card, card->host, MMC_GEN_CMD,
+				health_data, 512, 0x4B534BFB);
+	if (err)
+		goto out;
+    /*CMD 13*/
+	err = mmc_send_status(card, NULL);
+	if (err)
+		goto out;
+	/*CMD 56*/
+	err = mmc_send_health_data(card, card->host, MMC_GEN_CMD,
+				health_data, 512, 0x0d);
+	if (err)
+		goto out;
+    /*CMD 13*/
+	err = mmc_send_status(card, NULL);
+	if (err)
+		goto out;
+
+	set_mmchealth_data(health_data);
+out:
+	kfree(health_data);
+	return err;
+}
+
+/* api */
+int mmc_health(struct mmc_card *card)
+{
+	int err = 0;
+    	int flag = 0;
+
+  	/*获取cid,csd数据信息来判断颗粒*/
+  	set_emmc_mode(card);
+  	flag = get_emmc_mode();
+
+	/* FORESEE 32G eMMc */
+	if (flag == FORESEE_32G_eMMC1)
+		err = mmc_get_health_data1(card);
+	else if (flag == Phison_32G_eMMC)
+		err = mmc_get_health_data2(card);
+
+ 	if (err)
+		pr_err("mmc health write count info\n");
+
+  	sprd_create_mmc_health_init(flag);
+
+  	return err;
+}
+EXPORT_SYMBOL_GPL(mmc_health);
+#endif
 
 int mmc_send_tuning(struct mmc_host *host, u32 opcode, int *cmd_error)
 {
@@ -943,7 +1110,7 @@ void mmc_run_bkops(struct mmc_card *card)
 	 * urgent levels by using an asynchronous background task, when idle.
 	 */
 	err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
-			EXT_CSD_BKOPS_START, 1, MMC_OPS_TIMEOUT_MS);
+			 EXT_CSD_BKOPS_START, 1, MMC_BKOPS_TIMEOUT_MS);
 	if (err)
 		pr_warn("%s: Error %d starting bkops\n",
 			mmc_hostname(card->host), err);
@@ -961,7 +1128,8 @@ int mmc_flush_cache(struct mmc_card *card)
 
 	if (mmc_cache_enabled(card->host)) {
 		err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
-				EXT_CSD_FLUSH_CACHE, 1, 0);
+				 EXT_CSD_FLUSH_CACHE, 1,
+				 MMC_CACHE_FLUSH_TIMEOUT_MS);
 		if (err)
 			pr_err("%s: cache flush error %d\n",
 					mmc_hostname(card->host), err);

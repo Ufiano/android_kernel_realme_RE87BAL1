@@ -104,12 +104,13 @@ struct sdio_int_t {
 	unsigned int pub_int_num;
 	/* 1: power on, 0: power off */
 	atomic_t chip_power_on;
+	struct wait_queue_head pub_int_done;
 };
 
 /* add start, for power save handle */
 bool sdio_get_power_notify(void);
 void sdio_record_power_notify(bool notify_cb_sts);
-void sdio_wait_pub_int_done(void);
+bool sdio_wait_pub_int_done(void);
 /* add end */
 
 int sdio_ap_int_cp0(enum AP_INT_CP_BIT bit);

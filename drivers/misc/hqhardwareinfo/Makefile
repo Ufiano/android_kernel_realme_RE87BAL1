@@ -1,1 +1,1 @@
-obj-$(CONFIG_HQ_HARDWARE_INFO) += hardware_info.o
+obj-$(CONFIG_HQ_HARDWARE_INFO) += hq_hardware_info.o

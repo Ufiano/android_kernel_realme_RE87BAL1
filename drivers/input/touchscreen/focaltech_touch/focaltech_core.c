@@ -675,7 +675,7 @@ static int fts_read_touchdata(struct fts_ts_data *data)
     }
 
 
-    if (tp_gesture) {
+    if (data->gesture_mode) {
         ret = fts_gesture_readdata(data, buf + FTS_TOUCH_DATA_LEN);
         if (0 == ret) {
             FTS_INFO("succuss to get gesture data in irq handler");
@@ -1610,7 +1610,7 @@ static void ts_filesys_remove(struct fts_ts_data *pdata)
 
 
 
-extern int FTS_oplus_proc_node_init(void);
+extern int FTS_oppo_proc_node_init(void);
 
 
 static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
@@ -1735,9 +1735,9 @@ static int fts_ts_probe_entry(struct fts_ts_data *ts_data)
     if (ret) {
         FTS_ERROR("init gesture fail");
     }
-	ret = FTS_oplus_proc_node_init();
+	ret = FTS_oppo_proc_node_init();
 	if (ret) {
-        FTS_ERROR("init OPLUS_proc_node_init test fail");
+        FTS_ERROR("init OPPO_proc_node_init test fail");
     }
 	
 
@@ -1928,7 +1928,7 @@ static int fts_ts_suspend(struct device *dev)
     fts_esdcheck_suspend();
 #endif
 
-    if (tp_gesture) {
+    if (ts_data->gesture_mode) {
         fts_gesture_suspend(ts_data);
     } else {
 
@@ -1990,7 +1990,7 @@ static int fts_ts_resume(struct device *dev)
     fts_esdcheck_resume();
 #endif
 
-    if (tp_gesture) {
+    if (ts_data->gesture_mode) {
         fts_gesture_resume(ts_data);
     } else {
         //printk("now is test black_screen:enable");
@@ -2151,7 +2151,7 @@ static const struct spi_device_id fts_ts_id[] = {
     {},
 };
 static const struct of_device_id fts_dt_match[] = {
-    {.compatible = "oplus,touchscreen", },
+    {.compatible = "oppo,touchscreen", },
     {},
 };
 MODULE_DEVICE_TABLE(of, fts_dt_match);

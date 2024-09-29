@@ -62,6 +62,10 @@
 						REG_AP_APB_APB_EB
 						MASK_AP_APB_UART0_EB>;
 				clocks = <&ext_26m>;
+				/*pinctrl, change ap_uart0 to  inf1*/
+				pinctrl-names = "ap_uart0_1", "ap_uart1_1";
+				pinctrl-0 = <&ap_uart0_1>;
+				pinctrl-1 = <&ap_uart1_1>;
 				status = "disabled";
 			};
 
@@ -1685,6 +1689,16 @@
 					pins = "QOGIRL6_UART_INF1_SYS_SEL";
 					sprd,control = <0x8>;
 				};
+
+				ap_uart0_1: uart0-matrix-cfg-inf1 {
+					pins = "QOGIRL6_UART_INF1_SYS_SEL";
+					sprd,control = <0x0>;
+				};
+
+				ap_uart1_1: uart1-matrix-cfg-inf1 {
+					pins = "QOGIRL6_UART_INF1_SYS_SEL";
+					sprd,control = <0x1>;
+				};
 			};
 
 			djtag: djtag@64740000 {
@@ -2081,18 +2095,19 @@
 
 	audiocp_boot {
 		compatible = "unisoc,audcp-boot";
-		sysshutdown = <&pmu_apb_regs REG_WTL_AON_APB_OCM_RST_MSK MASK_AON_APB_AP_WDG_EB>;
-		coreshutdown = <&pmu_apb_regs REG_AP_AHB_AP_ASYNC_BRG MASK_MM_AHB_DCAM_INT_1_MASK>;
-		deepsleep = <&pmu_apb_regs REG_AP_AHB_ASYNC_BRIDGE_DEBUG_SIGNAL_W_AP MASK_MM_AHB_JPG_SOFT_RST_MASK>;
-		corereset = <&pmu_apb_regs REG_AP_AHB_AP_QOS0  MASK_MM_AHB_ISP_SOFT_RST>;
-		sysreset = <&pmu_apb_regs REG_AP_AHB_AP_QOS0  MASK_MM_AHB_CPP_DMA_SOFT_RST>;
-		reset_sel = <&pmu_apb_regs REG_PMU_APB_APCPU_SOFT_RST_TYPE_CFG MASK_WTL_AON_APB_RSV_REG_B_ZEROS>;
-		sysstatus = <&pmu_apb_regs REG_AP_AHB_AP_QOS1  MASK_WTL_AON_APB_RSV_REG_B_ZEROS>;
-		corestatus = <&pmu_apb_regs REG_PMU_APB_BISR_BYP_CFG_1 MASK_WTL_AON_APB_RSV_REG_B_ZEROS>;
+		dsp-reboot-mode = <1>;
+		sysshutdown = <&pmu_apb_regs REG_PMU_APB_PD_AUDCP_CFG_0 0x3000000>;
+		coreshutdown = <&pmu_apb_regs REG_PMU_APB_PD_AUDCP_AUDDSP_CFG_0 0x3000000>;
+		deepsleep = <&pmu_apb_regs REG_PMU_APB_FORCE_DEEP_SLEEP_CFG_0 MASK_PMU_APB_AUDCP_FORCE_DEEP_SLEEP_REG>;
+		corereset = <&pmu_apb_regs REG_PMU_APB_DM_SOFT_RST  MASK_PMU_APB_AUDCP_SOFT_RST>;
+		sysreset = <&pmu_apb_regs REG_PMU_APB_SYS_SOFT_RST_0  MASK_PMU_APB_AUDCP_SOFT_RST>;
+		reset_sel = <&pmu_apb_regs REG_PMU_APB_SOFT_RST_SEL_0 MASK_PMU_APB_AUDCP_SOFT_RST>;
+		sysstatus = <&pmu_apb_regs REG_PMU_APB_PWR_STATUS_DBG_21  MASK_PMU_APB_PD_AUDCP_STATE>;
+		corestatus = <&pmu_apb_regs REG_PMU_APB_PWR_STATUS_DBG_21 MASK_PMU_APB_PD_AUDCP_AUDDSP_STATE>;
 		sleepstatus = <&pmu_apb_regs REG_AON_APB_AUTO_GATE_CTRL1 MASK_WTL_AON_APB_RSV_REG_B_ZEROS>;
-		bootprotect = <&aon_apb_regs REG_AP_AHB_M6_LPC  MASK_WTL_AON_APB_RSV_REG_B_ZEROS>;
-		bootvector = <&aon_apb_regs REG_PMU_APB_BISR_BUSY_STATUS_2 MASK_WTL_AON_APB_RSV_REG_B_ZEROS>;
-		bootaddress_sel = <&aon_apb_regs REG_AON_APB_AUDCP_DSP_CTRL1 MASK_WTL_AON_APB_RSV_REG_B_ZEROS>;
+		bootprotect = <&aon_apb_regs REG_AON_APB_AUDCP_BOOT_PROT  MASK_AON_APB_AUDCP_REG_PROT_VAL>;
+		bootvector = <&aon_apb_regs REG_AON_APB_AUDCP_DSP_CTRL0 MASK_WTL_AON_APB_RSV_REG_B_ZEROS>;
+		bootaddress_sel = <&aon_apb_regs REG_AON_APB_AUDCP_DSP_CTRL1 MASK_AON_APB_AUDCP_DSP_BOOT>;
 	};
 
 	apipe-pcm {

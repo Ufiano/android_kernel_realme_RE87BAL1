@@ -27,7 +27,9 @@
 #include "dfm.h"
 #include "sprd-asoc-card-utils.h"
 #include "sprd-asoc-common.h"
-
+#ifdef CONFIG_SND_SOC_UNISOC_CODEC_SIA81XX
+extern int soc_aux_init_only_sia81xx(struct platform_device *pdev, struct snd_soc_card *card);
+#endif
 static struct sprd_dfm_priv priv_dfm;
 struct sprd_dfm_priv dfm_priv_get(void)
 {
@@ -186,6 +188,12 @@ static int vbc_rxpx_codec_sc27xx_probe(struct platform_device *pdev)
 	card->num_dapm_widgets = sprd_asoc_card_widgets.size;
 
 	card->late_probe = vbc_rxpx_codec_sc27xx_late_probe;
+#ifdef CONFIG_SND_SOC_UNISOC_CODEC_SIA81XX
+	ret = soc_aux_init_only_sia81xx(pdev, card);
+	if (ret < 0) {
+		pr_err("%s: soc_aux_init_only_sia81xx failed!\n", __func__);
+	}
+#endif
 	ret = asoc_sprd_register_card(&pdev->dev, card);
 	if (ret < 0)
 		goto error;

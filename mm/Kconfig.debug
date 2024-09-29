@@ -62,6 +62,15 @@ config PAGE_OWNER
 
 	  If unsure, say N.
 
+config SPRD_PAGE_OWNER
+	bool "SPRD track simplified page owner messages"
+	depends on PAGE_OWNER
+	default n
+	help
+	  Print simplified page owner messages(remove LRU,SLAB,ZRAM page etc)
+	  when OOM.And print simplified page owner messages in sys/kernel/debug/
+	  sprd_page_owner.
+
 config PAGE_POISONING
 	bool "Poison pages after freeing"
 	select PAGE_POISONING_NO_SANITY if HIBERNATION

@@ -568,7 +568,6 @@ static void tx_get_pcie_dma_addr(struct sprd_hif *hif, struct sk_buff *skb)
 static void tx_work_queue(struct tx_mgmt *tx_mgmt)
 {
 	unsigned long need_polling;
-	unsigned int polling_times = 0;
 	struct sprd_hif *hif;
 	enum sprd_mode mode = SPRD_MODE_NONE;
 	int send_num = 0;
@@ -578,7 +577,6 @@ static void tx_work_queue(struct tx_mgmt *tx_mgmt)
 	hif = tx_mgmt->hif;
 	priv = hif->priv;
 
-RETRY:
 	if (unlikely(hif->exit)) {
 		pr_err("%s no longer exsit, flush data, return!\n", __func__);
 		tx_flush_all_txlist(tx_mgmt);
@@ -589,18 +587,19 @@ RETRY:
 	/*During hang recovery, send data is not allowed.
 	 * but we still need to send cmd to cp2
 	 */
+
 	if (tx_mgmt->hang_recovery_status != HANG_RECOVERY_END) {
 		printk_ratelimited("sc2355, %s, hang happened\n", __func__);
 		if (sprd_msg_tx_pended(&tx_mgmt->tx_list_cmd))
 			tx_cmd(hif, &tx_mgmt->tx_list_cmd);
-		goto RETRY;
+		return;
 	}
 
 	if (tx_mgmt->thermal_status == THERMAL_WIFI_DOWN) {
 		printk_ratelimited("sc2355, %s, THERMAL_WIFI_DOWN\n", __func__);
 		if (sprd_msg_tx_pended(&tx_mgmt->tx_list_cmd))
 			tx_cmd(hif, &tx_mgmt->tx_list_cmd);
-		goto RETRY;
+		return;
 	}
 	if (tx_mgmt->thermal_status == THERMAL_TX_STOP) {
 		printk_ratelimited("sc2355, %s, THERMAL_TX_STOP\n", __func__);
@@ -683,22 +682,11 @@ RETRY:
 	if (priv->is_screen_off == 1 &&
 	    priv->hif.hw_type == SPRD_HW_SC2355_PCIE) {
 		usleep_range(590, 610);
-		goto RETRY;
+		return;
 	}
 	if (need_polling) {
-		/* retry to wait credit */
-		udelay(10);
-		polling_times = 0;
-		goto RETRY;
-	}
-
-	if (polling_times < TX_MAX_POLLING) {
-		/* do not go to sleep immidiately */
-		polling_times++;
-		udelay(10);
-		goto RETRY;
-	} else {
-		return;
+		/* remove retry wait credit, goto tx_down */
+		usleep_range(10, 15);
 	}
 }
 
@@ -1332,7 +1320,7 @@ out:
 	if (tx_mgmt->kt == 0 || in_count == 0) {
 		tx_mgmt->kt = kt;
 	} else {
-		pr_info("%s, %d, %s, %dadded, %lld usec per flow\n",
+		wl_debug("%s, %d, %s, %dadded, %lld usec per flow\n",
 			__func__, __LINE__,
 			(ret == -1) ? "event" : "data",
 			in_count,
@@ -1351,7 +1339,7 @@ out:
 	}
 	tx_mgmt->kt = ktime_get();
 
-	pr_info("_fc_,R+%d=%d,G+%d=%d,B+%d=%d,W+%d=%d,cp=%lu,ap=%lu\n",
+	wl_debug("_fc_,R+%d=%d,G+%d=%d,B+%d=%d,W+%d=%d,cp=%lu,ap=%lu\n",
 		flow[0], atomic_read(&tx_mgmt->flow_ctrl[0].flow),
 		flow[1], atomic_read(&tx_mgmt->flow_ctrl[1].flow),
 		flow[2], atomic_read(&tx_mgmt->flow_ctrl[2].flow),
@@ -1666,6 +1654,10 @@ int sc2355_reset(struct sprd_hif *hif)
 	pr_info("%s flust all tx list\n", __func__);
 	tx_flush_all_txlist(tx_mgmt);
 
+	/* when cp2 hang and reset, clear hang_recovery_status */
+	pr_info("%s set hang recovery status to END, %d\n", __func__, __LINE__);
+	tx_mgmt->hang_recovery_status = HANG_RECOVERY_END;
+
 	return 0;
 }
 
@@ -1823,7 +1815,7 @@ bool sc2355_is_vowifi_pkt(struct sk_buff *skb, bool *b_cmd_path)
 	u32 mark;
 
 	mark = skb->mark & DUAL_VOWIFI_MASK_MARK;
-	pr_info("%s Dual vowifi: mark bits 0x%x\n", __func__, mark);
+	wl_debug("%s Dual vowifi: mark bits 0x%x\n", __func__, mark);
 	switch (mark) {
 	case DUAL_VOWIFI_NOT_SUPPORT:
 		break;

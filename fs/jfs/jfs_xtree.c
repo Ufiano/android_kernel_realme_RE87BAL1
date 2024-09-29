@@ -1771,6 +1771,7 @@ int xtUpdate(tid_t tid, struct inode *ip, xad_t * nxad)
 		goto updateLeft;
 #endif				/* _JFS_WIP_NOCOALESCE */
 
+/* #ifdef _JFS_WIP_COALESCE */
 	if (xoff < nxoff)
 		goto coalesceRight;
 
@@ -1896,6 +1897,7 @@ int xtUpdate(tid_t tid, struct inode *ip, xad_t * nxad)
 		jfs_error(ip->i_sb, "xoff >= nxoff\n");
 		return -EIO;
 	}
+/* #endif _JFS_WIP_COALESCE */
 
 	/*
 	 * split XAD into (lXAD, nXAD):

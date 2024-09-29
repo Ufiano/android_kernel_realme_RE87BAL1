@@ -114,3 +114,7 @@ obj-$(CONFIG_TOUCHSCREEN_CTS)    += ICNL9911/
 obj-$(CONFIG_TOUCHSCREEN_NT36xxx_HOSTDL_SPI)    += nt36xxx/
 obj-$(CONFIG_TOUCHSCREEN_HIMAX_CHIPSET) += hxchipset/
 obj-$(CONFIG_TOUCHSCREEN_FTS_CHIPSET)    += focaltech_touch/
+obj-m  += ili9882q/
+obj-m  += chipone-tddi/
+obj-y   += tp_pannel_notifier.o
+#obj-y   += touch.o

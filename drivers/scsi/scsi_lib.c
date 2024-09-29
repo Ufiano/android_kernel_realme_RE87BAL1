@@ -1495,6 +1495,14 @@ static void scsi_softirq_done(struct request *rq)
 			scsi_queue_insert(cmd, SCSI_MLQUEUE_DEVICE_BUSY);
 			break;
 		default:
+			scsi_print_result(cmd, "Done", disposition);
+			scsi_print_command(cmd);
+			if (status_byte(cmd->result) & CHECK_CONDITION)
+				scsi_print_sense(cmd);
+			scmd_printk(KERN_INFO, cmd,
+				"scsi host busy %d failed %d\n",
+				atomic_read(&cmd->device->host->host_busy),
+				cmd->device->host->host_failed);
 			scsi_eh_scmd_add(cmd);
 			break;
 	}
@@ -1719,8 +1727,7 @@ out_put_budget:
 	case BLK_STS_OK:
 		break;
 	case BLK_STS_RESOURCE:
-		if (atomic_read(&sdev->device_busy) ||
-		    scsi_device_blocked(sdev))
+		if (scsi_device_blocked(sdev))
 			ret = BLK_STS_DEV_RESOURCE;
 		break;
 	default:

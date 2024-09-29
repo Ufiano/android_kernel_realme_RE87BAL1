@@ -65,7 +65,7 @@
 #define UMP9620_EFUSE_CC1_SHIFT		1
 #define UMP9620_EFUSE_CC2_SHIFT		11
 
-#define SC27XX_CC1_MASK(n)		GENMASK((n) + 9, (n) + 5)
+#define SC27XX_CC1_MASK(n)		GENMASK((n) + 4, (n))
 #define SC27XX_CC2_MASK(n)		GENMASK((n) + 4, (n))
 #define SC27XX_CC_SHIFT(n)		(n)
 
@@ -545,7 +545,6 @@ int sc27xx_typec_set_enable(struct sc27xx_typec *sc){
 
 EXPORT_SYMBOL_GPL(sc27xx_typec_set_enable);
 
-
 static const u32 sc27xx_typec_cable[] = {
 	EXTCON_USB,
 	EXTCON_USB_HOST,
@@ -643,11 +642,10 @@ static void typec_irq_enable_work(struct work_struct *work)
 		goto error;
 
 	return;
-	
+
 	error:
 	typec_unregister_port(sc->port);
 }
-
 
 static int sc27xx_typec_probe(struct platform_device *pdev)
 {

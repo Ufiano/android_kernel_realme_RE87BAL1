@@ -2459,6 +2459,10 @@ static void *__vmalloc_area_node(struct vm_struct *area, gfp_t gfp_mask,
 		else
 			page = alloc_pages_node(node, alloc_mask|highmem_mask, 0);
 
+#ifdef CONFIG_SPRD_PAGE_OWNER
+		SetPagePrivate(page);
+#endif
+
 		if (unlikely(!page)) {
 			/* Successfully allocated i pages, free them in __vunmap() */
 			area->nr_pages = i;

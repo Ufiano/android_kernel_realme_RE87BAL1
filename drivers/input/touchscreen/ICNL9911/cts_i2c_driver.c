@@ -268,7 +268,7 @@ static int cts_driver_probe(struct spi_device *client)
 {
     struct chipone_ts_data *cts_data = NULL;
     int ret = 0;
-	
+    printk("Do cts driver probe!!!");	
 #ifdef CONFIG_CTS_I2C_HOST
     cts_info("Probe i2c client: name='%s' addr=0x%02x flags=0x%02x irq=%d",
         client->name, client->addr, client->flags, client->irq);
@@ -289,14 +289,14 @@ static int cts_driver_probe(struct spi_device *client)
 
     cts_data = (struct chipone_ts_data *)kzalloc(sizeof(*cts_data), GFP_KERNEL);
     if (cts_data == NULL) {
-        cts_err("Allocate chipone_ts_data failed");
+        printk("Allocate chipone_ts_data failed");
         return -ENOMEM;
     }
 
     cts_data->pdata = (struct cts_platform_data *)kzalloc(
             sizeof(struct cts_platform_data), GFP_KERNEL);
     if (cts_data->pdata == NULL) {
-        cts_err("Allocate cts_platform_data failed");
+        printk("Allocate cts_platform_data failed");
         ret = -ENOMEM;
         goto err_free_cts_data;
     }
@@ -318,7 +318,7 @@ static int cts_driver_probe(struct spi_device *client)
 
     cts_data->workqueue = create_singlethread_workqueue(CFG_CTS_DEVICE_NAME "-workqueue");
     if (cts_data->workqueue == NULL) {
-        cts_err("Create workqueue failed");
+        printk("Create workqueue failed");
         ret = -ENOMEM;
         goto err_deinit_platform_data;
     }
@@ -326,38 +326,38 @@ static int cts_driver_probe(struct spi_device *client)
 #ifdef CONFIG_CTS_ESD_PROTECTION
     cts_data->esd_workqueue = create_singlethread_workqueue(CFG_CTS_DEVICE_NAME "-esd_workqueue");
     if (cts_data->esd_workqueue == NULL) {
-        cts_err("Create esd workqueue failed");
+        printk("Create esd workqueue failed");
         ret = -ENOMEM;
         goto err_destroy_workqueue;
     }
 #endif
     ret = cts_plat_request_resource(cts_data->pdata);
     if (ret < 0) {
-        cts_err("Request resource failed %d", ret);
+        printk("Request resource failed %d", ret);
         goto err_destroy_esd_workqueue;
     }
 
     ret = cts_plat_reset_device(cts_data->pdata);
     if (ret < 0) {
-        cts_err("Reset device failed %d", ret);
+        printk("Reset device failed %d", ret);
         goto err_free_resource;
     }
 
     ret = cts_probe_device(&cts_data->cts_dev);
     if (ret) {
-        cts_err("Probe device failed %d", ret);
+        printk("Probe device failed %d", ret);
         goto err_free_resource;
     }
 
     ret = cts_plat_init_touch_device(cts_data->pdata);
     if (ret < 0) {
-        cts_err("Init touch device failed %d", ret);
+        printk("Init touch device failed %d", ret);
         goto err_free_resource;
     }
 
     ret = cts_plat_init_vkey_device(cts_data->pdata);
     if (ret < 0) {
-        cts_err("Init vkey device failed %d", ret);
+        printk("Init vkey device failed %d", ret);
         goto err_deinit_touch_device;
     }
 
@@ -502,7 +502,7 @@ err_deinit_platform_data:
 err_free_cts_data:
     kfree(cts_data);
 
-    cts_err("Probe failed %d", ret);
+    printk("Probe failed %d", ret);
 
     return ret;
 }
@@ -878,9 +878,10 @@ static int __init cts_driver_init(void)
 
     cts_info("deng_Init");
 	get_lcd_name();
+	printk("Do Touch Init!!!! \n");
 	if  (lcd_name_for_tp == NULL){
          printk("lcd name  is null return \n");
-         return 0 ;
+         //return 0 ;
         }
     if (strncmp("lcd_icnl9911C_boe_mipi_hd", lcd_name_for_tp, 28) == 0) {
 #ifdef CONFIG_CTS_I2C_HOST
@@ -891,14 +892,14 @@ static int __init cts_driver_init(void)
         return spi_register_driver(&cts_spi_driver);
 #endif
     } else {
-        cts_err(" cts lcd not match");
+        printk(" cts lcd not match");
         return 0;
     }
 }
 
 static void __exit cts_driver_exit(void)
 {
-    cts_info("Exit");
+    printk("Exit");
 
     if (strncmp("lcd_icnl9911C_boe_mipi_hd", lcd_name_for_tp, 28) == 0) {
 #ifdef CONFIG_CTS_I2C_HOST

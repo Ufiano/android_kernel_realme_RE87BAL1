@@ -174,6 +174,8 @@
 #define SDIOHAL_REMOVE_CARD_VAL	0x8000
 #define WCN_CARD_EXIST(xmit)	(atomic_read(xmit) < SDIOHAL_REMOVE_CARD_VAL)
 
+#define SDIOHAL_RESUME_TIMEOUT	50000 /* 50000ms */
+
 struct sdiohal_frag_mg {
 	struct page_frag frag;
 	unsigned int pagecnt_bias;
@@ -202,6 +204,30 @@ struct sdiohal_sendbuf_t {
 	unsigned char *buf;
 	unsigned int retry_len;
 	unsigned char *retry_buf;
+};
+
+struct sdiohal_xmit_debug_point {
+	int channel;
+	u64 cur_time;
+	int num;
+	struct mbuf_t *head, *tail;
+	bool tx_driect;
+};
+
+enum {
+	TX_LIST_PUSH,
+	RX_LIST_DISPATCH,
+};
+
+#define SDIO_DEBUG_POINT_NUM 30
+struct sdiohal_debug_t {
+	struct sdiohal_xmit_debug_point tx_list_push[SDIO_DEBUG_POINT_NUM];
+
+	struct sdiohal_xmit_debug_point rx_list_dispatch[SDIO_DEBUG_POINT_NUM];
+	int tx_list_push_index;
+	int rx_list_dispatch_index;
+	char op_enter_comm[TASK_COMM_LEN], op_leave_comm[TASK_COMM_LEN];
+	void *op_enter_builtin_addr[4], *op_leave_builtin_addr[4];
 };
 
 struct sdiohal_data_t {
@@ -277,6 +303,9 @@ struct sdiohal_data_t {
 	u64 op_enter_ns;
 	u64 op_leave_ns;
 	u64 op_expire_cnt;
+	/*SDIO debug control block*/
+	struct sdiohal_debug_t sdcb;
+	wait_queue_head_t resume_waitq;
 };
 
 struct sdiohal_data_t *sdiohal_get_data(void);
@@ -311,8 +340,8 @@ void sdiohal_cp_tx_wakeup(enum slp_subsys subsys);
 void sdiohal_cp_rx_sleep(enum slp_subsys subsys);
 void sdiohal_cp_rx_wakeup(enum slp_subsys subsys);
 
+bool sdiohal_is_resumed(bool important);
 void sdiohal_resume_check(void);
-void sdiohal_resume_wait(void);
 void sdiohal_op_enter(void);
 void sdiohal_op_leave(void);
 void sdiohal_sdma_enter(void);
@@ -402,8 +431,21 @@ int sdiohal_runtime_put(void);
 void sdiohal_register_scan_notify(void *func);
 int sdiohal_scan_card(void *wcn_dev);
 void sdiohal_remove_card(void *wcn_dev);
+void sdiohal_debug_point_show(void);
+void sdiohal_debug_point_store(int type, int channel,
+				int num, struct mbuf_t *head, struct mbuf_t *tail, bool tx_direct);
 
 extern unsigned long long tm_enter_tx_thread;
 extern unsigned long long tm_exit_tx_thread;
+
+#define sdiohal_tx_list_push_dp(channel, head, tail, num) \
+	sdiohal_debug_point_store(TX_LIST_PUSH, (channel), (num), (head), (tail), false)
+
+#define sdiohal_tx_list_push_direct_dp(channel, head, tail, num) \
+	sdiohal_debug_point_store(TX_LIST_PUSH, (channel), (num), (head), (tail), true)
+
+#define sdiohal_rx_list_dispatch_dp(channel, head, tail, num) \
+	sdiohal_debug_point_store(RX_LIST_DISPATCH, (channel), (num), (head), (tail), false)
+
 
 #endif

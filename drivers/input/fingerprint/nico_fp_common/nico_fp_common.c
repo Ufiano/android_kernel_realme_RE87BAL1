@@ -32,7 +32,9 @@ static struct fp_data *nico_fp_data_ptr = NULL;
 static int finger_screen_status = 0;
 
 finger_screen fingerprint_get_screen_status = NULL;
+#ifndef VENDOR_KERNEL
 EXPORT_SYMBOL(fingerprint_get_screen_status);
+#endif
 
 struct fp_data {
     struct device *dev;
@@ -200,8 +202,9 @@ fp_vendor_t get_fpsensor_type(void)
 
     return vendor;
 }
+#ifndef VENDOR_KERNEL
 EXPORT_SYMBOL(get_fpsensor_type);
-
+#endif
 
 static int nico_fp_common_probe(struct platform_device *fp_dev)
 {

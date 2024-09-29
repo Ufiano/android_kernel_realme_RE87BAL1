@@ -35,7 +35,7 @@
 #define UMP9620_LDO_XTL_EN	BIT(2)
 #define UMP9620_SLP_LDO_PD_EN    BIT(0)
 #define SC27XX_PWR_OFF_EN	BIT(0)
-#define RETRY_CNT_MAX (5)
+#define SC2730_SLP_LDO_PD_EN    BIT(0)
 
 struct sc27xx_poweroff_data {
 	u32 poweroff_reg;
@@ -55,7 +55,7 @@ static const struct sc27xx_poweroff_data sc2730_data = {
 	.poweroff_reg = SC2730_PWR_PD_HW,
 	.slp_ctrl_reg = SC2730_SLP_CTRL,
 	.ldo_xtl_en = SC2730_LDO_XTL_EN,
-	.slp_ldo_pd_en = SC2730_SLP_LDO_PD_EN,
+	.slp_ldo_pd_en = SC2721_SLP_LDO_PD_EN,
 };
 
 static const struct sc27xx_poweroff_data sc2731_data = {
@@ -94,43 +94,12 @@ const struct sc27xx_poweroff_data *pdata;
 static void sc27xx_poweroff_shutdown(void)
 {
 #ifdef CONFIG_HOTPLUG_CPU
-    #if 0
 	int cpu;
 
 	for_each_online_cpu(cpu) {
 		if (cpu != smp_processor_id())
 			cpu_down(cpu);
 	}
-    #else
-    // sprd patch :SPCSS01068529 start
-    int cpu, retry_cnt, ret, primary = 0;
-
-    pr_info("hotpluging non-boot CPUs ......\n");
-    if (!cpu_online(primary)) {
-        primary = smp_processor_id();
-        pr_info("primary cpu change to cpu%d\n", primary);
-    }
-
-    cpu_hotplug_enable();
-    for_each_online_cpu(cpu) {
-        if (cpu == primary)
-            continue;
-
-        retry_cnt = 0;
-        while (retry_cnt < RETRY_CNT_MAX) {
-            ret = cpu_down(cpu);
-
-            if (!ret)
-                break;
-
-            msleep(20);
-            pr_err("%s: hotplug cpu%d fail, cnt %d\n", __func__, cpu, retry_cnt);
-            retry_cnt++;
-        }
-    }
-    cpu_hotplug_disable();
-    // sprd patch :SPCSS01068529 end
-    #endif
 #endif
 }
 
@@ -140,9 +109,25 @@ static struct syscore_ops poweroff_syscore_ops = {
 
 static void sc27xx_poweroff_do_poweroff(void)
 {
+	int val = 0;
+
+	regmap_read(regmap, 0x224c, &val);
+	pr_err("sc27xx poweroff do poweroff slp dcdc pd ctrl = %x", val);
+
+	pr_err("sc27xx poweroff do poweroff slp ctrl addr = %x", pdata->slp_ctrl_reg);
+	regmap_read(regmap, pdata->slp_ctrl_reg, &val);
+	pr_err("sc27xx poweroff do poweroff slp ctrl val1 = %x", val);
 	/* Disable the external subsys connection's power firstly */
 	regmap_update_bits(regmap, pdata->slp_ctrl_reg, pdata->ldo_xtl_en, 0);
 	regmap_update_bits(regmap, pdata->slp_ctrl_reg, pdata->slp_ldo_pd_en, 0);
+	regmap_read(regmap, pdata->slp_ctrl_reg, &val);
+	pr_err("sc27xx poweroff do poweroff slp ctrl val2 = %x", val);
+
+	regmap_update_bits(regmap, pdata->slp_ctrl_reg, SC2730_SLP_LDO_PD_EN, 0);
+	regmap_read(regmap, pdata->slp_ctrl_reg, &val);
+
+	pr_err("sc27xx poweroff do poweroff slp ctrl val3 = %x", val);
+	mdelay(2000);
 
 	regmap_write(regmap, pdata->poweroff_reg, SC27XX_PWR_OFF_EN);
 }

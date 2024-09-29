@@ -59,6 +59,8 @@ int marlin_set_sleep(enum wcn_sub_sys subsys, bool enable);
 int marlin_reset_reg(void);
 int start_marlin(enum wcn_sub_sys subsys);
 int stop_marlin(enum wcn_sub_sys subsys);
+unsigned int marlin_get_wcn_xpe_efuse_data(void);
+#define WCN_XPE_EFUSE_DATA 1
 int open_power_ctl(void);
 bool marlin_get_download_status(void);
 void marlin_set_download_status(int f);

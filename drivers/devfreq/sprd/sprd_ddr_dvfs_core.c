@@ -17,27 +17,31 @@
 #include <linux/slab.h>
 #include <linux/suspend.h>
 #include <linux/sipc.h>
-#include "sprd_ddr_dvfs.h"
+#include <linux/spi/spi_sprd_adi.h>
+#include <sprd_ddr_dvfs.h>
+
+
+extern void sprd_adi_panic_prepare_register(void *callback);
 
 enum dvfs_master_cmd {
 	DVFS_CMD_NORMAL		= 0x0000,
 	DVFS_CMD_ENABLE		= 0x0300,
-	DVFS_CMD_DISABLE		= 0x0305,
+	DVFS_CMD_DISABLE	= 0x0305,
 	DVFS_CMD_AUTO_ENABLE	= 0x0310,
 	DVFS_CMD_AUTO_DISABLE	= 0x0315,
-	DVFS_CMD_AXI_ENABLE	  = 0x0320,
-	DVFS_CMD_AXI_DISABLE	 = 0x0330,
+	DVFS_CMD_AXI_ENABLE	= 0x0320,
+	DVFS_CMD_AXI_DISABLE	= 0x0330,
 	DVFS_CMD_INQ_DDR_FREQ	= 0x0500,
 	DVFS_CMD_INQ_AP_FREQ	= 0x0502,
 	DVFS_CMD_INQ_CP_FREQ	= 0x0503,
 	DVFS_CMD_INQ_DDR_TABLE	= 0x0505,
 	DVFS_CMD_INQ_COUNT	= 0x0507,
 	DVFS_CMD_INQ_STATUS	= 0x050A,
-	DVFS_CMD_INQ_AUTO_STATUS	= 0x050B,
+	DVFS_CMD_INQ_AUTO_STATUS = 0x050B,
 	DVFS_CMD_INQ_OVERFLOW	= 0x0510,
 	DVFS_CMD_INQ_UNDERFLOW	= 0x0520,
 	DVFS_CMD_INQ_TIMER	= 0x0530,
-	DVFS_CMD_INQ_AXI		 = 0x0540,
+	DVFS_CMD_INQ_AXI	= 0x0540,
 	DVFS_CMD_INQ_AXI_WLTC	= 0x0541,
 	DVFS_CMD_INQ_AXI_RLTC	= 0x0542,
 	DVFS_CMD_SET_DDR_FREQ	= 0x0600,
@@ -49,6 +53,7 @@ enum dvfs_master_cmd {
 	DVFS_CMD_PARA_END	= 0x07FF,
 	DVFS_CMD_SET_AXI_WLTC	= 0x0810,
 	DVFS_CMD_SET_AXI_RLTC	= 0x0820,
+	DVFS_SAVE_DUMP_DATA	= 0x0910,
 	DVFS_CMD_DEBUG		= 0x0FFF
 };
 
@@ -58,14 +63,14 @@ enum dvfs_slave_cmd {
 	DVFS_RET_ADJ_BUSY	= 0x0002,
 	DVFS_RET_ADJ_NOCHANGE	= 0x0003,
 	DVFS_RET_ADJ_FAIL	= 0x0004,
-	DVFS_RET_DISABLE		= 0x0005,
+	DVFS_RET_DISABLE	= 0x0005,
 	DVFS_RET_ON_OFF_SUCCEED	= 0x0300,
 	DVFS_RET_ON_OFF_FAIL	= 0x0303,
 	DVFS_RET_INQ_SUCCEED	= 0x0500,
 	DVFS_RET_INQ_FAIL	= 0x0503,
 	DVFS_RET_SET_SUCCEED	= 0x0600,
 	DVFS_RET_SET_FAIL	= 0x0603,
-	DVFS_RET_PARA_OK		= 0x070F,
+	DVFS_RET_PARA_OK	= 0x070F,
 	DVFS_RET_DEBUG_OK	= 0x0F00,
 	DVFS_RET_INVALID_CMD	= 0x0F0F
 };
@@ -90,9 +95,96 @@ struct dvfs_data {
 	struct completion reg_callback_done;
 	struct governor_callback *gov_callback;
 	unsigned int init_done;
+	struct mutex dfs_step_mutex;
 };
 static struct dvfs_data *g_dvfs_data;
 static char *default_governor = "sprd-governor";
+
+struct ddr_dfs_step_list_t *ddr_cur_step_g;
+struct ddr_dfs_step_list_t *ddr_dfs_step_s;
+struct ddr_dfs_step_list_t ddr_step_arr[DDR_DB_NODE_NUM] = {0};
+
+struct ddr_dfs_step_list_t *ddr_step_list_init(struct ddr_dfs_step_list_t ddr_step_arr[],
+					       u32 node_num)
+{
+	u32 i = 0;
+	struct ddr_dfs_step_list_t *head = ddr_step_arr;
+	struct ddr_dfs_step_list_t *p = head;
+
+	for (i = 1; i < node_num; i++) {
+		p->next = ddr_step_arr + i;
+		p = p->next;
+	}
+	p->next = head;
+	return p;
+}
+
+void ddr_dfs_step_add(enum DDR_DFS_STATE_STEP cur_step, int status, char *scene, u32 buff, int pid)
+{
+	mutex_lock(&g_dvfs_data->dfs_step_mutex);
+	ddr_cur_step_g = ddr_cur_step_g->next;
+
+	ddr_cur_step_g->data.step = cur_step;
+	ddr_cur_step_g->data.status = status;
+
+	memset(ddr_cur_step_g->data.scene, 0, SCENE_MAX);
+	if (scene != NULL) {
+		if (buff >= SCENE_MAX)
+			memcpy(ddr_cur_step_g->data.scene, scene, SCENE_MAX - 1);
+		else
+			memcpy(ddr_cur_step_g->data.scene, scene, buff);
+	}
+	ddr_cur_step_g->data.buff = buff;
+	ddr_cur_step_g->data.pid = pid;
+	mutex_unlock(&g_dvfs_data->dfs_step_mutex);
+}
+
+static int ddrinfo_dfs_step_show(char **arg, char **step_status, char **scene,
+				 u32 *buff, int *pid, u32 i)
+{
+	if (i == 0)
+		ddr_dfs_step_s = ddr_cur_step_g;
+
+	ddr_dfs_step_s = ddr_dfs_step_s->next;
+	*scene = NULL;
+
+	switch (ddr_dfs_step_s->data.step) {
+	case 1:
+		*arg = "scenario_dfs_enter";
+		*scene = ddr_dfs_step_s->data.scene;
+		break;
+	case 2:
+		*arg = "exit_scene";
+		*scene = ddr_dfs_step_s->data.scene;
+		break;
+	case 3:
+		*arg = "auto_dfs_on_off";
+		break;
+	case 4:
+		*arg = "scaling_force_ddr_freq";
+		break;
+	case 5:
+		*arg = "scene_boost_enter";
+		break;
+	case 6:
+		*arg = "set_backdoor";
+		break;
+	default:
+		*arg = "NONE_STEP";
+		break;
+	}
+	if (ddr_dfs_step_s->data.status == 0)
+		*step_status = "pass";
+	else
+		*step_status = "fail";
+	*buff = ddr_dfs_step_s->data.buff;
+	*pid = ddr_dfs_step_s->data.pid;
+
+	if (i >= DDR_DB_NODE_NUM - 1)
+		return 1;
+	else
+		return 0;
+}
 
 static int dvfs_msg_recv(struct smsg *msg, int timeout)
 {
@@ -248,6 +340,16 @@ static int dvfs_auto_disable(void)
 	err = dvfs_msg(&data, 0, DVFS_CMD_AUTO_DISABLE, 2000);
 
 	return err;
+}
+
+static void dvfs_register_save(void)
+{
+	int err;
+	struct smsg msg;
+
+	err = dvfs_msg_send(&msg, DVFS_SAVE_DUMP_DATA, msecs_to_jiffies(100), 0);
+	mdelay(100);
+	dev_info(g_dvfs_data->dev, "info cm4 to save soc_dump data");
 }
 
 static int get_dvfs_status(unsigned int *data)
@@ -445,6 +547,8 @@ struct governor_callback g_gov_callback = {
 	.dvfs_auto_disable = dvfs_auto_disable,
 	.get_cur_freq = get_cur_freq,
 	.get_freq_table = get_freq_table,
+	.ddrinfo_dfs_step_show = ddrinfo_dfs_step_show,
+	.ddr_dfs_step_add = ddr_dfs_step_add,
 };
 
 static int dvfs_freq_target(struct device *dev, unsigned long *freq,
@@ -548,6 +652,7 @@ static int dvfs_smsg_thread(void *value)
 				return 0;
 			}
 		}
+
 		/*fix me : now we do not have interface for vol*/
 		if (data->paras[i].vol == 0)
 			data->paras[i].vol = 750;
@@ -561,6 +666,8 @@ static int dvfs_smsg_thread(void *value)
 		}
 	}
 
+	if (of_property_read_bool(dev->of_node, "info-socdump-enable-flag")) 
+          	sprd_adi_panic_prepare_register((void *)dvfs_register_save);
 
 	err = get_cur_freq((unsigned int *)(&data->profile->initial_freq));
 	if (err < 0) {
@@ -643,6 +750,9 @@ int dvfs_core_init(struct platform_device *pdev)
 	mutex_init(&g_dvfs_data->sync_mutex);
 	init_completion(&g_dvfs_data->reg_callback_done);
 	g_dvfs_data->gov_callback = &g_gov_callback;
+
+	mutex_init(&g_dvfs_data->dfs_step_mutex);
+	ddr_cur_step_g = ddr_step_list_init(ddr_step_arr, DDR_DB_NODE_NUM);
 
 	for (i = 0; i < g_dvfs_data->freq_num; i++) {
 		err = of_property_read_u32_index(node, "overflow",

@@ -236,12 +236,20 @@ static int usb_extcon_probe(struct platform_device *pdev)
 			return ret;
 		}*/
 		//ODM_HQ_EDIT 2021.11.09 Add OTG control
+#ifdef VENDOR_KERNEL
+		addr = ioremap(0x647105c8, 128);
+#else
 		addr = ioremap(0x64710654, 128);
+#endif
 		if(addr == NULL){
 			dev_err(otg_info->dev, "failed to get USB_ID addr\n");
 			return -EINVAL;;
 		}
+#ifdef VENDOR_KERNEL
+		writel_relaxed(0x00082045, addr);//pull down USB_ID
+#else
 		writel_relaxed(0x00080045, addr);//pull down USB_ID
+#endif
 	}
 
 	if (info->vbus_gpiod) {
@@ -282,14 +290,22 @@ void otg_switch_mode(int value)
 		dev_err(otg_info->dev, "failed to request otg_info->id_gpiod\n");
 		return;
 	}
+#ifdef VENDOR_KERNEL
+	addr = ioremap(0x647105c8, 128);
+#else
 	addr = ioremap(0x64710654, 128);
+#endif
 	if(addr == NULL){
 		dev_err(otg_info->dev, "failed to get USB_ID addr\n");
 		return;
 	}
 	if (value) {
 		if (!otg_switch_flage) {
+#ifdef VENDOR_KERNEL
+			writel_relaxed(0x0008208a, addr);//pull up USB_ID
+#else
 			writel_relaxed(0x00080089, addr);//pull up USB_ID
+#endif
 			msleep(100);
 			ret = devm_request_threaded_irq(otg_info->dev, otg_info->id_irq, NULL,
 						usb_irq_handler,
@@ -298,7 +314,11 @@ void otg_switch_mode(int value)
 						NULL, otg_info);
 			if (ret < 0) {
 				dev_err(otg_info->dev, "failed to request handler for ID IRQ\n");
+#ifdef VENDOR_KERNEL
+				writel_relaxed(0x00082045, addr);//pull down USB_ID
+#else
 				writel_relaxed(0x00080045, addr);//pull down USB_ID
+#endif
 				iounmap(addr);
 				return;
 			}
@@ -314,7 +334,11 @@ void otg_switch_mode(int value)
 			if (!gpiod_get_value(otg_info->id_gpiod))
 				extcon_set_state_sync(otg_info->edev, EXTCON_USB_HOST, false);
 			devm_free_irq(otg_info->dev, otg_info->id_irq, otg_info);
+#ifdef VENDOR_KERNEL
+			writel_relaxed(0x00082045, addr);//pull down USB_ID
+#else
 			writel_relaxed(0x00080045, addr);//pull down USB_ID
+#endif
 			dev_err(otg_info->dev, "switch otg off\n");
 		} else {
 			dev_err(otg_info->dev, "otg is off, not switch\n");

@@ -14,10 +14,11 @@ obj-$(CONFIG_SND_SOC_UNISOC_VAUDIO)		+= dai/vaudio/
 obj-$(CONFIG_SND_SOC_UNISOC_I2S)			+= dai/i2s/
 obj-$(CONFIG_SND_SOC_UNISOC_CODEC_DUMMY)		+= codec/dummy-codec/
 obj-$(CONFIG_SND_SOC_UNISOC_CODEC_SC2730)		+= codec/sprd/sc2730/
-obj-$(CONFIG_SND_SOC_UNISOC_PA_UCP1301)		+= codec/sprd/ucp1301/
+
 obj-$(CONFIG_SND_SOC_UNISOC_CODEC_SC2721)		+= codec/sprd/sc2721/
 obj-$(CONFIG_SND_SOC_UNISOC_PDM_R2P0)		+= codec/sprd/pdm_r2p0/
 obj-$(CONFIG_SND_SOC_UNISOC_CODEC_UMP9620)		+= codec/sprd/ump9620/
+obj-$(CONFIG_SND_SOC_UNISOC_CODEC_SIA81XX)		+= codec/sprd/sia81xx/
 
 # Machines
 snd-soc-sprd-card-objs		:= sprd-asoc-common.o sprd-asoc-card-utils.o \

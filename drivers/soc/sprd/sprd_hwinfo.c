@@ -40,20 +40,20 @@ struct ver_info {
 	char *audio_name;
 };
 
-static struct ver_info oplus_ver_info;
+static struct ver_info oppo_ver_info;
 
-DEFINE_STR_SHOW_FOPS(oplus_ver_info, prj_name);
-DEFINE_STR_SHOW_FOPS(oplus_ver_info, pcb_version);
-DEFINE_STR_SHOW_FOPS(oplus_ver_info, boot_mode);
-DEFINE_STR_SHOW_FOPS(oplus_ver_info, rf_type);
-DEFINE_STR_SHOW_FOPS(oplus_ver_info, secure_type);
-DEFINE_STR_SHOW_FOPS(oplus_ver_info, secure_stage);
-DEFINE_STR_SHOW_FOPS(oplus_ver_info, ocp);
-DEFINE_STR_SHOW_FOPS(oplus_ver_info, serial_id);
-DEFINE_STR_SHOW_FOPS(oplus_ver_info, eng_version);
-DEFINE_STR_SHOW_FOPS(oplus_ver_info, is_confidential);
-DEFINE_STR_SHOW_FOPS(oplus_ver_info, dtsi_name);
-DEFINE_STR_SHOW_FOPS(oplus_ver_info, audio_name);
+DEFINE_STR_SHOW_FOPS(oppo_ver_info, prj_name);
+DEFINE_STR_SHOW_FOPS(oppo_ver_info, pcb_version);
+DEFINE_STR_SHOW_FOPS(oppo_ver_info, boot_mode);
+DEFINE_STR_SHOW_FOPS(oppo_ver_info, rf_type);
+DEFINE_STR_SHOW_FOPS(oppo_ver_info, secure_type);
+DEFINE_STR_SHOW_FOPS(oppo_ver_info, secure_stage);
+DEFINE_STR_SHOW_FOPS(oppo_ver_info, ocp);
+DEFINE_STR_SHOW_FOPS(oppo_ver_info, serial_id);
+DEFINE_STR_SHOW_FOPS(oppo_ver_info, eng_version);
+DEFINE_STR_SHOW_FOPS(oppo_ver_info, is_confidential);
+DEFINE_STR_SHOW_FOPS(oppo_ver_info, dtsi_name);
+DEFINE_STR_SHOW_FOPS(oppo_ver_info, audio_name);
 
 void create_entry(const char *name, struct proc_dir_entry *parent,
 		  const struct file_operations *proc_fops)
@@ -67,26 +67,28 @@ void create_entry(const char *name, struct proc_dir_entry *parent,
 
 static int create_prjinfo_entries(void)
 {
-	struct proc_dir_entry *oplus_ver_dir;
+	struct proc_dir_entry *oppo_ver_dir;
 
-	oplus_ver_dir = proc_mkdir("oppoVersion", NULL);
-	if (oplus_ver_dir == NULL) {
+	oppo_ver_dir = proc_mkdir("oppoVersion", NULL);
+	if (oppo_ver_dir == NULL) {
 		pr_err("Unable to create /proc/oppoVersion directory\n");
 		return -ENOMEM;
 	}
 
-	create_entry("prjName", oplus_ver_dir, &prj_name_fops);
-	create_entry("pcbVersion", oplus_ver_dir, &pcb_version_fops);
-	create_entry("oppoBootmode", oplus_ver_dir, &boot_mode_fops);
-	create_entry("RFType", oplus_ver_dir, &rf_type_fops);
-	create_entry("secureType", oplus_ver_dir, &secure_type_fops);
-	create_entry("secureStage", oplus_ver_dir, &secure_stage_fops);
-	create_entry("ocp", oplus_ver_dir, &ocp_fops);
-	create_entry("serialID", oplus_ver_dir, &serial_id_fops);
-	create_entry("engVersion", oplus_ver_dir, &eng_version_fops);
-	create_entry("isConfidential", oplus_ver_dir, &is_confidential_fops);
-	create_entry("dtsiName", oplus_ver_dir, &dtsi_name_fops);
-	create_entry("audioName", oplus_ver_dir, &audio_name_fops);
+	create_entry("prjName", oppo_ver_dir, &prj_name_fops);
+	create_entry("pcbVersion", oppo_ver_dir, &pcb_version_fops);
+	create_entry("oppoBootmode", oppo_ver_dir, &boot_mode_fops);
+	create_entry("RFType", oppo_ver_dir, &rf_type_fops);
+#ifndef VENDOR_KERNEL
+	create_entry("secureType", oppo_ver_dir, &secure_type_fops);
+	create_entry("secureStage", oppo_ver_dir, &secure_stage_fops);
+#endif
+	create_entry("ocp", oppo_ver_dir, &ocp_fops);
+	create_entry("serialID", oppo_ver_dir, &serial_id_fops);
+	create_entry("engVersion", oppo_ver_dir, &eng_version_fops);
+	create_entry("isConfidential", oppo_ver_dir, &is_confidential_fops);
+	create_entry("dtsiName", oppo_ver_dir, &dtsi_name_fops);
+	create_entry("audioName", oppo_ver_dir, &audio_name_fops);
 
 	return 0;
 }
@@ -101,15 +103,15 @@ static int __init __match ## _setup(char *str)			\
 __setup(#__match"=", __match ## _setup)
 
 
-DEFINE_STR_INFO_SETUP(oplus_ver_info, prj_name);
-DEFINE_STR_INFO_SETUP(oplus_ver_info, pcb_version);
-DEFINE_STR_INFO_SETUP(oplus_ver_info, boot_mode);
-DEFINE_STR_INFO_SETUP(oplus_ver_info, rf_type);
-DEFINE_STR_INFO_SETUP(oplus_ver_info, secure_type);
-DEFINE_STR_INFO_SETUP(oplus_ver_info, secure_stage);
-DEFINE_STR_INFO_SETUP(oplus_ver_info, ocp);
-DEFINE_STR_INFO_SETUP(oplus_ver_info, serial_id);
-DEFINE_STR_INFO_SETUP(oplus_ver_info, eng_version);
-DEFINE_STR_INFO_SETUP(oplus_ver_info, is_confidential);
-DEFINE_STR_INFO_SETUP(oplus_ver_info, dtsi_name);
-DEFINE_STR_INFO_SETUP(oplus_ver_info, audio_name);
+DEFINE_STR_INFO_SETUP(oppo_ver_info, prj_name);
+DEFINE_STR_INFO_SETUP(oppo_ver_info, pcb_version);
+DEFINE_STR_INFO_SETUP(oppo_ver_info, boot_mode);
+DEFINE_STR_INFO_SETUP(oppo_ver_info, rf_type);
+DEFINE_STR_INFO_SETUP(oppo_ver_info, secure_type);
+DEFINE_STR_INFO_SETUP(oppo_ver_info, secure_stage);
+DEFINE_STR_INFO_SETUP(oppo_ver_info, ocp);
+DEFINE_STR_INFO_SETUP(oppo_ver_info, serial_id);
+DEFINE_STR_INFO_SETUP(oppo_ver_info, eng_version);
+DEFINE_STR_INFO_SETUP(oppo_ver_info, is_confidential);
+DEFINE_STR_INFO_SETUP(oppo_ver_info, dtsi_name);
+DEFINE_STR_INFO_SETUP(oppo_ver_info, audio_name);

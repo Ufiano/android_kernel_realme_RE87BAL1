@@ -41,6 +41,8 @@ int __read_mostly sysctl_hung_task_check_count = PID_MAX_LIMIT;
 /*
  * Zero means infinite timeout - no checking done:
  */
+
+#define CONFIG_DEFAULT_HUNG_TASK_TIMEOUT 120
 unsigned long __read_mostly sysctl_hung_task_timeout_secs = CONFIG_DEFAULT_HUNG_TASK_TIMEOUT;
 
 /*
@@ -235,13 +237,16 @@ int proc_dohung_task_timeout_secs(struct ctl_table *table, int write,
 	return ret;
 }
 
+
 static atomic_t reset_hung_task = ATOMIC_INIT(0);
 
 void reset_hung_task_detector(void)
 {
 	atomic_set(&reset_hung_task, 1);
 }
-EXPORT_SYMBOL_GPL(reset_hung_task_detector);
+//odm alm_id:5321993 struk to reboot function ; build-in  for gki 2023/3/17 wangshuaishuai start
+//EXPORT_SYMBOL_GPL(reset_hung_task_detector);
+//odm alm_id:5321993 struk to reboot function ; build-in  for gki 2023/3/17 wangshuaishuai en
 
 static bool hung_detector_suspended;
 

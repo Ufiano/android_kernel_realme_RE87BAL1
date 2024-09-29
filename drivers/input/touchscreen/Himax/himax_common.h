@@ -110,13 +110,14 @@
 
 //#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0))
 #define KERNEL_VER_ABOVE_4_19
+//#endif
 
 #if defined(HX_ZERO_FLASH)
 /*zero flash case, you need to setup the fix_touch_info of module*/
 /*Please set the size according to IC*/
 #define DSRAM_SIZE HX_32K_SZ
 #define HX_RESUME_SET_FW
-#define OPLUS_PROC_NODE
+#define OPPO_PROC_NODE
 /*#define HX_CODE_OVERLAY*/
 /*Independent threads run the notification chain notification function resume*/
 /*#define HX_CONTAINER_SPEED_UP*/
@@ -124,11 +125,11 @@
 #define HX_TP_PROC_GUEST_INFO
 #endif
 
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 	//#define HX_TP_USB_NOTIFIER
 	//#define HX_TP_HEADSET_NOTIFIER
 	//#define HX_UPDATE_FW_NOTIFIER
-	#define OPLUS_HX_UPDATE_FW   /* OPLUS bootup upgrade function by thread */
+	#define OPPO_HX_UPDATE_FW   /* OPPO bootup upgrade function by thread */
 #endif
 
 #if defined(HX_BOOT_UPGRADE) || defined(HX_ZERO_FLASH)
@@ -136,7 +137,7 @@
  */
 #define BOOT_UPGRADE_FWNAME "Himax_firmware.bin"
 #if defined(HX_ZERO_FLASH)
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 	#define BOOT_UPGRADE_FWNAME_SIGNED "Himax_firmware_signed.bin"
 	#define FW_UPDATE_COMPLETE_TIMEOUT  msecs_to_jiffies(40*1000)
 	#define MPAP_FWNAME "Himax_mpfw.bin"
@@ -335,7 +336,7 @@ enum fix_touch_info {
 #endif
 };
 
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 struct edge_limit {
 	int in_which_area;
 	int limit_area;
@@ -494,7 +495,7 @@ struct himax_report_data {
 	uint8_t *hx_rawdata_buf;
 	uint8_t rawdata_frame_size;
 };
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 struct firmware_head_struct {
         const uint8_t *data;
         size_t size;
@@ -524,7 +525,7 @@ struct himax_ts_data {
 	uint8_t irq_enabled;
 	uint8_t diag_self[50];
 	
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 	uint8_t backup_flag;
 	uint8_t psensor_stus;
 	int 	gesture_bak;

@@ -374,6 +374,7 @@
   usleep_range
   vabits_actual
   vfree
+  virtio_break_device
   virtio_check_driver_offered_feature
   virtio_config_changed
   virtio_max_dma_size
@@ -513,6 +514,7 @@
   ieee80211_scan_completed
   ieee80211_start_tx_ba_cb_irqsafe
   ieee80211_stop_tx_ba_cb_irqsafe
+  ieee80211_tx_prepare_skb
   ieee80211_tx_status_irqsafe
   ieee80211_unregister_hw
   init_net
@@ -1091,6 +1093,7 @@
 # required by virtio_pci.ko
   irq_set_affinity_hint
   pci_alloc_irq_vectors_affinity
+  pci_device_is_present
   pci_disable_sriov
   pci_enable_sriov
   pci_find_capability
@@ -1180,3 +1183,4 @@
   _raw_read_unlock
   _raw_write_lock
   _raw_write_unlock
+  wait_on_page_bit

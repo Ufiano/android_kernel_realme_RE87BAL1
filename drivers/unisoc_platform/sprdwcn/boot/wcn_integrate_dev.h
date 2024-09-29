@@ -4,7 +4,6 @@
 #include <misc/wcn_integrate_platform.h>
 #include "rf.h"
 #include "wcn_glb.h"
-#include "wcn_debug_bus.h"
 
 #define WCN_BTWF_FILENAME "wcnmodem"
 #define WCN_GNSS_FILENAME "gpsgl"
@@ -259,7 +258,6 @@ struct wcn_device {
 	struct	work_struct load_wq;
 	struct	delayed_work cali_wq;
 	struct	completion download_done;
-	struct  wcn_debug_bus dbus;
 };
 
 struct wcn_device_manage {

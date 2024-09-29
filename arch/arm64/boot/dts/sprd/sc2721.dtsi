@@ -243,9 +243,10 @@
 
 			vddsdcore: LDO_VDDSDCORE {
 				regulator-name = "vddsdcore";
-				regulator-min-microvolt = <1200000>;
+				regulator-min-microvolt = <3300000>;
 				regulator-max-microvolt = <3750000>;
 				regulator-ramp-delay = <25000>;
+				regulator-always-on;
 			};
 
 			vddsdio: LDO_VDDSDIO {
@@ -339,6 +340,7 @@
 				regulator-min-microvolt = <1200000>;
 				regulator-max-microvolt = <3750000>;
 				regulator-ramp-delay = <25000>;
+				regulator-always-on;
 			};
 		};
 

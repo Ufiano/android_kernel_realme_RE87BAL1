@@ -11,8 +11,8 @@
  * GNU General Public License for more details.
  */
 
-#ifndef _UFS_SPRD_H_
-#define _UFS_SPRD_H_
+#ifndef _UFS_SPRD_QOGIRL6_H_
+#define _UFS_SPRD_QOGIRL6_H_
 #include <linux/bits.h>
 
 struct syscon_ufs {
@@ -41,7 +41,11 @@ struct ufs_sprd_host {
 	struct clk *pclk_source;
 	struct clk *hclk;
 	struct clk *pclk;
-
+	struct completion pwm_async_done;
+	u32 ioctl_cmd;
+	bool wlun_dev_add;
+	struct completion hs_async_done;
+	ktime_t linkup_start_tstamp;
 };
 
 extern int sprd_get_soc_id(sprd_soc_id_type_t soc_id_type, u32 *id, int id_len);
@@ -118,6 +122,38 @@ extern int sprd_get_soc_id(sprd_soc_id_type_t soc_id_type, u32 *id, int id_len);
 #define	MPHY_APB_HSTXSCLKINV1_MASK BIT(13)
 #define	MPHY_APB_HSTXSCLKINV1_VAL BIT(13)
 
+#define	MPHY_DIG_CFG1_LANE0  0xC004
+#define	MPHY_DIG_CFG17_LANE0 0xC044
+#define	MPHY_DIG_CFG32_LANE0 0xC080
+
+#define	MPHY_DIG_CFG1_LANE1  0xC804
+#define	MPHY_DIG_CFG17_LANE1 0xC844
+#define	MPHY_DIG_CFG32_LANE1 0xC880
+
+#define	MPHY_APB_RX_CFGRXBIASLSENVAL_MASK BIT(5)
+#define	MPHY_APB_RX_CFGRXBIASLSENOVR_MASK BIT(21)
+#define	MPHY_APB_OVR_REG_LS_LDO_STABLE_MASK BIT(28)
+#define	MPHY_APB_REG_LS_LDO_STABLE_MASK BIT(17)
+
+#define MPHY_DIG_CFG62_LANE0	0xC0F8
+#define MPHY_DIG_CFG66_LANE0	0xC108
+#define MPHY_DIG_CFG15_LANE0	0xC03C
+
+#define MPHY_APB_REG_DCO_CTRLBIT	GENMASK(7, 0)
+#define MPHY_APB_REG_DCO_VALUE		0x2C
+#define MPHY_APB_OVR_REG_DCO_CTRLBIT	GENMASK(16, 16)
+#define MPHY_APB_OVR_REG_DCO_VALUE	BIT(16)
+
+#define WAIT_1MS_TIMEOUT	1000
+#define APB_DCO_CAL_RESULT_RANGE	0xA
+
 #define AON_VER_UFS 1
 
-#endif/* _UFS_SPRD_H_ */
+#define UFS_IOCTL_ENTER_MODE    0x5395
+#define UFS_IOCTL_AFC_EXIT      0x5396
+
+#define PWM_MODE_VAL    0x22
+#define HS_MODE_VAL     0x11
+
+
+#endif/* _UFS_SPRD_QOGIRL6_H_ */

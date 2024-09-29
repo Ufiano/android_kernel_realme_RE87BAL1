@@ -792,6 +792,7 @@ void sdiohal_enable_rx_irq(void)
 
 	sdiohal_atomic_sub(1, &p_data->irq_cnt);
 	irq_set_irq_type(p_data->irq_num, IRQF_TRIGGER_HIGH);
+	/* WARNING: when the card is removed, sdiohal_remove():free(pdata->irq) */
 	enable_irq(p_data->irq_num);
 }
 
@@ -953,9 +954,10 @@ static int sdiohal_suspend(struct device *dev)
 	int ret;
 	struct wcn_match_data *g_match_config = get_wcn_match_config();
 
-	pr_debug("[%s]enter\n", __func__);
+	pr_info("[%s]enter\n", __func__);
 
 	atomic_set(&p_data->flag_suspending, 1);
+	mdbg_device_lock_notify();
 	for (chn = 0; chn < SDIO_CHANNEL_NUM; chn++) {
 		sdiohal_ops = chn_ops(chn);
 		if (sdiohal_ops && sdiohal_ops->power_notify) {
@@ -966,18 +968,24 @@ static int sdiohal_suspend(struct device *dev)
 				pr_info("[%s] chn:%d suspend fail\n",
 					__func__, chn);
 				atomic_set(&p_data->flag_suspending, 0);
+				mdbg_device_unlock_notify();
 				return ret;
 			}
 		}
 	}
 
 	if (g_match_config && g_match_config->unisoc_wcn_slp) {
-		sdio_wait_pub_int_done();
+		if (unlikely(!sdio_wait_pub_int_done())) {
+			atomic_set(&p_data->flag_suspending, 0);
+			pr_err("[%s]PUB int xmit_lock:%d\n", __func__,
+					mutex_is_locked(&p_data->xmit_lock));
+			goto fail_to_suspend;
+		}
 		sdio_record_power_notify(false);
 	}
 
-	atomic_set(&p_data->flag_suspending, 0);
 	atomic_set(&p_data->flag_resume, 0);
+	atomic_set(&p_data->flag_suspending, 0);
 	if (atomic_read(&p_data->irq_cnt))
 		sdiohal_lock_rx_ws();
 
@@ -985,8 +993,27 @@ static int sdiohal_suspend(struct device *dev)
 		func = container_of(dev, struct sdio_func, dev);
 		func->card->host->pm_flags |= MMC_PM_KEEP_POWER;
 	}
+    mdbg_device_unlock_notify();
+
+    /* WARNING: wait for sending to complete? */
+    pr_info("[%s]done xmit_lock:%d\n", __func__, mutex_is_locked(&p_data->xmit_lock));
 
 	return 0;
+
+fail_to_suspend:
+	for (chn = chn - 1; chn >= 0; chn--) {
+		sdiohal_ops = chn_ops(chn);
+		if (sdiohal_ops && sdiohal_ops->power_notify) {
+			ret = sdiohal_ops->power_notify(chn, true);
+			if (ret != 0)
+				pr_info("[%s] chn:%d resume fail\n", __func__, chn);
+		}
+	}
+
+	mdbg_device_unlock_notify();
+	pr_info("[%s]failed xmit_lock:%d\n", __func__, mutex_is_locked(&p_data->xmit_lock));
+
+	return -EBUSY;
 }
 
 static int sdiohal_resume(struct device *dev)
@@ -997,7 +1024,7 @@ static int sdiohal_resume(struct device *dev)
 	int chn;
 	int ret;
 
-	pr_debug("[%s]enter\n", __func__);
+	pr_info("[%s]enter xmit_lock:%d\n", __func__, mutex_is_locked(&p_data->xmit_lock));
 
 	if (WCN_CARD_EXIST(&p_data->xmit_cnt)) {
 		func = container_of(dev, struct sdio_func, dev);
@@ -1005,6 +1032,8 @@ static int sdiohal_resume(struct device *dev)
 	}
 
 	atomic_set(&p_data->flag_resume, 1);
+	mdbg_device_lock_notify();
+	wake_up_all(&p_data->resume_waitq);
 
 	for (chn = 0; chn < SDIO_CHANNEL_NUM; chn++) {
 		sdiohal_ops = chn_ops(chn);
@@ -1015,7 +1044,9 @@ static int sdiohal_resume(struct device *dev)
 					__func__, chn);
 		}
 	}
+	mdbg_device_unlock_notify();
 
+	pr_debug("[%s]done xmit_lock:%d\n", __func__, mutex_is_locked(&p_data->xmit_lock));
 	return 0;
 }
 

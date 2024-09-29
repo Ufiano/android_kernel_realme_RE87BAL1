@@ -1110,6 +1110,18 @@ static ssize_t bq25890_reg_val_store(struct device *dev,
 		return count;
 	}
 
+	if (!new_state->online) {			     /* power removed */
+		/* disable ADC */
+		ret = bq25890_field_write(bq, F_CONV_RATE, 0);
+		if (ret < 0)
+			goto error;
+	} else if (!old_state.online) {			    /* power inserted */
+		/* enable ADC, to have control of charge current/voltage */
+		ret = bq25890_field_write(bq, F_CONV_RATE, 1);
+		if (ret < 0)
+			goto error;
+	}
+
 	ret = bq25890_write(info, reg_tab[info->reg_id].addr, val);
 	if (ret) {
 		dev_err(info->dev, "fail to wite 0x%.2x to REG_0x%.2x, ret = %d\n",

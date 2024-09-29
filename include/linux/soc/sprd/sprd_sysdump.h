@@ -21,6 +21,14 @@ extern int minidump_change_extend_information(const char *name,
 		unsigned long paddr_start,
 		unsigned long paddr_end);
 
+extern int last_kmsg_init(void);
+
+extern void last_kmsg_exit(void);
+
+extern char *ylog_buffer;
+#define DEVICE_NAME_YLOG "ylog_buffer"
+#define YLOG_BUF_SIZE (1 * 1024 * 1024)
+
 #ifdef CONFIG_SPRD_SYSDUMP
 /*
  * save per-cpu's stack and regs in sysdump.

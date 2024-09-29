@@ -534,8 +534,8 @@ static void sprd_eic_handle_one_type(struct gpio_chip *chip)
 			u32 offset = bank * SPRD_EIC_PER_BANK_NR + n;
 
 			girq = irq_find_mapping(chip->irq.domain, offset);
-			printk("%s (AON_EIC_EXT2.DBNC.5)---girq: %d---\n",__func__,girq);
-			printk("%s (AON_EIC_EXT2.DBNC.5)(AP_INTC:GPIO)---gpio: %d---\n",__func__,bank * SPRD_EIC_PER_BANK_NR + n);
+			//printk("%s (AON_EIC_EXT2.DBNC.5)---girq: %d---\n",__func__,girq);
+			//printk("%s (AON_EIC_EXT2.DBNC.5)(AP_INTC:GPIO)---gpio: %d---\n",__func__,bank * SPRD_EIC_PER_BANK_NR + n);
 
 			generic_handle_irq(girq);
 			sprd_eic_toggle_trigger(chip, girq, offset);

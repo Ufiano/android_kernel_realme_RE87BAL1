@@ -31,42 +31,42 @@
 #define NVT_DIFF "nvt_diff"
 #define NVT_PEN_DIFF "nvt_pen_diff"
 
-#define OPLUS_BASELINE_TEST "baseline_test"
-#define OPLUS_COORDINATE "coordinate"
-#define OPLUS_DELTA "delta"
-#define OPLUS_BASELINE "baseline"
-#define OPLUS_MAIN_REGISTER "main_register"
-#define OPLUS_DEBUG_LEVEL "debug_level"
-#define OPLUS_GESTURE "double_tap_enable"
-#define OPLUS_IRQ_DEPATH "irq_depth"
-#define OPLUS_REGISTER_INFO "oplus_register_info"
-#define OPLUS_FW_UPDATE "tp_fw_update"
-#define OPLUS_GAME_SWITCH "game_switch_enable"
-#define OPLUS_TP_LIMIT_ENABLE "oplus_tp_limit_enable"
-#define OPLUS_DBG_MESSAGE_DIFF_ENABLE "dbg_message_diff_enable"
-#define OPLUS_DBG_FINGER_DOWN_DIFF "finger_down_diff"
-#define OPLUS_DBG_STATUS_CHANGE_DIFF "status_change_diff"
-#define OPLUS_DBG_GESTURE_COORD_RECORD_ENABLE "dbg_gesture_coord_record_enable"
-#define OPLUS_DBG_GESTURE_COORD_RECORD "dbg_gesture_coord_record"
-#define OPLUS_DBG_GESTURE_COORD_ENABLE "dbg_gesture_coord_enable"
+#define OPPO_BASELINE_TEST "baseline_test"
+#define OPPO_COORDINATE "coordinate"
+#define OPPO_DELTA "delta"
+#define OPPO_BASELINE "baseline"
+#define OPPO_MAIN_REGISTER "main_register"
+#define OPPO_DEBUG_LEVEL "debug_level"
+#define OPPO_GESTURE "double_tap_enable"
+#define OPPO_IRQ_DEPATH "irq_depth"
+#define OPPO_REGISTER_INFO "oppo_register_info"
+#define OPPO_FW_UPDATE "tp_fw_update"
+#define OPPO_GAME_SWITCH "game_switch_enable"
+#define OPPO_TP_LIMIT_ENABLE "oppo_tp_limit_enable"
+#define OPPO_DBG_MESSAGE_DIFF_ENABLE "dbg_message_diff_enable"
+#define OPPO_DBG_FINGER_DOWN_DIFF "finger_down_diff"
+#define OPPO_DBG_STATUS_CHANGE_DIFF "status_change_diff"
+#define OPPO_DBG_GESTURE_COORD_RECORD_ENABLE "dbg_gesture_coord_record_enable"
+#define OPPO_DBG_GESTURE_COORD_RECORD "dbg_gesture_coord_record"
+#define OPPO_DBG_GESTURE_COORD_ENABLE "dbg_gesture_coord_enable"
 
-static struct proc_dir_entry *oplus_coordinate;
-static struct proc_dir_entry *oplus_delta;
-static struct proc_dir_entry *oplus_baseline;
-static struct proc_dir_entry *oplus_main_register;
-static struct proc_dir_entry *oplus_debug_level;
-static struct proc_dir_entry *oplus_gesture;
-static struct proc_dir_entry *oplus_irq_depath;
-static struct proc_dir_entry *register_info_oplus;
-static struct proc_dir_entry *oplus_fw_update;
-static struct proc_dir_entry *oplus_game_switch;
-static struct proc_dir_entry *oplus_tp_limit_enable;
-static struct proc_dir_entry *oplus_dbg_message_diff_enable_entry;
-static struct proc_dir_entry *oplus_dbg_finger_down_diff_entry;
-static struct proc_dir_entry *oplus_dbg_status_change_diff_entry;
-static struct proc_dir_entry *oplus_dbg_gesture_coord_enable_entry;
-static struct proc_dir_entry *oplus_dbg_gesture_coord_record_enable_entry;
-static struct proc_dir_entry *oplus_dbg_gesture_coord_record_entry;
+static struct proc_dir_entry *oppo_coordinate;
+static struct proc_dir_entry *oppo_delta;
+static struct proc_dir_entry *oppo_baseline;
+static struct proc_dir_entry *oppo_main_register;
+static struct proc_dir_entry *oppo_debug_level;
+static struct proc_dir_entry *oppo_gesture;
+static struct proc_dir_entry *oppo_irq_depath;
+static struct proc_dir_entry *register_info_oppo;
+static struct proc_dir_entry *oppo_fw_update;
+static struct proc_dir_entry *oppo_game_switch;
+static struct proc_dir_entry *oppo_tp_limit_enable;
+static struct proc_dir_entry *oppo_dbg_message_diff_enable_entry;
+static struct proc_dir_entry *oppo_dbg_finger_down_diff_entry;
+static struct proc_dir_entry *oppo_dbg_status_change_diff_entry;
+static struct proc_dir_entry *oppo_dbg_gesture_coord_enable_entry;
+static struct proc_dir_entry *oppo_dbg_gesture_coord_record_enable_entry;
+static struct proc_dir_entry *oppo_dbg_gesture_coord_record_entry;
 
 
 
@@ -613,8 +613,8 @@ const struct seq_operations nvt_pen_diff_seq_ops = {
 	.show   = c_pen_1d_diff_show
 };
 
-/* oplus_dbg_message_diff_enable */
-static ssize_t oplus_dbg_message_diff_enable_write(struct file *filp, const char __user *buf,
+/* oppo_dbg_message_diff_enable */
+static ssize_t oppo_dbg_message_diff_enable_write(struct file *filp, const char __user *buf,
 		size_t count, loff_t *ppos)
 {
 	unsigned int tmp = 0;
@@ -654,15 +654,15 @@ static ssize_t oplus_dbg_message_diff_enable_write(struct file *filp, const char
 	return count;
 };
 
-static const struct file_operations oplus_dbg_message_diff_enable_fops =
+static const struct file_operations oppo_dbg_message_diff_enable_fops =
 {
-	.write = oplus_dbg_message_diff_enable_write,
+	.write = oppo_dbg_message_diff_enable_write,
 	.owner = THIS_MODULE,
 };
 
 #define NVT_MMAP_DEBUG_FINGER_DOWN_DIFFDATA   0x263E4
 #define NVT_MMAP_DEBUG_STATUS_CHANGE_DIFFDATA 0x2666C
-static int32_t oplus_dbg_finger_down_diff_open(struct inode *inode, struct file *file)
+static int32_t oppo_dbg_finger_down_diff_open(struct inode *inode, struct file *file)
 {
 	if (mutex_lock_interruptible(&ts->lock)) {
 		return -ERESTARTSYS;
@@ -688,15 +688,15 @@ static int32_t oplus_dbg_finger_down_diff_open(struct inode *inode, struct file 
 	return seq_open(file, &nvt_seq_ops);
 }
 
-static const struct file_operations oplus_dbg_finger_down_diff_fops = {
+static const struct file_operations oppo_dbg_finger_down_diff_fops = {
 	.owner = THIS_MODULE,
-	.open = oplus_dbg_finger_down_diff_open,
+	.open = oppo_dbg_finger_down_diff_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
 	.release = seq_release,
 };
 
-static int32_t oplus_dbg_status_change_diff_open(struct inode *inode, struct file *file)
+static int32_t oppo_dbg_status_change_diff_open(struct inode *inode, struct file *file)
 {
 	if (mutex_lock_interruptible(&ts->lock)) {
 		return -ERESTARTSYS;
@@ -722,16 +722,16 @@ static int32_t oplus_dbg_status_change_diff_open(struct inode *inode, struct fil
 	return seq_open(file, &nvt_seq_ops);
 }
 
-static const struct file_operations oplus_dbg_status_change_diff_fops = {
+static const struct file_operations oppo_dbg_status_change_diff_fops = {
 	.owner = THIS_MODULE,
-	.open = oplus_dbg_status_change_diff_open,
+	.open = oppo_dbg_status_change_diff_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
 	.release = seq_release,
 };
 
-/* oplus_dbg_gesture_coord_record_enable */
-static ssize_t oplus_dbg_gesture_coord_record_enable_write(struct file *filp, const char __user *buf,
+/* oppo_dbg_gesture_coord_record_enable */
+static ssize_t oppo_dbg_gesture_coord_record_enable_write(struct file *filp, const char __user *buf,
 		size_t count, loff_t *ppos)
 {
 	unsigned int tmp = 0;
@@ -767,17 +767,17 @@ static ssize_t oplus_dbg_gesture_coord_record_enable_write(struct file *filp, co
 	return count;
 };
 
-static const struct file_operations oplus_dbg_gesture_coord_record_enable_fops =
+static const struct file_operations oppo_dbg_gesture_coord_record_enable_fops =
 {
-	.write = oplus_dbg_gesture_coord_record_enable_write,
+	.write = oppo_dbg_gesture_coord_record_enable_write,
 	.owner = THIS_MODULE,
 };
 
 static int32_t gesture_buf[1024] = {0};
-/* oplus_dbg_gesture_coord_record_open */
-static int32_t c_oplus_dbg_gesture_coord_record_show(struct seq_file *m, void *v)
+/* oppo_dbg_gesture_coord_record_open */
+static int32_t c_oppo_dbg_gesture_coord_record_show(struct seq_file *m, void *v)
 {
-	struct oplus_debug_gesture_record_info *gesture_record = &ts->oplus_debug_gesture_record_info;
+	struct oppo_debug_gesture_record_info *gesture_record = &ts->oppo_debug_gesture_record_info;
 	uint32_t i = 0;
 	char tmp[256] = {0};
 
@@ -794,11 +794,11 @@ static int32_t c_oplus_dbg_gesture_coord_record_show(struct seq_file *m, void *v
     return 0;
 }
 
-const struct seq_operations oplus_dbg_gesture_coornidate_record_seq_ops = {
+const struct seq_operations oppo_dbg_gesture_coornidate_record_seq_ops = {
     .start  = c_start,
     .next   = c_next,
     .stop   = c_stop,
-    .show   = c_oplus_dbg_gesture_coord_record_show
+    .show   = c_oppo_dbg_gesture_coord_record_show
 };
 
 void nvt_read_debug_gesture_coordinate_buffer(uint32_t address, uint32_t xdata_len)
@@ -867,7 +867,7 @@ void nvt_read_debug_gesture_coordinate_buffer(uint32_t address, uint32_t xdata_l
 	nvt_set_page(ts->mmap->EVENT_BUF_ADDR);
 }
 
-static int32_t oplus_dbg_gesture_coord_record_open(struct inode *inode, struct file *file)
+static int32_t oppo_dbg_gesture_coord_record_open(struct inode *inode, struct file *file)
 {
 	uint32_t input_x = 0;
 	uint32_t input_y = 0;
@@ -905,34 +905,34 @@ static int32_t oplus_dbg_gesture_coord_record_open(struct inode *inode, struct f
 	gesture_buf[0] = 10;
 	gesture_buf[1] = points_num[0] + points_num[1];
 
-	memset(&ts->oplus_debug_gesture_record_info, 0, sizeof(struct oplus_debug_gesture_record_info));
+	memset(&ts->oppo_debug_gesture_record_info, 0, sizeof(struct oppo_debug_gesture_record_info));
 
 	/* decode coordinate (2 buffers) */
 	for (i = 0 ; i < gesture_buf[1] ; i++) {
 		input_x = (uint32_t)(gesture_buf[i*3 + 2] << 4) + (uint32_t) (gesture_buf[i*3 + 4] >> 4);
 		input_y = (uint32_t)(gesture_buf[i*3 + 3] << 4) + (uint32_t) (gesture_buf[i*3 + 4] & 0x0F);
 
-		ts->oplus_debug_gesture_record_info.coordinate[i].x = (uint16_t) input_x;
-		ts->oplus_debug_gesture_record_info.coordinate[i].y = (uint16_t) input_y;
+		ts->oppo_debug_gesture_record_info.coordinate[i].x = (uint16_t) input_x;
+		ts->oppo_debug_gesture_record_info.coordinate[i].y = (uint16_t) input_y;
 	}
 
 	mutex_unlock(&ts->lock);
 
 	NVT_LOG("--\n");
 
-	return seq_open(file, &oplus_dbg_gesture_coornidate_record_seq_ops);
+	return seq_open(file, &oppo_dbg_gesture_coornidate_record_seq_ops);
 }
 
-static const struct file_operations oplus_dbg_gesture_coord_record_fops = {
+static const struct file_operations oppo_dbg_gesture_coord_record_fops = {
 	.owner = THIS_MODULE,
-	.open = oplus_dbg_gesture_coord_record_open,
+	.open = oppo_dbg_gesture_coord_record_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
 	.release = seq_release,
 };
 
-/* oplus_dbg_gesture_coord_enable */
-static ssize_t oplus_dbg_gesture_coord_enable_write(struct file *filp, const char __user *buf,
+/* oppo_dbg_gesture_coord_enable */
+static ssize_t oppo_dbg_gesture_coord_enable_write(struct file *filp, const char __user *buf,
 		size_t count, loff_t *ppos)
 {
 	unsigned int tmp = 0;
@@ -968,9 +968,9 @@ static ssize_t oplus_dbg_gesture_coord_enable_write(struct file *filp, const cha
 	return count;
 };
 
-static const struct file_operations oplus_dbg_gesture_coord_enable_fops =
+static const struct file_operations oppo_dbg_gesture_coord_enable_fops =
 {
-	.write = oplus_dbg_gesture_coord_enable_write,
+	.write = oppo_dbg_gesture_coord_enable_write,
 	.owner = THIS_MODULE,
 };
 /*******************************************************
@@ -1265,7 +1265,7 @@ return:
 	Executive outcomes. 0---succeed. -12---failed.
 *******************************************************/
 /* coordinate */
-static int32_t c_oplus_coordinate_show(struct seq_file *m, void *v)
+static int32_t c_oppo_coordinate_show(struct seq_file *m, void *v)
 {
 	struct gesture_info *gesture = &ts->gesture;
 	char tmp[256] = {0};
@@ -1280,27 +1280,27 @@ static int32_t c_oplus_coordinate_show(struct seq_file *m, void *v)
 		gesture->Point_4th.x, gesture->Point_4th.y,
 		gesture->clockwise);
 
-	/* oplus gesture formate */
+	/* oppo gesture formate */
 	seq_printf(m, "%s\n", tmp);
 
 	return 0;
 }
 
-const struct seq_operations oplus_coordinate_seq_ops = {
+const struct seq_operations oppo_coordinate_seq_ops = {
 	.start  = c_start,
 	.next   = c_next,
 	.stop   = c_stop,
-	.show   = c_oplus_coordinate_show
+	.show   = c_oppo_coordinate_show
 };
 
-static int32_t oplus_coordinate_open(struct inode *inode, struct file *file)
+static int32_t oppo_coordinate_open(struct inode *inode, struct file *file)
 {
-	return seq_open(file, &oplus_coordinate_seq_ops);
+	return seq_open(file, &oppo_coordinate_seq_ops);
 }
 
-static const struct file_operations oplus_coordinate_fops = {
+static const struct file_operations oppo_coordinate_fops = {
 	.owner = THIS_MODULE,
-	.open = oplus_coordinate_open,
+	.open = oppo_coordinate_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
 	.release = seq_release,
@@ -1386,7 +1386,7 @@ static int32_t c_main_register_show(struct seq_file *m, void *v)
 	return 0;
 }
 
-const struct seq_operations oplus_main_register_seq_ops = {
+const struct seq_operations oppo_main_register_seq_ops = {
 	.start  = c_start,
 	.next   = c_next,
 	.stop   = c_stop,
@@ -1395,10 +1395,10 @@ const struct seq_operations oplus_main_register_seq_ops = {
 
 static int32_t nvt_main_register_open(struct inode *inode, struct file *file)
 {
-	return seq_open(file, &oplus_main_register_seq_ops);
+	return seq_open(file, &oppo_main_register_seq_ops);
 }
 
-static const struct file_operations oplus_main_register_fops = {
+static const struct file_operations oppo_main_register_fops = {
 	.owner = THIS_MODULE,
 	.open = nvt_main_register_open,
 	.read = seq_read,
@@ -1407,7 +1407,7 @@ static const struct file_operations oplus_main_register_fops = {
 };
 
 /* debug_level */
-static ssize_t oplus_debug_level_write(struct file *filp, const char __user *buf,
+static ssize_t oppo_debug_level_write(struct file *filp, const char __user *buf,
 		size_t count, loff_t *ppos)
 {
 	unsigned int tmp = 0;
@@ -1435,9 +1435,9 @@ static ssize_t oplus_debug_level_write(struct file *filp, const char __user *buf
 	return count;
 };
 
-static const struct file_operations oplus_debug_level_fops =
+static const struct file_operations oppo_debug_level_fops =
 {
-	.write = oplus_debug_level_write,
+	.write = oppo_debug_level_write,
 	.owner = THIS_MODULE,
 };
 
@@ -1448,7 +1448,7 @@ static const struct file_operations oplus_debug_level_fops =
  *    gesture_enable = 2 : disable gesture when ps is near
  *    gesture_enable = 3 : enable single tap gesture when ps is far away
  */
-static ssize_t oplus_gesture_write(struct file *filp, const char __user *buf,size_t count, loff_t *ppos)
+static ssize_t oppo_gesture_write(struct file *filp, const char __user *buf,size_t count, loff_t *ppos)
 {
 	int value = 0;
 	char cmd[128] = {0};
@@ -1463,7 +1463,7 @@ static ssize_t oplus_gesture_write(struct file *filp, const char __user *buf,siz
 		return -EINVAL;
 	}
 
-    sscanf(buf, "%d", &value);
+    sscanf(cmd, "%d", &value);
     if (value > 3) {
         return count;
 	}
@@ -1492,7 +1492,7 @@ static ssize_t oplus_gesture_write(struct file *filp, const char __user *buf,siz
 
 }
 
-static ssize_t oplus_gesture_read(struct file *file, char __user *buf,size_t count, loff_t *ppos)
+static ssize_t oppo_gesture_read(struct file *file, char __user *buf,size_t count, loff_t *ppos)
 {
 	int ret = 0;
 	int len;
@@ -1522,15 +1522,15 @@ static ssize_t oplus_gesture_read(struct file *file, char __user *buf,size_t cou
 
 }
 
-static const struct file_operations oplus_gesture_fops =
+static const struct file_operations oppo_gesture_fops =
 {
-	.write = oplus_gesture_write,
-	.read = oplus_gesture_read,
+	.write = oppo_gesture_write,
+	.read = oppo_gesture_read,
 	.owner = THIS_MODULE,
 };
 
 /* tp_fw_update */
-static ssize_t oplus_fw_update_write(struct file *filp, const char __user *buf,
+static ssize_t oppo_fw_update_write(struct file *filp, const char __user *buf,
 		size_t count, loff_t *ppos)
 {
 	unsigned int tmp = 0;
@@ -1579,9 +1579,9 @@ static ssize_t oplus_fw_update_write(struct file *filp, const char __user *buf,
 	return count;
 };
 
-static const struct file_operations oplus_fw_update_fops =
+static const struct file_operations oppo_fw_update_fops =
 {
-	.write = oplus_fw_update_write,
+	.write = oppo_fw_update_write,
 	.owner = THIS_MODULE,
 };
 
@@ -1596,7 +1596,7 @@ static int32_t c_irq_depath_show(struct seq_file *m, void *v)
 	return 0;
 }
 
-const struct seq_operations oplus_irq_depath_seq_ops = {
+const struct seq_operations oppo_irq_depath_seq_ops = {
 	.start  = c_start,
 	.next   = c_next,
 	.stop   = c_stop,
@@ -1605,10 +1605,10 @@ const struct seq_operations oplus_irq_depath_seq_ops = {
 
 static int32_t nvt_irq_depath_open(struct inode *inode, struct file *file)
 {
-	return seq_open(file, &oplus_irq_depath_seq_ops);
+	return seq_open(file, &oppo_irq_depath_seq_ops);
 }
 
-static const struct file_operations oplus_irq_depath_fops = {
+static const struct file_operations oppo_irq_depath_fops = {
 	.owner = THIS_MODULE,
 	.open = nvt_irq_depath_open,
 	.read = seq_read,
@@ -1616,16 +1616,16 @@ static const struct file_operations oplus_irq_depath_fops = {
 	.release = seq_release,
 };
 
-/* oplus_register_info */
-struct oplus_register_info {
+/* oppo_register_info */
+struct oppo_register_info {
 	uint32_t addr;
 	uint32_t len;
-} oplus_reg;
+} oppo_reg;
 
 /*
  * Example data format: echo 11A60,2 > file_node
  */
-static ssize_t oplus_register_info_write(struct file *filp, const char __user *buf,
+static ssize_t oppo_register_info_write(struct file *filp, const char __user *buf,
 		size_t count, loff_t *ppos)
 {
 	uint8_t tmp[10] = {0};
@@ -1645,26 +1645,26 @@ static ssize_t oplus_register_info_write(struct file *filp, const char __user *b
 	/* parsing address (Novatek address length: 5 bit) */
 	sprintf(tmp, "%c%c%c%c%c", cmd[0], cmd[1], cmd[2], cmd[3], cmd[4]);
 
-	if (kstrtouint(tmp, 16, &oplus_reg.addr)) {
+	if (kstrtouint(tmp, 16, &oppo_reg.addr)) {
 		NVT_ERR("kstrtouint error\n");
 		return -EINVAL;
 	}
 
-	NVT_LOG("address: 0x%05X\n", oplus_reg.addr);
+	NVT_LOG("address: 0x%05X\n", oppo_reg.addr);
 
 	/* parsing length */
 	sprintf(tmp, "%c", cmd[6]);
-	if (kstrtouint(tmp, 10, &oplus_reg.len)) {
+	if (kstrtouint(tmp, 10, &oppo_reg.len)) {
 		NVT_ERR("kstrtouint error\n");
 		return -EINVAL;
 	}
 
-	NVT_LOG("len %d\n", oplus_reg.len);
+	NVT_LOG("len %d\n", oppo_reg.len);
 
 	return count;
 }
 
-static ssize_t oplus_register_info_read(struct file *file, char __user *buff,size_t count, loff_t *ppos)
+static ssize_t oppo_register_info_read(struct file *file, char __user *buff,size_t count, loff_t *ppos)
 {
 	uint8_t *buf = NULL;
 	uint8_t *ptr = NULL;
@@ -1680,33 +1680,33 @@ static ssize_t oplus_register_info_read(struct file *file, char __user *buff,siz
 		return -ERESTARTSYS;
 	}
 
-	if (oplus_reg.len == 0) {
-		NVT_ERR("len = %d\n", oplus_reg.len);
+	if (oppo_reg.len == 0) {
+		NVT_ERR("len = %d\n", oppo_reg.len);
 		goto fail;
 	}
 
-	buf = (uint8_t *)kzalloc(sizeof(uint8_t)*(oplus_reg.len), GFP_KERNEL);
+	buf = (uint8_t *)kzalloc(sizeof(uint8_t)*(oppo_reg.len), GFP_KERNEL);
 	if (buf == NULL) {
 		NVT_ERR("failed to allocate memory for buf\n");
 		goto fail;
 	}
 
-	ptr = (uint8_t *)kzalloc(sizeof(uint8_t)*(oplus_reg.len)*3+1, GFP_KERNEL);
+	ptr = (uint8_t *)kzalloc(sizeof(uint8_t)*(oppo_reg.len)*3+1, GFP_KERNEL);
 	if (ptr == NULL) {
 		NVT_ERR("failed to allocate memory for ptr\n");
 		goto fail;
 	}
 
 	/* read data */
-	nvt_set_page(oplus_reg.addr);
-	buf[0] = oplus_reg.addr & 0x7F;
-	CTP_SPI_READ(ts->client, buf, oplus_reg.len + 1);
+	nvt_set_page(oppo_reg.addr);
+	buf[0] = oppo_reg.addr & 0x7F;
+	CTP_SPI_READ(ts->client, buf, oppo_reg.len + 1);
 
 	/* set index to EVENT_BUF_ADDR */
 	nvt_set_page(ts->mmap->EVENT_BUF_ADDR);
 
 	/* copy hex data to string */
-	for (i=0 ; i<oplus_reg.len ; i++) {
+	for (i=0 ; i<oppo_reg.len ; i++) {
 		len += sprintf(ptr+len, "%02X ", buf[i+1]);
 		//NVT_ERR("[%d] buf %02X\n", i, buf[i+1]);
 	}
@@ -1734,15 +1734,15 @@ fail:
 	return len;
 }
 
-static const struct file_operations oplus_register_info_fops =
+static const struct file_operations oppo_register_info_fops =
 {
-	.write = oplus_register_info_write,
-	.read = oplus_register_info_read,
+	.write = oppo_register_info_write,
+	.read = oppo_register_info_read,
 	.owner = THIS_MODULE,
 };
 
 /* game_switch_enable */
-static ssize_t oplus_game_switch_write(struct file *filp, const char __user *buf,
+static ssize_t oppo_game_switch_write(struct file *filp, const char __user *buf,
 		size_t count, loff_t *ppos)
 {
 	unsigned int tmp = 0;
@@ -1776,7 +1776,7 @@ static ssize_t oplus_game_switch_write(struct file *filp, const char __user *buf
 	return count;
 };
 
-static ssize_t oplus_game_switch_read(struct file *filp, char __user *buf, size_t count, loff_t *ppos)
+static ssize_t oppo_game_switch_read(struct file *filp, char __user *buf, size_t count, loff_t *ppos)
 {
 	uint8_t tmp[8] = {0};
 
@@ -1787,15 +1787,15 @@ static ssize_t oplus_game_switch_read(struct file *filp, char __user *buf, size_
 	return simple_read_from_buffer(buf, count, ppos, tmp, strlen(tmp));
 }
 
-static const struct file_operations oplus_game_switch_fops =
+static const struct file_operations oppo_game_switch_fops =
 {
-	.write = oplus_game_switch_write,
-	.read = oplus_game_switch_read,
+	.write = oppo_game_switch_write,
+	.read = oppo_game_switch_read,
 	.owner = THIS_MODULE,
 };
 
-/* oplus_tp_limit_enable */
-static ssize_t oplus_tp_limit_read(struct file *filp, char __user *buf, size_t count, loff_t *ppos)
+/* oppo_tp_limit_enable */
+static ssize_t oppo_tp_limit_read(struct file *filp, char __user *buf, size_t count, loff_t *ppos)
 {
 	uint8_t tmp[8] = {0};
 
@@ -1806,7 +1806,7 @@ static ssize_t oplus_tp_limit_read(struct file *filp, char __user *buf, size_t c
 	return simple_read_from_buffer(buf, count, ppos, tmp, strlen(tmp));
 }
 
-static ssize_t oplus_tp_limit_write(struct file *filp, const char __user *buf,
+static ssize_t oppo_tp_limit_write(struct file *filp, const char __user *buf,
 		size_t count, loff_t *ppos)
 {
 	unsigned int tmp = 0;
@@ -1840,10 +1840,10 @@ static ssize_t oplus_tp_limit_write(struct file *filp, const char __user *buf,
 	return count;
 };
 
-static const struct file_operations oplus_tp_limit_fops =
+static const struct file_operations oppo_tp_limit_fops =
 {
-	.write = oplus_tp_limit_write,
-	.read = oplus_tp_limit_read,
+	.write = oppo_tp_limit_write,
+	.read = oppo_tp_limit_read,
 	.owner = THIS_MODULE,
 };
 
@@ -1891,127 +1891,127 @@ int32_t nvt_extra_proc_init(void)
 		}
 	}
 
-	/* oplus customized proc node */
-	if ((ts->oplus_touchpanel_proc == NULL) || (ts->debug_info == NULL)) {
+	/* oppo customized proc node */
+	if ((ts->oppo_touchpanel_proc == NULL) || (ts->debug_info == NULL)) {
 		NVT_ERR("proc/touchpanel/ or proc/touchpanel/debug_info is NULL!\n");
 		return -ENOMEM;
 	}
 
-	oplus_coordinate = proc_create(OPLUS_COORDINATE, 0664,
-			ts->oplus_touchpanel_proc, &oplus_coordinate_fops);
-	if (oplus_coordinate == NULL) {
+	oppo_coordinate = proc_create(OPPO_COORDINATE, 0664,
+			ts->oppo_touchpanel_proc, &oppo_coordinate_fops);
+	if (oppo_coordinate == NULL) {
 		NVT_ERR("create proc/touchpanel/coordinate Failed!\n");
 		return -ENOMEM;
 	}
 
-	oplus_delta = proc_create(OPLUS_DELTA, 0664,
+	oppo_delta = proc_create(OPPO_DELTA, 0664,
 			ts->debug_info, &nvt_diff_fops);
-	if (oplus_delta == NULL) {
+	if (oppo_delta == NULL) {
 		NVT_ERR("create proc/touchpanel/debug_info/delta Failed!\n");
 		return -ENOMEM;
 	}
 
-	oplus_baseline = proc_create(OPLUS_BASELINE, 0664,
+	oppo_baseline = proc_create(OPPO_BASELINE, 0664,
 			ts->debug_info, &nvt_baseline_fops);
-	if (oplus_baseline == NULL) {
+	if (oppo_baseline == NULL) {
 		NVT_ERR("create proc/touchpanel/debug_info/baseline Failed!\n");
 		return -ENOMEM;
 	}
 
-	oplus_main_register = proc_create(OPLUS_MAIN_REGISTER, 0664,
-			ts->debug_info, &oplus_main_register_fops);
-	if (oplus_main_register == NULL) {
+	oppo_main_register = proc_create(OPPO_MAIN_REGISTER, 0664,
+			ts->debug_info, &oppo_main_register_fops);
+	if (oppo_main_register == NULL) {
 		NVT_ERR("create proc/touchpanel/debug_info/main_register Failed!\n");
 		return -ENOMEM;
 	}
 
-	oplus_debug_level = proc_create(OPLUS_DEBUG_LEVEL, 0664,
-			ts->oplus_touchpanel_proc, &oplus_debug_level_fops);
-	if (oplus_debug_level == NULL) {
+	oppo_debug_level = proc_create(OPPO_DEBUG_LEVEL, 0664,
+			ts->oppo_touchpanel_proc, &oppo_debug_level_fops);
+	if (oppo_debug_level == NULL) {
 		NVT_ERR("create proc/touchpanel/debug_level Failed!\n");
 		return -ENOMEM;
 	}
 
-	oplus_gesture = proc_create(OPLUS_GESTURE, 0664,
-			ts->oplus_touchpanel_proc, &oplus_gesture_fops);
-	if (oplus_gesture == NULL) {
+	oppo_gesture = proc_create(OPPO_GESTURE, 0664,
+			ts->oppo_touchpanel_proc, &oppo_gesture_fops);
+	if (oppo_gesture == NULL) {
 		NVT_ERR("create proc/touchpanel/double_tap_enable Failed!\n");
 		return -ENOMEM;
 	}
 
-	oplus_irq_depath = proc_create(OPLUS_IRQ_DEPATH, 0444,
-			ts->oplus_touchpanel_proc, &oplus_irq_depath_fops);
-	if (oplus_irq_depath == NULL) {
+	oppo_irq_depath = proc_create(OPPO_IRQ_DEPATH, 0444,
+			ts->oppo_touchpanel_proc, &oppo_irq_depath_fops);
+	if (oppo_irq_depath == NULL) {
 		NVT_ERR("create proc/touchpanel/irq_depath Failed!\n");
 		return -ENOMEM;
 	}
 
-	register_info_oplus = proc_create(OPLUS_REGISTER_INFO, 0664,
-			ts->oplus_touchpanel_proc, &oplus_register_info_fops);
-	if (register_info_oplus == NULL) {
-		NVT_ERR("create proc/touchpanel/oplus_register_info Failed!\n");
+	register_info_oppo = proc_create(OPPO_REGISTER_INFO, 0664,
+			ts->oppo_touchpanel_proc, &oppo_register_info_fops);
+	if (register_info_oppo == NULL) {
+		NVT_ERR("create proc/touchpanel/oppo_register_info Failed!\n");
 		return -ENOMEM;
 	}
 
-	oplus_fw_update = proc_create(OPLUS_FW_UPDATE, 0664,
-			ts->oplus_touchpanel_proc, &oplus_fw_update_fops);
-	if (oplus_fw_update == NULL) {
+	oppo_fw_update = proc_create(OPPO_FW_UPDATE, 0664,
+			ts->oppo_touchpanel_proc, &oppo_fw_update_fops);
+	if (oppo_fw_update == NULL) {
 		NVT_ERR("create proc/touchpanel/tp_fw_update Failed!\n");
 		return -ENOMEM;
 	}
 
-	oplus_game_switch = proc_create(OPLUS_GAME_SWITCH, 0666,
-			ts->oplus_touchpanel_proc, &oplus_game_switch_fops);
-	if (oplus_game_switch == NULL) {
-		NVT_ERR("create proc/touchpanel/oplus_game_switch_enable Failed!\n");
+	oppo_game_switch = proc_create(OPPO_GAME_SWITCH, 0666,
+			ts->oppo_touchpanel_proc, &oppo_game_switch_fops);
+	if (oppo_game_switch == NULL) {
+		NVT_ERR("create proc/touchpanel/oppo_game_switch_enable Failed!\n");
 		return -ENOMEM;
 	}
 
-	oplus_tp_limit_enable = proc_create(OPLUS_TP_LIMIT_ENABLE, 0666,
-			ts->oplus_touchpanel_proc, &oplus_tp_limit_fops);
-	if (oplus_tp_limit_enable == NULL) {
-		NVT_ERR("create proc/touchpanel/oplus_tp_limit_enable Failed!\n");
+	oppo_tp_limit_enable = proc_create(OPPO_TP_LIMIT_ENABLE, 0666,
+			ts->oppo_touchpanel_proc, &oppo_tp_limit_fops);
+	if (oppo_tp_limit_enable == NULL) {
+		NVT_ERR("create proc/touchpanel/oppo_tp_limit_enable Failed!\n");
 		return -ENOMEM;
 	}
 
-	oplus_dbg_message_diff_enable_entry = proc_create(OPLUS_DBG_MESSAGE_DIFF_ENABLE, 0222,
-			ts->debug_info, &oplus_dbg_message_diff_enable_fops);
-	if (oplus_dbg_message_diff_enable_entry == NULL) {
-		NVT_ERR("create proc/touchpanel/debug_info/oplus_dbg_message_diff_enable_entry Failed!\n");
+	oppo_dbg_message_diff_enable_entry = proc_create(OPPO_DBG_MESSAGE_DIFF_ENABLE, 0222,
+			ts->debug_info, &oppo_dbg_message_diff_enable_fops);
+	if (oppo_dbg_message_diff_enable_entry == NULL) {
+		NVT_ERR("create proc/touchpanel/debug_info/oppo_dbg_message_diff_enable_entry Failed!\n");
 		return -ENOMEM;
 	}
 
-	oplus_dbg_finger_down_diff_entry = proc_create(OPLUS_DBG_FINGER_DOWN_DIFF, 0444,
-			ts->debug_info, &oplus_dbg_finger_down_diff_fops);
-	if (oplus_dbg_finger_down_diff_entry == NULL) {
+	oppo_dbg_finger_down_diff_entry = proc_create(OPPO_DBG_FINGER_DOWN_DIFF, 0444,
+			ts->debug_info, &oppo_dbg_finger_down_diff_fops);
+	if (oppo_dbg_finger_down_diff_entry == NULL) {
 		NVT_ERR("create proc/touchpanel/debug_info/nvt_dbg_finger_down_diff Failed!\n");
 		return -ENOMEM;
 	}
 
-	oplus_dbg_status_change_diff_entry = proc_create(OPLUS_DBG_STATUS_CHANGE_DIFF, 0444,
-			ts->debug_info, &oplus_dbg_status_change_diff_fops);
-	if (oplus_dbg_status_change_diff_entry == NULL) {
+	oppo_dbg_status_change_diff_entry = proc_create(OPPO_DBG_STATUS_CHANGE_DIFF, 0444,
+			ts->debug_info, &oppo_dbg_status_change_diff_fops);
+	if (oppo_dbg_status_change_diff_entry == NULL) {
 		NVT_ERR("create proc/touchpanel/debug_info/nvt_dbg_status_change_diff Failed!\n");
 		return -ENOMEM;
 	}
 
-	oplus_dbg_gesture_coord_record_enable_entry = proc_create(OPLUS_DBG_GESTURE_COORD_RECORD_ENABLE, 0222,
-			ts->debug_info, &oplus_dbg_gesture_coord_record_enable_fops);
-	if (oplus_dbg_gesture_coord_record_enable_entry == NULL) {
-		NVT_ERR("create proc/touchpanel/debug_info/oplus_dbg_gesture_coord_record_enable Failed!\n");
+	oppo_dbg_gesture_coord_record_enable_entry = proc_create(OPPO_DBG_GESTURE_COORD_RECORD_ENABLE, 0222,
+			ts->debug_info, &oppo_dbg_gesture_coord_record_enable_fops);
+	if (oppo_dbg_gesture_coord_record_enable_entry == NULL) {
+		NVT_ERR("create proc/touchpanel/debug_info/oppo_dbg_gesture_coord_record_enable Failed!\n");
 		return -ENOMEM;
 	}
 
-	oplus_dbg_gesture_coord_record_entry = proc_create(OPLUS_DBG_GESTURE_COORD_RECORD, 0444,
-			ts->debug_info, &oplus_dbg_gesture_coord_record_fops);
-	if (oplus_dbg_gesture_coord_record_entry == NULL) {
-		NVT_ERR("create proc/touchpanel/debug_info/oplus_dbg_gesture_coord_record Failed!\n");
+	oppo_dbg_gesture_coord_record_entry = proc_create(OPPO_DBG_GESTURE_COORD_RECORD, 0444,
+			ts->debug_info, &oppo_dbg_gesture_coord_record_fops);
+	if (oppo_dbg_gesture_coord_record_entry == NULL) {
+		NVT_ERR("create proc/touchpanel/debug_info/oppo_dbg_gesture_coord_record Failed!\n");
 		return -ENOMEM;
 	}
-	oplus_dbg_gesture_coord_enable_entry = proc_create(OPLUS_DBG_GESTURE_COORD_ENABLE, 0222,
-			ts->debug_info, &oplus_dbg_gesture_coord_enable_fops);
-	if (oplus_dbg_gesture_coord_enable_entry == NULL) {
-		NVT_ERR("create proc/touchpanel/debug_info/oplus_dbg_gesture_coord_enable_entry Failed!\n");
+	oppo_dbg_gesture_coord_enable_entry = proc_create(OPPO_DBG_GESTURE_COORD_ENABLE, 0222,
+			ts->debug_info, &oppo_dbg_gesture_coord_enable_fops);
+	if (oppo_dbg_gesture_coord_enable_entry == NULL) {
+		NVT_ERR("create proc/touchpanel/debug_info/oppo_dbg_gesture_coord_enable_entry Failed!\n");
 		return -ENOMEM;
 	}
 

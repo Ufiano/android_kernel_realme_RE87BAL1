@@ -30,7 +30,6 @@
 #include "rtt.h"
 #include "rx.h"
 #include "tx.h"
-
 #define ASSERT_INFO_BUF_SIZE	100
 
 #define SEC1			1
@@ -213,9 +212,9 @@ char *get_project_name5G(void)
 		if(temp_name != NULL){
 		temp_name += strlen("prj_name=");
 		pr_info("prj_name5G=%s\n",temp_name);
-		}else{
-			pr_err("read prj_name5G err");
-			}
+	}else{
+		pr_err("read prj_name5G err");
+		}
 	}
 	return temp_name;
 }
@@ -1426,15 +1425,13 @@ int sc2355_get_fw_info(struct sprd_priv *priv)
 			printk("[kernel] keepon 5GWIFI");
 		}else if (prj_name != NULL && (strncmp(prj_name,"21721",5) == 0)) {
 			printk("[kernel] keepon 5GWIFI");
-		}else if (prj_name != NULL && (strncmp(prj_name,"21720",5) == 0)) {
-			printk("[kernel] keepon 5GWIFI");
 		}else if (prj_name != NULL && (strncmp(prj_name,"21722",5) == 0)) {
 			printk("[kernel] keepon 5GWIFI");
 		}else if (prj_name != NULL && (strncmp(prj_name,"21723",5) == 0)) {
 			printk("[kernel] keepon 5GWIFI");
 		}else{
-			priv->fw_capa &= ~(1 << 0);
-			printk("[kernel] Shutdown 5GWIFI");
+		priv->fw_capa &= ~(1 << 0);
+		printk("[kernel] Shutdown 5GWIFI");
 		}
 		priv->fw_std = p->fw_std;
 		priv->extend_feature = p->extend_feature;
@@ -2914,7 +2911,6 @@ bool sc2355_do_delay_work(struct sprd_work *work)
 	u8 mac_addr[ETH_ALEN];
 	u16 reason_code;
 	struct sprd_vif *vif;
-	struct sprd_hif *hif = NULL;
 
 	if (!work)
 		return false;
@@ -2942,13 +2938,6 @@ bool sc2355_do_delay_work(struct sprd_work *work)
 		sprd_tdls_oper(vif->priv, vif, tdls->peer, tdls->oper);
 		break;
 	case SPRD_SEND_CLOSE:
-		hif = &vif->priv->hif;
-		if (!hif) {
-			pr_err("%s can not get hif!\n", __func__);
-			return false;
-		}
-		vif->state &= ~VIF_STATE_OPEN;
-		sprd_hif_tx_flush(hif, vif);
 		sprd_close_fw(vif->priv, vif);
 		break;
 	case SPRD_PCIE_RX_ALLOC_BUF:
@@ -3674,9 +3663,11 @@ unsigned short sc2355_rx_evt_process(struct sprd_priv *priv, u8 *msg)
 		return plen;
 	}
 
-	pr_warn("[%u]ctx_id %d recv[%s]len: %d,rsp_cnt=%d\n",
-		le32_to_cpu(hdr->mstime), ctx_id,
-		cmdevt_evt2str(hdr->cmd_id), plen, hdr->rsp_cnt);
+	if (hdr->cmd_id != EVT_SDIO_FLOWCON) {
+		wl_info("[%u]ctx_id %d recv[%s]len: %d,rsp_cnt=%d\n",
+			le32_to_cpu(hdr->mstime), ctx_id,
+			cmdevt_evt2str(hdr->cmd_id), plen, hdr->rsp_cnt);
+	}
 
 	print_hex_dump_debug("EVENT: ", DUMP_PREFIX_OFFSET, 16, 1,
 			     (u8 *)hdr, hdr->plen, 0);

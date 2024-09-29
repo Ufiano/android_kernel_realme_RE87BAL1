@@ -27,6 +27,7 @@
 #include "ufs-sprd-qogirn6pro.h"
 #include "ufs_quirks.h"
 #include "unipro.h"
+#include "ufs-sprd.h"
 
 /**
  * ufs_sprd_rmwl - read modify write into a register
@@ -616,6 +617,8 @@ static int ufs_sprd_pwr_change_notify(struct ufs_hba *hba,
 	case PRE_CHANGE:
 		memcpy(dev_req_params, dev_max_params,
 				       sizeof(struct ufs_pa_layer_attr));
+		/* err==0 using dev_req_params,err!=0 using dev_max_params */
+		err = -EPERM;
 		break;
 	case POST_CHANGE:
 		/* Set auto h8 ilde time to 10ms */
@@ -626,7 +629,7 @@ static int ufs_sprd_pwr_change_notify(struct ufs_hba *hba,
 		err = -EINVAL;
 		break;
 	}
-
+	ufs_sprd_pwr_change_compare(hba, status, dev_max_params, dev_req_params, err);
 out:
 	return err;
 }

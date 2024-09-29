@@ -227,6 +227,11 @@ static int sprd_hsphy_init(struct usb_phy *x)
 	reg = msk = MASK_ANLG_PHY_G4_ANALOG_USB20_USB20_TUNEHSAMP;
 	regmap_update_bits(phy->ana_g4,
 		REG_ANLG_PHY_G4_ANALOG_USB20_USB20_TRIMMING, msk, reg);
+		
+	reg = 0x18f64701;
+	msk = 0xffffffff;
+	regmap_update_bits(phy->ana_g4,
+		REG_ANLG_PHY_G4_ANALOG_USB20_USB20_TRIMMING, msk, reg);
 
 	if (!atomic_read(&phy->reset)) {
 		sprd_hsphy_reset_core(phy);

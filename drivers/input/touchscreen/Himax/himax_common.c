@@ -36,13 +36,13 @@ extern void himax_hx83112_exit(void);
 int (*hx_msm_drm_register_client)(struct notifier_block *nb);
 int (*hx_msm_drm_unregister_client)(struct notifier_block *nb);
 #endif
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 static void tp_fw_update_work(struct work_struct *work);
 static const uint8_t fw_i_arr[]= {
 	#include "00_Txd_Boe_Realme_Rio_HX83112A_CID4701_D00_C00_20201221.i"
 	};
 
-uint32_t g_oplus_debug_level = 3;
+uint32_t g_oppo_debug_level = 3;
 int use_i_file_flag = 0;
 
 
@@ -140,11 +140,11 @@ int g_f_0f_updat;
 #endif
 #endif
 
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 	#define HIMAX_PROC_TOUCHPANEL_FOLDER "touchpanel"
 	struct proc_dir_entry *himax_proc_touchpanel_dir;
-	#define HIMAX_PROC_OPLUS_REG_INFO_FILE	"oplus_register_info"
-	struct proc_dir_entry *himax_proc_oplus_reg_info_file = NULL;
+	#define HIMAX_PROC_OPPO_REG_INFO_FILE	"oppo_register_info"
+	struct proc_dir_entry *himax_proc_oppo_reg_info_file = NULL;
 	#define HIMAX_PROC_TP_FW_UPDATE_FILE	"tp_fw_update"
 	struct proc_dir_entry *himax_proc_tp_fw_update_file = NULL;
 
@@ -156,22 +156,22 @@ int g_f_0f_updat;
 	struct proc_dir_entry *himax_proc_coordinate_file = NULL;	
 #endif
 #endif
-	#define HIMAX_PROC_LIMIT_ENABLE_FILE	"oplus_tp_limit_enable"
+	#define HIMAX_PROC_LIMIT_ENABLE_FILE	"oppo_tp_limit_enable"
 	struct proc_dir_entry *himax_proc_limit_enable_file;
-	#define HIMAX_PROC_LIMIT_AREA_FILE	"oplus_tp_limit_area"
+	#define HIMAX_PROC_LIMIT_AREA_FILE	"oppo_tp_limit_area"
 	struct proc_dir_entry *himax_proc_limit_area_file;
 	#define PAGESIZE 256
 	#define HIMAX_PROC_GAME_SWITCH_FILE	"game_switch_enable"
 	struct proc_dir_entry *himax_proc_game_switch_en_file;
 
-	#define HIMAX_PROC_OPLUS_TP_DIRECTION_FILE	"oplus_tp_direction"
-	struct proc_dir_entry *himax_proc_oplus_tp_direction_file = NULL;
+	#define HIMAX_PROC_OPPO_TP_DIRECTION_FILE	"oppo_tp_direction"
+	struct proc_dir_entry *himax_proc_oppo_tp_direction_file = NULL;
 
 	#define HIMAX_PROC_INCELL_PANEL_FILE	"incell_panel"
 	struct proc_dir_entry *himax_proc_incell_panel_file = NULL;
 	
-	#define HIMAX_PROC_OPLUS_TX_HOP_FILE	  "oplus_tp_hop_test"
-	struct proc_dir_entry *himax_proc_oplus_tx_hop_file = NULL;
+	#define HIMAX_PROC_OPPO_TX_HOP_FILE	  "oppo_tp_hop_test"
+	struct proc_dir_entry *himax_proc_oppo_tx_hop_file = NULL;
 	
 	#define HIMAX_PROC_BASELINE_TEST_FILE	"baseline_test"
 	struct proc_dir_entry *himax_proc_baseline_test_file;
@@ -182,8 +182,8 @@ int g_f_0f_updat;
 	#define HIMAX_PROC_IRQ_DEPTH_FILE	"irq_depth"
 	struct proc_dir_entry *himax_proc_irq_depth_file = NULL;
 
-	#define HIMAX_PROC_OPLUS_DEBUG_LEVEL_FILE	"debug_level"
-	struct proc_dir_entry *himax_proc_oplus_debug_level_file = NULL;
+	#define HIMAX_PROC_OPPO_DEBUG_LEVEL_FILE	"debug_level"
+	struct proc_dir_entry *himax_proc_oppo_debug_level_file = NULL;
 	
 	//proc/touchpanel/debug_infor node begin
 	struct proc_dir_entry *himax_proc_debug_infor_dir = NULL;
@@ -202,8 +202,8 @@ int g_f_0f_updat;
 	extern uint8_t cfg_flag;
 	extern uint8_t byte_length;
 	extern uint8_t reg_cmd[4];
-	extern int oplus_baseline_read( struct seq_file *s );
-	extern int oplus_delta_read_sub( struct seq_file *s );
+	extern int oppo_baseline_read( struct seq_file *s );
+	extern int oppo_delta_read_sub( struct seq_file *s );
 	extern int himax_self_test_data_init(void);
 	extern void himax_self_test_data_deinit(void);
 	extern int **g_inspection_criteria;
@@ -244,7 +244,7 @@ EXPORT_SYMBOL(himax_touch_proc_dir);
 int g_mmi_refcnt;
 EXPORT_SYMBOL(g_mmi_refcnt);
 
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 #define HIMAX_PROC_TOUCH_FOLDER "himax"
 #else
 #define HIMAX_PROC_TOUCH_FOLDER "android_touch"
@@ -323,7 +323,7 @@ bool USB_detect_flag;
 static int gest_pt_cnt;
 static int gest_pt_x[GEST_PT_MAX_NUM];
 static int gest_pt_y[GEST_PT_MAX_NUM];
-#if !defined(OPLUS_PROC_NODE)
+#if !defined(OPPO_PROC_NODE)
 static int gest_start_x, gest_start_y, gest_end_x, gest_end_y;
 static int gest_width, gest_height, gest_mid_x, gest_mid_y;
 #endif
@@ -914,11 +914,11 @@ static const struct file_operations himax_proc_vendor_ops = {
 
 int himax_common_proc_init(void)
 {
-#if defined(OPLUS_PROC_NODE)	
+#if defined(OPPO_PROC_NODE)	
 		himax_touch_proc_dir = proc_mkdir(HIMAX_PROC_TOUCH_FOLDER, himax_proc_debug_infor_dir);
 
 		if (himax_touch_proc_dir == NULL) {
-			E(" %s: oplus himax_touch_proc_dir file create failed!\n", __func__);
+			E(" %s: oppo himax_touch_proc_dir file create failed!\n", __func__);
 			return -ENOMEM;
 		}
 #else
@@ -1027,7 +1027,7 @@ void himax_common_proc_deinit(void)
 #endif
 	remove_proc_entry(HIMAX_PROC_SELF_TEST_FILE, himax_touch_proc_dir);
 
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 	remove_proc_entry(HIMAX_PROC_TOUCH_FOLDER, himax_proc_touchpanel_dir);
 #else
 	remove_proc_entry(HIMAX_PROC_TOUCH_FOLDER, NULL);
@@ -1036,8 +1036,8 @@ void himax_common_proc_deinit(void)
 
 /* File node for SMWP and HSEN - End*/
 
-/*  File node for oplus  -- start*/
-#if defined(OPLUS_PROC_NODE)
+/*  File node for oppo  -- start*/
+#if defined(OPPO_PROC_NODE)
 #if defined(HX_TP_USB_NOTIFIER)
 /*
  * check_usb_state----expose to be called by charger int to get usb state
@@ -1232,7 +1232,7 @@ static struct file_operations himax_proc_main_reg_ops = {
 //himax_proc_main_reg_ops end
 // himax_proc_baseline_ops start
 
-static void *himax_oplus_seq_start(struct seq_file *s, loff_t *pos)
+static void *himax_oppo_seq_start(struct seq_file *s, loff_t *pos)
 {
 	if (*pos >= 1) {
 		return NULL;
@@ -1240,66 +1240,66 @@ static void *himax_oplus_seq_start(struct seq_file *s, loff_t *pos)
 	return (void *)((unsigned long) *pos + 1);
 }
 
-static void *himax_oplus_seq_next(struct seq_file *s, void *v, loff_t *pos)
+static void *himax_oppo_seq_next(struct seq_file *s, void *v, loff_t *pos)
 {
 	return NULL;
 }
 
-static void himax_oplus_seq_stop(struct seq_file *s, void *v)
+static void himax_oppo_seq_stop(struct seq_file *s, void *v)
 {
 }
-static int himax_oplus_baseline_read(struct seq_file *s, void *v) /*baseline*/
+static int himax_oppo_baseline_read(struct seq_file *s, void *v) /*baseline*/
 {
 	size_t ret = 0;
 
-	ret = oplus_baseline_read ( s );
+	ret = oppo_baseline_read ( s );
 	return ret;
 }
 
-static struct seq_operations himax_oplus_baseline_seq_ops = {
-	.start	= himax_oplus_seq_start,
-	.next	= himax_oplus_seq_next,
-	.stop	= himax_oplus_seq_stop,
-	.show	= himax_oplus_baseline_read,
+static struct seq_operations himax_oppo_baseline_seq_ops = {
+	.start	= himax_oppo_seq_start,
+	.next	= himax_oppo_seq_next,
+	.stop	= himax_oppo_seq_stop,
+	.show	= himax_oppo_baseline_read,
 };
 
-static int himax_oplus_baseline_proc_open(struct inode *inode, struct file *file)
+static int himax_oppo_baseline_proc_open(struct inode *inode, struct file *file)
 {
-	return seq_open(file, &himax_oplus_baseline_seq_ops);
+	return seq_open(file, &himax_oppo_baseline_seq_ops);
 };
 
 static struct file_operations himax_proc_baseline_ops = {
 	.owner = THIS_MODULE,
-	.open = himax_oplus_baseline_proc_open,
+	.open = himax_oppo_baseline_proc_open,
 	.read = seq_read,
 };
 // himax_proc_baseline_ops end
 
 //himax_proc_delta_ops start
 
-static int himax_oplus_delta_read(struct seq_file *s, void *v) /*delta*/
+static int himax_oppo_delta_read(struct seq_file *s, void *v) /*delta*/
 {
 	size_t ret = 0;
 
-	ret = oplus_delta_read_sub( s );
+	ret = oppo_delta_read_sub( s );
 
 	return ret;
 }
-static struct seq_operations himax_oplus_delta_seq_ops = {
-	.start	= himax_oplus_seq_start,
-	.next	= himax_oplus_seq_next,
-	.stop	= himax_oplus_seq_stop,
-	.show	= himax_oplus_delta_read,
+static struct seq_operations himax_oppo_delta_seq_ops = {
+	.start	= himax_oppo_seq_start,
+	.next	= himax_oppo_seq_next,
+	.stop	= himax_oppo_seq_stop,
+	.show	= himax_oppo_delta_read,
 };
 
-static int himax_oplus_delta_proc_open(struct inode *inode, struct file *file)
+static int himax_oppo_delta_proc_open(struct inode *inode, struct file *file)
 {
-	return seq_open(file, &himax_oplus_delta_seq_ops);
+	return seq_open(file, &himax_oppo_delta_seq_ops);
 };
 
 static struct file_operations himax_proc_delta_ops = {
 	.owner = THIS_MODULE,
-	.open = himax_oplus_delta_proc_open,
+	.open = himax_oppo_delta_proc_open,
 	.read = seq_read,
 };
 //himax_proc_delta_ops end
@@ -1530,8 +1530,8 @@ static const struct file_operations himax_proc_baseline_test_ops = {
 
 // himax_proc_baseline_test_ops end
 
-//himax_proc_oplus_tx_hop_op start
-static ssize_t oplus_io_ctrl_read(struct file *file, char *buf,
+//himax_proc_oppo_tx_hop_op start
+static ssize_t oppo_io_ctrl_read(struct file *file, char *buf,
 							   size_t len, loff_t *pos)
 {
 	size_t count = 0;
@@ -1554,7 +1554,7 @@ static ssize_t oplus_io_ctrl_read(struct file *file, char *buf,
 	return count;
 }
 
-static ssize_t himax_oplus_hop_test_write(struct file *file, const char *buff,/*oplus_io_ctrl*/
+static ssize_t himax_oppo_hop_test_write(struct file *file, const char *buff,/*oppo_io_ctrl*/
 								size_t len, loff_t *pos)
 {
 	
@@ -1600,13 +1600,13 @@ static ssize_t himax_oplus_hop_test_write(struct file *file, const char *buff,/*
 	return len;
 }
 
-static struct file_operations himax_proc_oplus_tx_hop_ops = {
+static struct file_operations himax_proc_oppo_tx_hop_ops = {
 	.owner = THIS_MODULE,
-	.read = oplus_io_ctrl_read,
-	.write = himax_oplus_hop_test_write,
+	.read = oppo_io_ctrl_read,
+	.write = himax_oppo_hop_test_write,
 };
 
-//himax_proc_oplus_tx_hop_op end
+//himax_proc_oppo_tx_hop_op end
 
 /* incell_panel	Start*/
 
@@ -1701,8 +1701,8 @@ static struct file_operations himax_proc_irq_depth_ops = {
 
 /* irq depth	End*/
 
-/*oplus debug level 	Start*/
-static ssize_t himax_oplus_debug_level_read(struct file *file, char *buf,
+/*oppo debug level 	Start*/
+static ssize_t himax_oppo_debug_level_read(struct file *file, char *buf,
 								  size_t len, loff_t *pos)
 {
 	size_t ret = 0;
@@ -1710,7 +1710,7 @@ static ssize_t himax_oplus_debug_level_read(struct file *file, char *buf,
 	I("%s: enter, %d \n", __func__, __LINE__);
 
 	if (!HX_PROC_SEND_FLAG) {
-		ret = snprintf(temp_buf, sizeof(temp_buf), "%d\n", g_oplus_debug_level);
+		ret = snprintf(temp_buf, sizeof(temp_buf), "%d\n", g_oppo_debug_level);
 		if (copy_to_user(buf, temp_buf, ret))
 			I("%s,here:%d\n", __func__, __LINE__);
 
@@ -1723,7 +1723,7 @@ static ssize_t himax_oplus_debug_level_read(struct file *file, char *buf,
 }
 
 
-static ssize_t himax_oplus_debug_level_write(struct file *file, const char *buff,
+static ssize_t himax_oppo_debug_level_write(struct file *file, const char *buff,
 								   size_t len, loff_t *pos)
 {
 
@@ -1744,34 +1744,34 @@ static ssize_t himax_oplus_debug_level_write(struct file *file, const char *buff
     ret = sscanf(buf, "%d", &dbgLevel);
 
     if (ret >= 1) {
-        g_oplus_debug_level = 0;
+        g_oppo_debug_level = 0;
         switch(dbgLevel) {
             case 2:
-                g_oplus_debug_level	= dbgLevel & BIT(1);
+                g_oppo_debug_level	= dbgLevel & BIT(1);
                 break;
             case 1:
             case 0:
-                g_oplus_debug_level = dbgLevel & BIT(0);
+                g_oppo_debug_level = dbgLevel & BIT(0);
                 break;
             default:
-            g_oplus_debug_level = 0;
+            g_oppo_debug_level = 0;
         };
     }
-    I("%s: buf = %s, debug_level = %d\n", __func__, buf, g_oplus_debug_level);
+    I("%s: buf = %s, debug_level = %d\n", __func__, buf, g_oppo_debug_level);
 
     return len;
 }
 
-static struct file_operations himax_proc_oplus_debug_level_ops = {
+static struct file_operations himax_proc_oppo_debug_level_ops = {
 	.owner = THIS_MODULE,
-	.read = himax_oplus_debug_level_read,
-	.write = himax_oplus_debug_level_write,
+	.read = himax_oppo_debug_level_read,
+	.write = himax_oppo_debug_level_write,
 };
 
-/* oplus debug level	End*/
+/* oppo debug level	End*/
 
-/* oplus_tp_direction	Start*/
-static ssize_t himax_oplus_tp_direction_write(struct file *file, const char *buff,
+/* oppo_tp_direction	Start*/
+static ssize_t himax_oppo_tp_direction_write(struct file *file, const char *buff,
 									size_t len, loff_t *pos)
 {
 	char buf_tmp[4] = {0};
@@ -1795,24 +1795,24 @@ static ssize_t himax_oplus_tp_direction_write(struct file *file, const char *buf
 	 }
 
 	if (buf_tmp[0] == '0') {
-		himax_parse_assign_cmd(fw_oplus_tp_direction_0_pwd, buf_tmp, sizeof(buf_tmp));
-		g_core_fp.fp_register_write(pfw_op->addr_oplus_tp_direction/*0x10007f3c*/, DATA_LEN_4, buf_tmp, 0);
-		I("%s: oplus_tp_direction disable .\n", __func__);
+		himax_parse_assign_cmd(fw_oppo_tp_direction_0_pwd, buf_tmp, sizeof(buf_tmp));
+		g_core_fp.fp_register_write(pfw_op->addr_oppo_tp_direction/*0x10007f3c*/, DATA_LEN_4, buf_tmp, 0);
+		I("%s: oppo_tp_direction disable .\n", __func__);
 	}
 	else if(buf_tmp[0] == '1')
 	{
-		himax_parse_assign_cmd(fw_oplus_tp_direction_1_pwd, buf_tmp, sizeof(buf_tmp));
-		g_core_fp.fp_register_write(pfw_op->addr_oplus_tp_direction, DATA_LEN_4, buf_tmp, 0);
-		I("%s: oplus_tp_direction enable .\n", __func__);
+		himax_parse_assign_cmd(fw_oppo_tp_direction_1_pwd, buf_tmp, sizeof(buf_tmp));
+		g_core_fp.fp_register_write(pfw_op->addr_oppo_tp_direction, DATA_LEN_4, buf_tmp, 0);
+		I("%s: oppo_tp_direction enable .\n", __func__);
 	}
 	else if(buf_tmp[0] == '2')
 	{
-		himax_parse_assign_cmd(fw_oplus_tp_direction_2_pwd, buf_tmp, sizeof(buf_tmp));
-		g_core_fp.fp_register_write(pfw_op->addr_oplus_tp_direction, DATA_LEN_4, buf_tmp, 0);
-		I("%s: oplus_tp_direction enable .\n", __func__);
+		himax_parse_assign_cmd(fw_oppo_tp_direction_2_pwd, buf_tmp, sizeof(buf_tmp));
+		g_core_fp.fp_register_write(pfw_op->addr_oppo_tp_direction, DATA_LEN_4, buf_tmp, 0);
+		I("%s: oppo_tp_direction enable .\n", __func__);
 	}
 	else {
-		I("%s: oplus_tp_direction wrong parameter .\n", __func__);
+		I("%s: oppo_tp_direction wrong parameter .\n", __func__);
 		return -EINVAL;
 	}
 
@@ -1835,13 +1835,13 @@ static ssize_t proc_dir_control_read(struct file *file, char __user *user_buf, s
     return ret;
 }
 
-static struct file_operations himax_proc_oplus_tp_direction_ops = {
+static struct file_operations himax_proc_oppo_tp_direction_ops = {
 	.owner = THIS_MODULE,
 	.open  = simple_open,
 	.read  = proc_dir_control_read,
-	.write = himax_oplus_tp_direction_write,
+	.write = himax_oppo_tp_direction_write,
 };
-/* oplus_tp_direction	End*/
+/* oppo_tp_direction	End*/
 
 /* Game Switch Enable Start*/
 static ssize_t hx_game_switch_write(struct file	*file, const char	__user *buffer,	size_t count,	loff_t *ppos)
@@ -2026,7 +2026,7 @@ static ssize_t hx_limit_ctrl_write(struct	file *file,	const	char __user	*buffer,
 
 	if(ts->limit_edge == 0)
 	{
-		I("%s: oplus send cmd 0 firmware will action in oplus_tp_direction\n", __func__);
+		I("%s: oppo send cmd 0 firmware will action in oppo_tp_direction\n", __func__);
 		return count;
 	}
 
@@ -2145,7 +2145,7 @@ static struct file_operations himax_proc_double_tap_en_ops = {
 //himax_double_tap_en end
 // himax_proc_coor_start
 #ifdef HX_GESTURE_TRACK
-/*oplus*/
+/*oppo*/
 static void *himax_coor_start(struct seq_file *m, loff_t *pos)
 {
 	return *pos < 1 ? (void *)1 : NULL;
@@ -2194,13 +2194,13 @@ static int32_t himax_coor_show(struct seq_file *m, void *v)
 			hx_gesture_coor[11], hx_gesture_coor[12],
 			hx_gesture_coor[13]);
 
-		/* oplus gesture formate */
+		/* oppo gesture formate */
 		seq_printf(m, "%s\n", temp_buf);
 	I("%s end.\n",__func__);
 	return 0;
 }
 
-const struct seq_operations oplus_coord_seq_ops =
+const struct seq_operations oppo_coord_seq_ops =
 {
     .start  = himax_coor_start,
     .next   = himax_coor_next,
@@ -2210,7 +2210,7 @@ const struct seq_operations oplus_coord_seq_ops =
 
 static int32_t himax_diag_coor_open(struct inode *inode, struct file *file)
 {
-    return seq_open(file, &oplus_coord_seq_ops);
+    return seq_open(file, &oppo_coord_seq_ops);
 }
 
 static struct file_operations himax_proc_coor_ops = {
@@ -2273,8 +2273,8 @@ static struct file_operations himax_proc_tp_fw_update_ops = {
 	.write = himax_tp_fw_update_write,
 };
 //himax_proc_tp_fw_update end
-//HIMAX_PROC_OPLUS_REG_INFO START
-static ssize_t himax_oplus_reg_read_read(struct file *file, char *buf, size_t len, loff_t *pos)
+//HIMAX_PROC_OPPO_REG_INFO START
+static ssize_t himax_oppo_reg_read_read(struct file *file, char *buf, size_t len, loff_t *pos)
 {
 	int ret = 0;
 	uint16_t loop_i;
@@ -2311,7 +2311,7 @@ static ssize_t himax_oplus_reg_read_read(struct file *file, char *buf, size_t le
 	return ret;
 }
 
-static ssize_t himax_oplus_reg_read_write(struct file *file, const char *buff,
+static ssize_t himax_oppo_reg_read_write(struct file *file, const char *buff,
 		size_t len, loff_t *pos)
 {
 	char buf[80] = {0};
@@ -2441,14 +2441,14 @@ static ssize_t himax_oplus_reg_read_write(struct file *file, const char *buff,
 	return len;
 }
 
-static struct file_operations himax_proc_oplus_reg_read_ops = {
+static struct file_operations himax_proc_oppo_reg_read_ops = {
 	.owner = THIS_MODULE,
-	.read = himax_oplus_reg_read_read,
-	.write = himax_oplus_reg_read_write,
+	.read = himax_oppo_reg_read_read,
+	.write = himax_oppo_reg_read_write,
 };
-//HIMAX_PROC_OPLUS_REG_INFO END
+//HIMAX_PROC_OPPO_REG_INFO END
 
-int OPLUS_proc_node_init(void)
+int OPPO_proc_node_init(void)
 {
 			
 	himax_proc_touchpanel_dir = proc_mkdir(HIMAX_PROC_TOUCHPANEL_FOLDER, NULL);
@@ -2458,18 +2458,18 @@ int OPLUS_proc_node_init(void)
 			return -ENOMEM;
 		}
 	
-	himax_proc_oplus_reg_info_file = proc_create(HIMAX_PROC_OPLUS_REG_INFO_FILE, (S_IWUSR | S_IRUGO),
-								  himax_proc_touchpanel_dir, &himax_proc_oplus_reg_read_ops);
-	if (himax_proc_oplus_reg_info_file == NULL) {
-		E(" %s: proc oplus_reg_info file create failed!\n", __func__);
-		goto fail_oplus_proc_0;
+	himax_proc_oppo_reg_info_file = proc_create(HIMAX_PROC_OPPO_REG_INFO_FILE, (S_IWUSR | S_IRUGO),
+								  himax_proc_touchpanel_dir, &himax_proc_oppo_reg_read_ops);
+	if (himax_proc_oppo_reg_info_file == NULL) {
+		E(" %s: proc oppo_reg_info file create failed!\n", __func__);
+		goto fail_oppo_proc_0;
 	}
 	
 	himax_proc_tp_fw_update_file = proc_create(HIMAX_PROC_TP_FW_UPDATE_FILE, (S_IWUSR | S_IRUGO | S_IWUGO),
 								  himax_proc_touchpanel_dir, &himax_proc_tp_fw_update_ops);
 	if (himax_proc_tp_fw_update_file == NULL) {
 		E(" %s: proc tp_fw_update file create failed!\n", __func__);
-		goto fail_oplus_proc_1;
+		goto fail_oppo_proc_1;
 	}
 	
 #ifdef HX_SMART_WAKEUP
@@ -2478,14 +2478,14 @@ int OPLUS_proc_node_init(void)
 									  himax_proc_touchpanel_dir, &himax_proc_coor_ops);
 	if (himax_proc_coordinate_file == NULL) {
 		E(" %s: himax_proc_coordinate_file create failed!\n", __func__);
-		goto fail_oplus_proc_2;
+		goto fail_oppo_proc_2;
 	}
 #endif
 	himax_proc_double_tap_en_file = proc_create(HIMAX_PROC_DOUBLE_TAP_EN_FILE, (S_IWUSR | S_IRUGO | S_IWUGO),
 								  himax_proc_touchpanel_dir, &himax_proc_double_tap_en_ops);
 	if (himax_proc_double_tap_en_file == NULL) {
 		E(" %s: proc double_tap_en file create failed!\n", __func__);
-		goto fail_oplus_proc_3;
+		goto fail_oppo_proc_3;
 	}
 #endif	
 	himax_proc_limit_enable_file = proc_create(HIMAX_PROC_LIMIT_ENABLE_FILE, (S_IWUSR | S_IRUGO | S_IWUGO),
@@ -2493,68 +2493,68 @@ int OPLUS_proc_node_init(void)
 
 	if (himax_proc_limit_enable_file == NULL) {
 		E(" %s: proc limit enable file create failed!\n", __func__);
-		goto fail_oplus_proc_4;
+		goto fail_oppo_proc_4;
 	}
 	himax_proc_limit_area_file = proc_create(HIMAX_PROC_LIMIT_AREA_FILE, (S_IWUSR | S_IRUGO | S_IWUGO),
 										  himax_proc_touchpanel_dir, &proc_limit_area_ops);
 
 	if (himax_proc_limit_area_file == NULL) {
 		E(" %s: proc limit area file create failed!\n", __func__);
-		goto fail_oplus_proc_5;
+		goto fail_oppo_proc_5;
 	}
 	himax_proc_game_switch_en_file = proc_create(HIMAX_PROC_GAME_SWITCH_FILE, (S_IWUSR | S_IRUGO | S_IWUGO),
 										  himax_proc_touchpanel_dir, &hx_proc_game_switch_ops);
 
 	if (himax_proc_game_switch_en_file == NULL) {
 		E(" %s: proc game switch en file create failed!\n", __func__);
-		goto fail_oplus_proc_6;
+		goto fail_oppo_proc_6;
 	}
 	
-	himax_proc_oplus_tp_direction_file = proc_create(HIMAX_PROC_OPLUS_TP_DIRECTION_FILE, (S_IWUSR | S_IRUGO | S_IWUGO),
-								  himax_proc_touchpanel_dir, &himax_proc_oplus_tp_direction_ops);
-	if (himax_proc_oplus_tp_direction_file == NULL) {
-		E(" %s: proc oplus_tp_direction file create failed!\n", __func__);
-		goto fail_oplus_proc_7;
+	himax_proc_oppo_tp_direction_file = proc_create(HIMAX_PROC_OPPO_TP_DIRECTION_FILE, (S_IWUSR | S_IRUGO | S_IWUGO),
+								  himax_proc_touchpanel_dir, &himax_proc_oppo_tp_direction_ops);
+	if (himax_proc_oppo_tp_direction_file == NULL) {
+		E(" %s: proc oppo_tp_direction file create failed!\n", __func__);
+		goto fail_oppo_proc_7;
 	}
 
 	himax_proc_incell_panel_file = proc_create(HIMAX_PROC_INCELL_PANEL_FILE, (S_IWUSR | S_IRUGO | S_IWUGO),
 								  himax_proc_touchpanel_dir, &himax_proc_incell_panel_ops);
 	if (himax_proc_incell_panel_file == NULL) {
 		E(" %s: proc incell_panel file create failed!\n", __func__);
-		goto fail_oplus_proc_8;
+		goto fail_oppo_proc_8;
 	}
 
-	himax_proc_oplus_tx_hop_file = proc_create(HIMAX_PROC_OPLUS_TX_HOP_FILE, (S_IWUSR | S_IRUGO | S_IWUGO),
-								  himax_proc_touchpanel_dir, &himax_proc_oplus_tx_hop_ops);
-	if (himax_proc_oplus_tx_hop_file == NULL) {
+	himax_proc_oppo_tx_hop_file = proc_create(HIMAX_PROC_OPPO_TX_HOP_FILE, (S_IWUSR | S_IRUGO | S_IWUGO),
+								  himax_proc_touchpanel_dir, &himax_proc_oppo_tx_hop_ops);
+	if (himax_proc_oppo_tx_hop_file == NULL) {
 		E(" %s: proc tx freq change test create failed!\n", __func__);
-		goto fail_oplus_proc_9;
+		goto fail_oppo_proc_9;
 	}	
 	
 	himax_proc_baseline_test_file = proc_create(HIMAX_PROC_BASELINE_TEST_FILE, (S_IRUGO), himax_proc_touchpanel_dir, &himax_proc_baseline_test_ops);
 	if (himax_proc_baseline_test_file == NULL) {
 		E(" %s: proc baseline_test file create failed!\n", __func__);
-		goto fail_oplus_proc_10;
+		goto fail_oppo_proc_10;
 	}
 	#if defined(HX_SMART_WAKEUP)
 	himax_proc_backscreen_baseline_file = proc_create(HIMAX_PROC_BACKSCREEN_BASELINE_FILE, (S_IRUGO | S_IWUGO), himax_proc_touchpanel_dir, &himax_black_screen_test_fops);
 	if (himax_proc_backscreen_baseline_file == NULL) {
 		E(" %s create proc/touchpanel/blackscreen_test Failed!\n", __func__);
-		goto fail_oplus_proc_11;
+		goto fail_oppo_proc_11;
 	}
 	#endif
 	himax_proc_irq_depth_file = proc_create(HIMAX_PROC_IRQ_DEPTH_FILE, (S_IWUSR | S_IRUGO | S_IWUGO),
 								  himax_proc_touchpanel_dir, &himax_proc_irq_depth_ops);
 	if (himax_proc_irq_depth_file == NULL) {
 		E(" %s: proc incell_panel file create failed!\n", __func__);
-		goto fail_oplus_proc_12;
+		goto fail_oppo_proc_12;
 	}
 
-	himax_proc_oplus_debug_level_file = proc_create(HIMAX_PROC_OPLUS_DEBUG_LEVEL_FILE, (S_IWUSR | S_IRUGO | S_IWUGO),
-								  himax_proc_touchpanel_dir, &himax_proc_oplus_debug_level_ops);
-	if (himax_proc_oplus_debug_level_file == NULL) {
+	himax_proc_oppo_debug_level_file = proc_create(HIMAX_PROC_OPPO_DEBUG_LEVEL_FILE, (S_IWUSR | S_IRUGO | S_IWUGO),
+								  himax_proc_touchpanel_dir, &himax_proc_oppo_debug_level_ops);
+	if (himax_proc_oppo_debug_level_file == NULL) {
 		E(" %s: proc incell_panel file create failed!\n", __func__);
-		goto fail_oplus_proc_13;
+		goto fail_oppo_proc_13;
 	}
 	
 	
@@ -2565,77 +2565,77 @@ int OPLUS_proc_node_init(void)
 									  himax_proc_debug_infor_dir, &himax_proc_delta_ops);
 		if (himax_proc_delta_o_file == NULL) {
 			E(" %s: proc dbg_info file create failed!\n", __func__);
-			goto fail_oplus_proc_dbg_1;
+			goto fail_oppo_proc_dbg_1;
 		}
 
 		himax_proc_baseline_O_file = proc_create(HIMAX_PROC_BASELINE_O_FILE, (S_IWUSR | S_IRUGO),
 									  himax_proc_debug_infor_dir, &himax_proc_baseline_ops);
 		if (himax_proc_baseline_O_file == NULL) {
 			E(" %s: proc baseline file create failed!\n", __func__);
-			goto fail_oplus_proc_dbg_2;
+			goto fail_oppo_proc_dbg_2;
 		}
 
 		himax_proc_main_reg_file = proc_create(HIMAX_PROC_MAIN_REG_FILE, (S_IWUSR | S_IRUGO),
 									  himax_proc_debug_infor_dir, &himax_proc_main_reg_ops);
 		if (himax_proc_main_reg_file == NULL) {
 			E(" %s: proc main_register file create failed!\n", __func__);
-			goto fail_oplus_proc_dbg_3;
+			goto fail_oppo_proc_dbg_3;
 		}
 
 		himax_proc_data_limit_file = proc_create(HIMAX_PROC_DATA_LIMIT_FILE, (S_IWUSR | S_IRUGO),
 									  himax_proc_debug_infor_dir, &himax_proc_data_limit_ops);
 		if (himax_proc_data_limit_file == NULL) {
 			E(" %s: proc data_limit file create failed!\n", __func__);
-			goto fail_oplus_proc_dbg_4;
+			goto fail_oppo_proc_dbg_4;
 		}
 	} else {
 		E(" %s: himax_proc_debug_infor_dir create failed!\n", __func__);
-		goto fail_oplus_proc_dbg_0;
+		goto fail_oppo_proc_dbg_0;
 	}
 	return 0;
-fail_oplus_proc_dbg_4:
+fail_oppo_proc_dbg_4:
 	remove_proc_entry(HIMAX_PROC_MAIN_REG_FILE, himax_proc_debug_infor_dir);	
-fail_oplus_proc_dbg_3:
+fail_oppo_proc_dbg_3:
 	remove_proc_entry(HIMAX_PROC_BASELINE_O_FILE, himax_proc_debug_infor_dir);
-fail_oplus_proc_dbg_2:
+fail_oppo_proc_dbg_2:
 	remove_proc_entry(HIMAX_PROC_DELTA_O_FILE, himax_proc_debug_infor_dir);
-fail_oplus_proc_dbg_1:	
+fail_oppo_proc_dbg_1:	
 	remove_proc_entry(HIMAX_PROC_DEBUG_INFO_FOLDER, himax_proc_touchpanel_dir);
-fail_oplus_proc_dbg_0:
-	remove_proc_entry(HIMAX_PROC_OPLUS_DEBUG_LEVEL_FILE, himax_proc_touchpanel_dir);
-fail_oplus_proc_13:
+fail_oppo_proc_dbg_0:
+	remove_proc_entry(HIMAX_PROC_OPPO_DEBUG_LEVEL_FILE, himax_proc_touchpanel_dir);
+fail_oppo_proc_13:
 	remove_proc_entry(HIMAX_PROC_IRQ_DEPTH_FILE, himax_proc_touchpanel_dir);
-fail_oplus_proc_12:
+fail_oppo_proc_12:
 #if defined(HX_SMART_WAKEUP)
 	remove_proc_entry(HIMAX_PROC_BACKSCREEN_BASELINE_FILE, himax_proc_touchpanel_dir);	
-fail_oplus_proc_11:
+fail_oppo_proc_11:
 #endif
 	remove_proc_entry(HIMAX_PROC_BASELINE_TEST_FILE, himax_proc_touchpanel_dir);	
-fail_oplus_proc_10:
-	remove_proc_entry(HIMAX_PROC_OPLUS_TX_HOP_FILE, himax_proc_touchpanel_dir);	
-fail_oplus_proc_9:
+fail_oppo_proc_10:
+	remove_proc_entry(HIMAX_PROC_OPPO_TX_HOP_FILE, himax_proc_touchpanel_dir);	
+fail_oppo_proc_9:
 	remove_proc_entry(HIMAX_PROC_INCELL_PANEL_FILE, himax_proc_touchpanel_dir);	
-fail_oplus_proc_8:
-	remove_proc_entry(HIMAX_PROC_OPLUS_TP_DIRECTION_FILE, himax_proc_touchpanel_dir);	
-fail_oplus_proc_7:
+fail_oppo_proc_8:
+	remove_proc_entry(HIMAX_PROC_OPPO_TP_DIRECTION_FILE, himax_proc_touchpanel_dir);	
+fail_oppo_proc_7:
 	remove_proc_entry(HIMAX_PROC_GAME_SWITCH_FILE, himax_proc_touchpanel_dir);		
-fail_oplus_proc_6:
+fail_oppo_proc_6:
 	remove_proc_entry(HIMAX_PROC_LIMIT_AREA_FILE, himax_proc_touchpanel_dir);	
-fail_oplus_proc_5:
+fail_oppo_proc_5:
 	remove_proc_entry(HIMAX_PROC_LIMIT_ENABLE_FILE, himax_proc_touchpanel_dir);	
-fail_oplus_proc_4:
+fail_oppo_proc_4:
 #ifdef HX_SMART_WAKEUP
 	remove_proc_entry(HIMAX_PROC_DOUBLE_TAP_EN_FILE, himax_proc_touchpanel_dir);	
-fail_oplus_proc_3:
+fail_oppo_proc_3:
 #ifdef HX_GESTURE_TRACK
 	remove_proc_entry(HIMAX_PROC_COORDINATE_FILE, himax_proc_touchpanel_dir);	
-fail_oplus_proc_2:
+fail_oppo_proc_2:
 #endif
 #endif	
 	remove_proc_entry(HIMAX_PROC_TP_FW_UPDATE_FILE, himax_proc_touchpanel_dir);	
-fail_oplus_proc_1:
-	remove_proc_entry(HIMAX_PROC_OPLUS_REG_INFO_FILE, himax_proc_touchpanel_dir);
-fail_oplus_proc_0:	
+fail_oppo_proc_1:
+	remove_proc_entry(HIMAX_PROC_OPPO_REG_INFO_FILE, himax_proc_touchpanel_dir);
+fail_oppo_proc_0:	
 	if( strcmp( HIMAX_PROC_TOUCHPANEL_FOLDER, HIMAX_PROC_TOUCH_FOLDER)!= 0  ){
 		remove_proc_entry(HIMAX_PROC_TOUCHPANEL_FOLDER, NULL);	
 	}
@@ -2643,7 +2643,7 @@ fail_oplus_proc_0:
 
 }
 
-int OPLUS_proc_node_deinit(void)
+int OPPO_proc_node_deinit(void)
 {
 	remove_proc_entry(HIMAX_PROC_MAIN_REG_FILE, himax_proc_debug_infor_dir);	
 	remove_proc_entry(HIMAX_PROC_BASELINE_O_FILE, himax_proc_debug_infor_dir);
@@ -2653,12 +2653,12 @@ int OPLUS_proc_node_deinit(void)
 	#if defined(HX_SMART_WAKEUP)
 	remove_proc_entry(HIMAX_PROC_BACKSCREEN_BASELINE_FILE, himax_proc_touchpanel_dir);	
 	#endif
-	remove_proc_entry(HIMAX_PROC_OPLUS_DEBUG_LEVEL_FILE, himax_proc_touchpanel_dir);	
+	remove_proc_entry(HIMAX_PROC_OPPO_DEBUG_LEVEL_FILE, himax_proc_touchpanel_dir);	
 	remove_proc_entry(HIMAX_PROC_IRQ_DEPTH_FILE, himax_proc_touchpanel_dir);	
 	remove_proc_entry(HIMAX_PROC_BASELINE_TEST_FILE, himax_proc_touchpanel_dir);	
-	remove_proc_entry(HIMAX_PROC_OPLUS_TX_HOP_FILE, himax_proc_touchpanel_dir);	
+	remove_proc_entry(HIMAX_PROC_OPPO_TX_HOP_FILE, himax_proc_touchpanel_dir);	
 	remove_proc_entry(HIMAX_PROC_INCELL_PANEL_FILE, himax_proc_touchpanel_dir);	
-	remove_proc_entry(HIMAX_PROC_OPLUS_TP_DIRECTION_FILE, himax_proc_touchpanel_dir);	
+	remove_proc_entry(HIMAX_PROC_OPPO_TP_DIRECTION_FILE, himax_proc_touchpanel_dir);	
 	remove_proc_entry(HIMAX_PROC_GAME_SWITCH_FILE, himax_proc_touchpanel_dir);		
 	remove_proc_entry(HIMAX_PROC_LIMIT_AREA_FILE, himax_proc_touchpanel_dir);	
 	remove_proc_entry(HIMAX_PROC_LIMIT_ENABLE_FILE, himax_proc_touchpanel_dir);	
@@ -2669,7 +2669,7 @@ int OPLUS_proc_node_deinit(void)
 #endif
 #endif	
 	remove_proc_entry(HIMAX_PROC_TP_FW_UPDATE_FILE, himax_proc_touchpanel_dir);	
-	remove_proc_entry(HIMAX_PROC_OPLUS_REG_INFO_FILE, himax_proc_touchpanel_dir);
+	remove_proc_entry(HIMAX_PROC_OPPO_REG_INFO_FILE, himax_proc_touchpanel_dir);
 	remove_proc_entry(HIMAX_PROC_TOUCHPANEL_FOLDER, NULL);	
 	return -ENOMEM;
 }
@@ -2838,7 +2838,7 @@ static void himax_tp_headset_notifier_init(void)
 }
 #endif
 #endif
-/*  File node for oplus  -- end*/
+/*  File node for oppo  -- end*/
 
 
 
@@ -3049,7 +3049,7 @@ static int i_get_FW(void)
 {
 	int ret = -1;
 	int result = NO_ERR;
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 	struct firmware *tmp_fw_entry = NULL;
 	if (tmp_fw_entry == NULL) {
 			tmp_fw_entry = kzalloc(sizeof(struct firmware), GFP_KERNEL);
@@ -3222,7 +3222,7 @@ static int himax_wake_event_parse(struct himax_ts_data *ts, int ts_status)
 {
 	uint8_t *buf = wake_event_buffer;
 #if defined(HX_GESTURE_TRACK)
-#if !defined(OPLUS_PROC_NODE)
+#if !defined(OPPO_PROC_NODE)
 	int tmp_max_x = 0x00;
 	int tmp_min_x = 0xFFFF;
 	int tmp_max_y = 0x00;
@@ -3285,7 +3285,7 @@ static int himax_wake_event_parse(struct himax_ts_data *ts, int ts_status)
 		gest_pt_cnt = 0;
 		I("gest doornidate start\n %s", __func__);
 		
-#if defined(OPLUS_PROC_NODE) /*oplus gesture parsing*/
+#if defined(OPPO_PROC_NODE) /*oppo gesture parsing*/
 
 		for (i = 0; i < 14; i++) {/*default value initialize*/
 			hx_gesture_coor[i] = 0;
@@ -3403,7 +3403,7 @@ static void himax_wake_event_report(void)
 
 	if (g_ts_dbg != 0)
 		I("%s: Entering!\n", __func__);
-#ifdef OPLUS_PROC_NODE
+#ifdef OPPO_PROC_NODE
 		KEY_EVENT = KEY_F4;
 #endif	
 
@@ -3415,7 +3415,7 @@ static void himax_wake_event_report(void)
 				__func__, KEY_EVENT);
 		input_report_key(private_ts->input_dev, KEY_EVENT, 0);
 		input_sync(private_ts->input_dev);
-#if !defined(OPLUS_PROC_NODE)		
+#if !defined(OPPO_PROC_NODE)		
 #if defined(HX_GESTURE_TRACK)
 		I("gest_start_x=%d,start_y=%d,end_x=%d,end_y=%d\n",
 			gest_start_x,
@@ -4733,7 +4733,7 @@ static int hx_chk_flash_sts(void)
 	return rslt;
 }
 #endif
-#ifdef OPLUS_PROC_NODE
+#ifdef OPPO_PROC_NODE
 static void tp_fw_update_work(struct work_struct *work)
 {
 	struct himax_ts_data *ts = private_ts;
@@ -4874,7 +4874,7 @@ static void himax_boot_upgrade(struct work_struct *work)
 
 	if (fw_sts == NO_ERR)
 	{
-#ifdef OPLUS_PROC_NODE
+#ifdef OPPO_PROC_NODE
 		if(!private_ts->recovery_mode){
 			if( hxfw != NULL && use_i_file_flag != 1) {
 				release_firmware(hxfw);
@@ -4997,7 +4997,7 @@ int himax_chip_common_init(void)
 		err = -ENOMEM;
 		goto err_alloc_touch_data_failed;
 	}
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 	ts->recovery_mode = false;
     
 	/*Judge whether it is factory test mode */
@@ -5106,7 +5106,7 @@ found_hx_chip:
 	}
 
 	himax_int_enable(0);
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 		ts->firmware_headfile.data = fw_i_arr;
 		ts->firmware_headfile.size = sizeof(fw_i_arr);
 		ts->g_fw_sta = false;
@@ -5177,10 +5177,10 @@ found_hx_chip:
 #if defined(HX_HIGH_SENSE)
 	ts->HSEN_enable = 0;
 #endif
-#if defined(OPLUS_PROC_NODE)	
-	if (OPLUS_proc_node_init()) {
-		E(" %s:OPLUS_proc_node_init failed!\n", __func__);
-		goto err_creat_oplus_proc_failed;
+#if defined(OPPO_PROC_NODE)	
+	if (OPPO_proc_node_init()) {
+		E(" %s:OPPO_proc_node_init failed!\n", __func__);
+		goto err_creat_oppo_proc_failed;
 	}	
 	ts->himax_Freq_hop_test_wq = create_singlethread_workqueue("HIMAX_FREQ_hop_test_wq");
 
@@ -5281,19 +5281,19 @@ err_creat_proc_file_failed:
 	wakeup_source_trash(ts->ts_SMWP_wake_lock);
 #endif
 #endif
-#if defined(OPLUS_PROC_NODE)		
+#if defined(OPPO_PROC_NODE)		
 	cancel_delayed_work_sync(&ts->himax_Freq_hop_test_wrok);
 	destroy_workqueue(ts->himax_Freq_hop_test_wq);
 err_get_Freq_hop_test_wq_failed:
-	OPLUS_proc_node_deinit();
-err_creat_oplus_proc_failed:
+	OPPO_proc_node_deinit();
+err_creat_oppo_proc_failed:
 #endif	
 	cancel_delayed_work_sync(&ts->work_boot_upgrade);
 	destroy_workqueue(ts->himax_boot_upgrade_wq);
 err_boot_upgrade_wq_failed:
 	himax_ts_unregister_interrupt();
 err_register_interrupt_failed:
-#if defined(OPLUS_PROC_NODE)	
+#if defined(OPPO_PROC_NODE)	
 	if (ts->g_fw_buf) {
         kfree(ts->g_fw_buf);
     }	
@@ -5338,8 +5338,8 @@ void himax_chip_common_deinit(void)
 #endif
 
 	himax_common_proc_deinit();
-#if defined(OPLUS_PROC_NODE)		
-	OPLUS_proc_node_deinit();
+#if defined(OPPO_PROC_NODE)		
+	OPPO_proc_node_deinit();
 #endif
 	himax_report_data_deinit();
 
@@ -5464,7 +5464,7 @@ int himax_chip_common_suspend(struct himax_ts_data *ts)
 END:
 	if (ts->in_self_test == 1)
 		ts->suspend_resume_done = 1;
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 	ts->suspend_state = TP_SUSPEND_COMPLETE;
 #endif
 	I("%s: END\n", __func__);
@@ -5553,7 +5553,7 @@ ESCAPE_0F_UPDATE:
 END:
 	if (ts->in_self_test == 1)
 		ts->suspend_resume_done = 1;
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
     ts->suspend_state = TP_SPEEDUP_RESUME_COMPLETE;
 #endif
 	I("%s: END\n", __func__);

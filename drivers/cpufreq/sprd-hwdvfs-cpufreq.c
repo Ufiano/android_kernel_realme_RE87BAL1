@@ -909,6 +909,8 @@ static int sprd_hardware_cpufreq_suspend(struct cpufreq_policy *policy)
 		/* The other policy switch to suspend freq */
 		cpu = cpumask_next_zero(-1, policy->cpus);
 		info = sprd_cpufreq_info_lookup(cpu);
+		if (IS_ERR_OR_NULL(info->pcluster))
+			return 0;
 		mutex_lock(&info->pcluster->opp_mutex);
 		driver->target_set(pdev, info->clu_id, 0);
 		mutex_unlock(&info->pcluster->opp_mutex);

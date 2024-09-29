@@ -10,8 +10,11 @@
 #include <linux/of_irq.h>
 #include <linux/of_graph.h>
 #include <video/mipi_display.h>
+#ifdef LCD_CONFIG_POWER_ESD_ON
 #include <linux/notifier.h>
-
+#else
+#include <linux/sprd_drm_notifier.h>
+#endif
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_of.h>
@@ -24,7 +27,7 @@
 #include "dsi/sprd_dsi_api.h"
 #include "dphy/sprd_dphy_api.h"
 #include "sysfs/sysfs_display.h"
-#include "sprd_drm_notifier.h"
+
 
 #define encoder_to_dsi(encoder) \
 	container_of(encoder, struct sprd_dsi, encoder)
@@ -102,9 +105,12 @@ static void sprd_dsi_encoder_enable(struct drm_encoder *encoder)
 
 	if (dsi->panel) {
 		drm_panel_prepare(dsi->panel);
+#ifdef LCD_CONFIG_POWER_ESD_ON
+#else
+		disp_notifier_call_chain(DISPC_POWER_ON, NULL);
+#endif
 		mdelay(10);
 		drm_panel_enable(dsi->panel);
-		disp_notifier_call_chain(DISPC_POWER_ON, NULL);
 	}
 
 	sprd_dsi_set_work_mode(dsi, dsi->ctx.work_mode);
@@ -152,7 +158,10 @@ static void sprd_dsi_encoder_disable(struct drm_encoder *encoder)
 	sprd_dsi_lp_cmd_enable(dsi, true);
 
 	if (dsi->panel) {
+#ifndef LCD_CONFIG_POWER_ESD_ON
 		disp_notifier_call_chain(DISPC_POWER_OFF, NULL);
+#endif
+		mdelay(2);
 		drm_panel_disable(dsi->panel);
 		sprd_dphy_ulps_enter(dsi->phy);
 		drm_panel_unprepare(dsi->panel);
@@ -788,8 +797,9 @@ static int sprd_dsi_probe(struct platform_device *pdev)
 		DRM_ERROR("failed to allocate dsi data.\n");
 		return -ENOMEM;
 	}
+#ifdef LCD_CONFIG_POWER_ESD_ON
 	dsi->connector.dpms = DRM_MODE_DPMS_OFF;
-
+#endif
 	pdata = of_device_get_match_data(&pdev->dev);
 	if (pdata) {
 		dsi->core = pdata->core;

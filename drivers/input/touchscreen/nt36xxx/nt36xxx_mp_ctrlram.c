@@ -173,10 +173,10 @@ static int32_t *RawData_FDM_FWRawdata = NULL;
 #endif
 
 static struct proc_dir_entry *NVT_proc_selftest_entry = NULL;
-static struct proc_dir_entry *oplus_auto_test_entry = NULL;
+static struct proc_dir_entry *oppo_auto_test_entry = NULL;
 #if LPWG_TEST
 static struct proc_dir_entry *NVT_proc_lpwg_selftest_entry = NULL;
-static struct proc_dir_entry *oplus_black_screen_entry = NULL;
+static struct proc_dir_entry *oppo_black_screen_entry = NULL;
 #endif
 static int8_t nvt_mp_test_result_printed = 0;
 static uint8_t fw_ver = 0;
@@ -2608,7 +2608,7 @@ static int32_t c_show_selftest(struct seq_file *m, void *v)
 	}
 #endif
 
-	/* oplus format */
+	/* oppo format */
 	err_cnt = TestResult_Short + TestResult_Open + TestResult_FW_Rawdata \
 		+ TestResult_FW_CC + TestResult_Noise;
 #if DIGI_NOISE_TEST
@@ -3112,7 +3112,7 @@ static int32_t c_show_lpwg_selftest(struct seq_file *m, void *v)
 	}
 #endif
 
-	/* oplus format */
+	/* oppo format */
 	err_cnt = TestResult_FW_Rawdata + TestResult_Noise;
 #if (FDM_TEST && LPWG_TEST)
 	err_cnt += TestResult_FDM_FWRawdata + TestResult_FDM_Noise;
@@ -3833,20 +3833,20 @@ int32_t nvt_mp_proc_init(void)
 			NVT_LOG("create /proc/nvt_selftest Succeeded!\n");
 		}
 
-		/* oplus customized proc node */
-		if (ts->oplus_touchpanel_proc != NULL) {
+		/* oppo customized proc node */
+		if (ts->oppo_touchpanel_proc != NULL) {
 			//proc/touchpanel/baseline_test
-			oplus_auto_test_entry = proc_create("baseline_test", 0666,
-					ts->oplus_touchpanel_proc, &nvt_selftest_fops);
-			if (oplus_auto_test_entry == NULL) {
+			oppo_auto_test_entry = proc_create("baseline_test", 0666,
+					ts->oppo_touchpanel_proc, &nvt_selftest_fops);
+			if (oppo_auto_test_entry == NULL) {
 				NVT_ERR("create proc/touchpanel/baseline_test Failed!\n");
 				return -EPERM;
 			}
 #if LPWG_TEST
 			//proc/touchpanel/black_screen_test
-			oplus_black_screen_entry = proc_create("black_screen_test", 0666,
-					ts->oplus_touchpanel_proc, &nvt_lpwg_selftest_fops);
-			if (oplus_black_screen_entry == NULL) {
+			oppo_black_screen_entry = proc_create("black_screen_test", 0666,
+					ts->oppo_touchpanel_proc, &nvt_lpwg_selftest_fops);
+			if (oppo_black_screen_entry == NULL) {
 				NVT_ERR("create proc/touchpanel/black_screen_test Failed!\n");
 				return -EPERM;
 			}

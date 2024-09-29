@@ -37,6 +37,7 @@
 #include <linux/iio/consumer.h>
 #include <linux/hardware_info.h>
 #include <linux/device.h>
+#include <linux/of_gpio.h>
 #include <linux/of_platform.h>
 #include <linux/printk.h>
 #include <linux/pinctrl/consumer.h>
@@ -57,7 +58,11 @@
 
 #define CM_CAP_ONE_PERCENT			10
 #define CM_HCAP_DECREASE_STEP			8
+#ifdef VENDOR_KERNEL
+#define CM_HCAP_THRESHOLD			985
+#else
 #define CM_HCAP_THRESHOLD			1001
+#endif //defined VENDOR_KERNEL
 #define CM_CAP_FULL_PERCENT			1000
 #define CM_MAGIC_NUM				0x5A5AA5A5
 #define CM_CAPACITY_LEVEL_CRITICAL		0
@@ -76,6 +81,9 @@
 #define CM_FAST_CHARGE_VOLTAGE_5V		5000000
 #define CM_FAST_CHARGE_START_VOLTAGE_LTHRESHOLD	3520000
 #define CM_FAST_CHARGE_START_VOLTAGE_HTHRESHOLD	4200000
+#ifdef VENDOR_KERNEL
+#define CM_FAST_CHARGE_ENABLE_COUNT		3
+#endif //defined VENDOR_KERNEL
 #define CM_FAST_CHARGE_DISABLE_COUNT		2
 
 #define CM_CP_VSTEP				20000
@@ -108,11 +116,13 @@
 #define BATTERY_VOLTAGE_MAX     4550000
 #define BATTERY_RECHARGE_VOLTAGE     4370000
 
+#define CM_ATO_CHARGE_STATUS                (1 << 4)
 #define JEITA_HIGHEST_TEMPE         530
 #define JEITA_LOWEST_TEMPE         -100
 #define NTC_DISCONNECT_TEMP		-200
 #define CM_BAT_VOL_SHAKE_COUNT                  3
 #define CM_RESTORE_BATT_VOL_SHAKE           4000000
+#ifndef VENDOR_KERNEL
 #define CM_FAST_CHARGE_ENABLE_COUNT			4
 #define CM_FAST_CHARGE_ENABLE_CAP			900
 #define CM_CC_CV_VOLTAGE					4435000
@@ -120,11 +130,30 @@
 #define CM_FAST_CHARGE_ENABLE_BATTERY_VOLTAGE_MAX   4550000
 #define CM_FAST_CHARGE_ENABLE_TEMP_MAX      420
 #define CM_FAST_CHARGE_ENABLE_TEMP_MIN      0
+#endif //not defined VENDOR_KERNEL
 #define CM_TRY_DIS_FCHG_WORK_MS			100
+#ifdef VENDOR_KERNEL
+#define CM_HIGH_TEMP_STATUS      9//��ֵ��Ҫ��Ӧ46��jeita״̬ dcp-jeita-temp-table
+#else
 #define CM_HIGH_TEMP_STATUS      6
+#endif //defined VENDOR_KERNEL
 #define CM_HIGH_TEMP_STATUS_CV      4070000
 #define HW_BAT_FULL_VOLT 50000
-
+enum {
+	BAT_OVP_SET = 0,
+	FRAMEWORK_SET,
+	MMI_SET,
+	AGING_SET,
+	ATO_SET,
+	OVER_JEITA_TEMP_LIMIT,
+	VBUS_OVP,
+	BAT_POOR_CONTACT,
+	BELOW_JEITA_TEMP_LIMIT,
+	SAFETY_TIMER,
+	HIZ_SET,
+	HIGH_LOW_TEMP_SET,
+	OTHERS_MAX,
+};
 static const char * const cm_cp_state_names[] = {
 	[CM_CP_STATE_UNKNOWN] = "Charge pump state: UNKNOWN",
 	[CM_CP_STATE_RECOVERY] = "Charge pump state: RECOVERY",
@@ -153,7 +182,7 @@ static char *charger_manager_supplied_to[] = {
  * rtc alarm. It should be 2 or larger
  */
 #define CM_RTC_SMALL		(2)
-
+int g_temp_debug = 0;
 #define CM_EVENT_TYPE_NUM	6
 static LIST_HEAD(cm_list);
 static DEFINE_MUTEX(cm_list_mtx);
@@ -174,10 +203,12 @@ static unsigned long next_polling; /* Next appointed polling time */
 static struct workqueue_struct *cm_wq; /* init at driver add */
 static struct delayed_work cm_monitor_work; /* init at driver add */
 
+/*odm.hq.bsp.luowenjiang@huaqin.com 2021.11.12 modify for usb temp protection start*/
 #ifdef CONFIG_HQ_USB_TEMP_CHECK
 static struct charger_manager *my_cm;
 static void cm_wake_up_usbtemp_thread(void);
 #endif
+/*odm.hq.bsp.luowenjiang@huaqin.com 2021.11.12 modify for usb temp protection end*/
 
 static bool allow_charger_enable;
 static bool is_charger_mode;
@@ -186,13 +217,22 @@ static bool cm_manager_adjust_current(struct charger_manager *cm, int jeita_stat
 static void cm_update_charger_type_status(struct charger_manager *cm);
 static int cm_manager_get_jeita_status(struct charger_manager *cm, int cur_temp);
 static bool cm_charger_is_support_fchg(struct charger_manager *cm);
+static int cm_manager_step_charge_monitor(struct charger_manager *cm);
 
+#ifdef CONFIG_HQ_USB_TEMP_CHECK
 extern struct sc27xx_typec *psc ;
 extern int sc27xx_typec_set_sink(struct sc27xx_typec *sc);
 extern int sc27xx_typec_set_enable(struct sc27xx_typec *sc);
+#endif //defined CONFIG_HQ_USB_TEMP_CHECK
 int cm_ntc_get_current_temp(struct charger_manager *cm);
+#ifndef VENDOR_KERNEL
+#ifdef CONFIG_HQ_USB_TEMP_CHECK
+/*odm.hq.bsp.luowenjiang@huaqin.com 2022.01.08 modify for cc short to vbus start*/
 extern bool sc27xx_typec_cc1_cc2_voltage_detect(struct sc27xx_typec *sc);
+/*odm.hq.bsp.luowenjiang@huaqin.com 2022.01.08 modify for cc short to vbus start*/
+#endif //defined CONFIG_HQ_USB_TEMP_CHECK
 static int otg_switch_state;
+#endif //not defined VENDOR_KERNEL
 unsigned int notify_code = 0;
 static bool bat_ovp_flag = false;
 static bool g_bat_vol_shake = false;
@@ -212,9 +252,16 @@ int g_factory_mode = 0;
 static int charger_full_count = 0,hw_full_counts = 0;
 static bool is_full_warm = false;
 static int  last_temp = -100;
+
+/*odm.hq.bsp.luowenjiang@huaqin.com 2021.12.30 modify for error full charge status start*/
 static bool error_full_status = false;
+/*odm.hq.bsp.luowenjiang@huaqin.com 2021.12.30 modify for error full charge status end*/
 #define ATL_BATTERY_VOLTAGE_MIN_5000  630
+#ifdef CONFIG_HQ_USB_TEMP_CHECK
+/*odm.hq.bsp.luowenjiang@huaqin.com 2022.01.08 modify for cc short to vbus start*/
 static bool g_cc_vbus_status = false;
+/*odm.hq.bsp.luowenjiang@huaqin.com 2022.01.08 modify for cc short to vbus end*/
+#endif //defined CONFIG_HQ_USB_TEMP_CHECK
 #define ATL_BATTERY_VOLTAGE_MAX_5000  810
 #define GUANYU_BATTERY_VOLTAGE_MAX_5000    510
 #define GUANYU_BATTERY_VOLTAGE_MIN_5000    310
@@ -223,8 +270,10 @@ int sc27xx_fgu_bat_id = 0;
 EXPORT_SYMBOL_GPL(sc27xx_fgu_bat_id);
 static char cm_prj_name[10] = "unknow";
 bool bbat_mode = false;
-EXPORT_SYMBOL_GPL(bbat_mode);
-extern int g_cc_polarity; 
+
+#ifdef CONFIG_HQ_USB_TEMP_CHECK
+extern int g_cc_polarity;
+#endif
 static int cm_get_battery_temperature_by_psy(struct charger_manager *cm, int *temp);
 static int get_prj_name_setup(void)
 {
@@ -274,22 +323,36 @@ int cm_get_bat_id(struct charger_manager *cm)
 
 	batid_volt = id_vol;
 	if ((id_vol >= ATL_BATTERY_VOLTAGE_MIN_5000)&&(id_vol <= ATL_BATTERY_VOLTAGE_MAX_5000)) {
+#ifndef VENDOR_KERNEL // VENDOR_KERNEL：for beidou_T
 		get_hardware_info_data(HWID_BATERY_ID,"ATL 4.45V");
+#endif
 		sc27xx_fgu_bat_id = 1;
 	} else if((id_vol >= GUANYU_BATTERY_VOLTAGE_MIN_5000)&&(id_vol <= GUANYU_BATTERY_VOLTAGE_MAX_5000)){
+#ifndef VENDOR_KERNEL // VENDOR_KERNEL：for beidou_T
 		get_hardware_info_data(HWID_BATERY_ID,"GUANYU 4.45V");
+#endif
 		sc27xx_fgu_bat_id = 2;
 	}else{
 		sc27xx_fgu_bat_id = 3;
+#ifndef VENDOR_KERNEL // VENDOR_KERNEL：for beidou_T
 		get_hardware_info_data(HWID_BATERY_ID,"OTHERS");
-	}
+#endif
+        }
 	pr_err("**********sc27xx_fgu_bat_id=%d", sc27xx_fgu_bat_id);
 
 	return sc27xx_fgu_bat_id;
 }
 
 EXPORT_SYMBOL_GPL(cm_get_bat_id);
-
+static int cm_battery_status = 0;
+static void set_batt_charge_status(int user, int status, int enable)
+{
+	if (enable) {
+		cm_battery_status &= ~status;
+	} else {
+		cm_battery_status |= status;
+	}
+}
 static int set_hiz_mode(struct charger_manager *cm,bool hiz_en)
 {
 	struct charger_desc *desc = cm->desc;
@@ -309,7 +372,7 @@ static int set_hiz_mode(struct charger_manager *cm,bool hiz_en)
 			val.intval = CM_HIZ_ENABLE_CMD;
 		else
 			val.intval = CM_HIZ_DISABLE_CMD;
-		
+
 		ret = power_supply_set_property(psy, POWER_SUPPLY_PROP_STATUS, &val);
 		power_supply_put(psy);
 		if (ret) {
@@ -319,31 +382,10 @@ static int set_hiz_mode(struct charger_manager *cm,bool hiz_en)
 	}
 	return 0;
 }
-struct pinctrl *p = NULL;
-static int sprd_pin_set_gpio(char *pinctrlName)
-{
-        struct pinctrl_state *pinctrl_state;
-        int ret;
 
-	if(p == NULL || pinctrlName == NULL)
-		return -EINVAL;
-        pinctrl_state = pinctrl_lookup_state(p,pinctrlName);
-	 if (IS_ERR(pinctrl_state))
-                return PTR_ERR(pinctrl_state);
-        printk("---retrieves a state handle from a pinctrl handle---\n");
-        ret = pinctrl_select_state(p, pinctrl_state);
-        printk("---select a pinctrl state to HW--- \n");
-        return ret;
-}
-static int input_gpio(int num)
-{
-        int ret;
-        int gpio_num = 64 + num;
+static int sprd_pin_set_gpio(char *pinctrlName);
+static int pull_gpio(int num,int value);
 
-        ret = gpio_request(gpio_num, "change_to_gpio");
-        ret = gpio_direction_input(gpio_num);
-        return 0;
-}
 static void cm_cap_remap_init_boundary(struct charger_desc *desc, int index, struct device *dev)
 {
 
@@ -1528,7 +1570,8 @@ static bool cm_primary_charger_enable(struct charger_manager *cm, bool enable)
 
 	return true;
 }
-
+//#define FIX_FULL_BAT_SOC_UA 10000
+//#define FIX_FULL_BAT_SOC_MIN 990
 /**
  * is_full_charged - Returns true if the battery is fully charged.
  * @cm: the Charger Manager representing the battery.
@@ -1584,7 +1627,7 @@ static bool is_full_charged(struct charger_manager *cm)
 				goto out;
 
 			if (uV > (cm->desc->fullbatt_uV - cm->desc->fullbatt_vchkdrop_uV)){
-			dev_info(cm->dev, "VBATT %duV after full-batt:%d\n", uV,desc->fullbatt_vchkdrop_uV);
+			//dev_info(cm->dev, "VBATT %duV after full-batt:%d\n", uV,desc->fullbatt_vchkdrop_uV);
 				if(cm->battery_status == POWER_SUPPLY_STATUS_FULL){
 					is_full = true;
 				}
@@ -1604,7 +1647,16 @@ static bool is_full_charged(struct charger_manager *cm)
 		} else {
 			desc->first_trigger_cnt = 0;
 		}
-
+#if 0
+		dev_err(cm->dev, "%s vbat_now_uV = %d, ibat_now_uA %d, trigger_cnt %d\n", __func__, uV, uA, desc->trigger_cnt);
+		if (uV >= desc->fullbatt_uV && uA <= (desc->fullbatt_uA + FIX_FULL_BAT_SOC_UA) && uA >= 0 && cm->desc->cap > FIX_FULL_BAT_SOC_MIN) {
+			dev_err(cm->dev, "normal full,fix soc to FULL\n");
+			adjust_fuel_cap(cm, CM_FORCE_SET_FUEL_CAP_FULL);
+		}else if(cur_jeita_status == CM_HIGH_TEMP_STATUS && uV >= CM_HIGH_TEMP_STATUS_CV && uA <= (desc->fullbatt_uA + FIX_FULL_BAT_SOC_UA) && uA >= 0){
+			dev_err(cm->dev, "warm full,fix soc to FULL\n");
+			adjust_fuel_cap(cm, CM_FORCE_SET_FUEL_CAP_FULL);
+		}
+#endif
 		if (uV >= desc->fullbatt_uV && uA <= desc->fullbatt_uA && uA >= 0) {
 			if (++desc->trigger_cnt > 1) {
 				dev_info(cm->dev,"%s up full,uv:%d, ua:%d, cap:%d, cnt:%d\n",__func__,uV,uA,cm->desc->cap,desc->trigger_cnt);
@@ -1644,7 +1696,7 @@ static bool is_full_charged(struct charger_manager *cm)
 			}
 			goto out;
 		}else {
-			dev_info(cm->dev,"charge full reset");
+			//dev_info(cm->dev,"charge full reset");
 			is_full_warm = false;
 			hw_full_counts = 0;
 			charger_full_count = 0;
@@ -1666,7 +1718,7 @@ static bool is_full_charged(struct charger_manager *cm)
 	}
 
 out:
-	printk("%s up full,is_full:%d,force_full:%d,is_full_warm:%d\n",__func__,is_full,cm->desc->force_set_full,is_full_warm);
+	//dev_err(cm->dev, "%s is_full = %d, force_set_full %d, is_full_warm %d\n", __func__, is_full, cm->desc->force_set_full, is_full_warm);
 	power_supply_put(fuel_gauge);
 	return is_full;
 }
@@ -1856,8 +1908,7 @@ static void cm_update_charge_info(struct charger_manager *cm, int cmd)
 	}
 
 	mutex_unlock(&cm->desc->charge_info_mtx);
-	
-	//thm_info->thm_pwr = 18000;
+
 	if (thm_info->thm_pwr && thm_info->adapter_default_charge_vol)
 		thm_info->thm_adjust_cur = (int)(thm_info->thm_pwr /
 			thm_info->adapter_default_charge_vol) * 1000;
@@ -1906,6 +1957,7 @@ static void cm_update_charge_info(struct charger_manager *cm, int cmd)
 		cm_update_current_jeita_status(cm);
 }
 
+#ifndef VENDOR_KERNEL
 static void cm_vote_property_unparadll(struct charger_manager *cm, int target_cur,
 				       const char **name, enum power_supply_property psp)
 {
@@ -1941,6 +1993,7 @@ static void cm_vote_property_unparadll(struct charger_manager *cm, int target_cu
 		}
 	}
 }
+#endif //not defined VENDOR_KERNEL
 
 static void cm_vote_property(struct charger_manager *cm, int target_val,
 			     const char **name, enum power_supply_property psp)
@@ -1970,7 +2023,7 @@ static void cm_vote_property(struct charger_manager *cm, int target_val,
 	}
 }
 
-/*
+#ifdef VENDOR_KERNEL // VENDOR_KERNEL：for beidou_T
 static int cm_check_parallel_charger(struct charger_manager *cm, int cur)
 {
 	if (cm->desc->enable_fast_charge && cm->desc->psy_charger_stat[1])
@@ -1978,7 +2031,7 @@ static int cm_check_parallel_charger(struct charger_manager *cm, int cur)
 
 	return cur;
 }
-*/
+#endif //defined VENDOR_KERNEL
 
 static void cm_sprd_vote_callback(struct sprd_vote *vote_gov, int vote_type,
 				  int value, void *data)
@@ -1990,20 +2043,32 @@ static void cm_sprd_vote_callback(struct sprd_vote *vote_gov, int vote_type,
 	switch (vote_type) {
 	case SPRD_VOTE_TYPE_IBAT:
 		psy_charger_name = cm->desc->psy_charger_stat;
+#ifndef VENDOR_KERNEL
 		if (cm->desc->enable_fast_charge) {
 			cm_vote_property_unparadll(cm, value, psy_charger_name,
 						   POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT);
-		} else {
+		} else 
+#endif //not defined VENDOR_KERNEL
+		{
+#ifdef VENDOR_KERNEL // VENDOR_KERNEL：for beidou_T
+			value = cm_check_parallel_charger(cm, value);
+#endif //defined VENDOR_KERNEL
 			cm_vote_property(cm, value, psy_charger_name,
 					 POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT);
 		}
 		break;
 	case SPRD_VOTE_TYPE_IBUS:
 		psy_charger_name = cm->desc->psy_charger_stat;
+#ifndef VENDOR_KERNEL
 		if (cm->desc->enable_fast_charge) {
 			cm_vote_property_unparadll(cm, value, psy_charger_name,
 						   POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT);
-		} else{
+		} else
+#endif //not defined VENDOR_KERNEL
+		{
+#ifdef VENDOR_KERNEL // VENDOR_KERNEL：for beidou_T
+			value = cm_check_parallel_charger(cm, value);
+#endif //defined VENDOR_KERNEL
 			cm_vote_property(cm, value, psy_charger_name,
 					 POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT);
 		}
@@ -2163,11 +2228,6 @@ static int cm_adjust_fast_charge_voltage(struct charger_manager *cm, int vol)
 		return -ENODEV;
 	}
 
-	/*if (vol == CM_FAST_CHARGE_VOLTAGE_9V) {
-		desc->charge_voltage_max = desc->fast_charge_voltage_max;
-		desc->charge_voltage_drop = desc->fast_charge_voltage_drop;
-	} */
-
 	val.intval = vol;
 	ret = power_supply_set_property(psy, POWER_SUPPLY_PROP_VOLTAGE_MAX, &val);
 	power_supply_put(psy);
@@ -2184,7 +2244,9 @@ static bool cm_is_reach_fchg_threshold(struct charger_manager *cm)
 {
 	int batt_ocv, batt_uA, fchg_ocv_threshold, thm_cur;
 	int cur_jeita_status, target_cur;
+#ifndef VENDOR_KERNEL
 	int batt_uV = 0, cur_temp = 0, fast_charge_enable_count = 0;
+#endif //not defined VENDOR_KERNEL
 
 	if (get_batt_ocv(cm, &batt_ocv)) {
 		dev_err(cm->dev, "get_batt_ocv error.\n");
@@ -2196,6 +2258,7 @@ static bool cm_is_reach_fchg_threshold(struct charger_manager *cm)
 		return false;
 	}
 
+#ifndef VENDOR_KERNEL
 	if (get_vbat_now_uV(cm, &batt_uV)) {
 		dev_err(cm->dev, "get_vbat_now_uV error\n");
 		return false;
@@ -2205,6 +2268,7 @@ static bool cm_is_reach_fchg_threshold(struct charger_manager *cm)
 		dev_err(cm->dev, "get_cur_temp error.\n");
 		return false;
 	}
+#endif //not defined VENDOR_KERNEL
 
 	target_cur = batt_uA;
 	if (cm->desc->jeita_tab_size) {
@@ -2225,7 +2289,7 @@ static bool cm_is_reach_fchg_threshold(struct charger_manager *cm)
 	if (cm->desc->thm_info.thm_adjust_cur > 0)
 		thm_cur = cm->desc->thm_info.thm_adjust_cur;
 
-#if 0
+#ifdef VENDOR_KERNEL
 	if (target_cur >= CM_FAST_CHARGE_ENABLE_CURRENT &&
 	    thm_cur >= CM_FAST_CHARGE_ENABLE_THERMAL_CURRENT &&
 	    batt_ocv >= CM_FAST_CHARGE_START_VOLTAGE_LTHRESHOLD &&
@@ -2234,10 +2298,11 @@ static bool cm_is_reach_fchg_threshold(struct charger_manager *cm)
 	else if (batt_ocv >= CM_FAST_CHARGE_START_VOLTAGE_LTHRESHOLD &&
 		 batt_uA >= CM_FAST_CHARGE_ENABLE_CURRENT)
 		return true;
-#endif
 
+	return false;
+#else //not defined VENDOR_KERNEL
 	fast_charge_enable_count = 0;
-	
+
 	/* Ibat > 1A */
 	if (batt_uA  > CM_FAST_CHARGE_ENABLE_CURRENT)
 		fast_charge_enable_count++;
@@ -2256,13 +2321,22 @@ static bool cm_is_reach_fchg_threshold(struct charger_manager *cm)
 	if (cm->desc->cap < CM_FAST_CHARGE_ENABLE_CAP && batt_uV <= CM_CC_CV_VOLTAGE)
 		fast_charge_enable_count++;
 
+#ifdef CONFIG_HQ_USB_TEMP_CHECK
 	if (fast_charge_enable_count < CM_FAST_CHARGE_ENABLE_COUNT || (g_factory_mode == 0 && g_cool_down == 1)
 				|| g_cc_vbus_status)
 		return false;
 
 	dev_info(cm->dev, "batt_uA = %d, batt_uV = %d, cur_temp = %d, cap = %d, cool_down = %d g_cc_vbus_status = %d\n",
 			batt_uA, batt_uV, cur_temp, cm->desc->cap, g_cool_down,g_cc_vbus_status);
+#else
+        if (fast_charge_enable_count < CM_FAST_CHARGE_ENABLE_COUNT || (g_factory_mode == 0 && g_cool_down == 1))
+                return false;
+
+        dev_info(cm->dev, "batt_uA = %d, batt_uV = %d, cur_temp = %d, cap = %d, cool_down = %d\n",
+                        batt_uA, batt_uV, cur_temp, cm->desc->cap, g_cool_down);
+#endif
 	return true;
+#endif //defined VENDOR_KERNEL
 }
 
 static int cm_fixed_fchg_enable(struct charger_manager *cm)
@@ -2309,6 +2383,7 @@ static int cm_fixed_fchg_enable(struct charger_manager *cm)
 				 SPRD_VOTE_TYPE_IBUS,
 				 SPRD_VOTE_TYPE_IBUS_ID_FCHG_FIXED_TRANSITION,
 				 SPRD_VOTE_CMD_MIN, CM_FAST_CHARGE_TRANSITION_CURRENT_1P5A, cm);
+
 	pr_err("cm_fixed_fchg_enable fastcharger true\n");
 	cm_update_charge_info(cm, (CM_CHARGE_INFO_CHARGE_LIMIT |
 				   CM_CHARGE_INFO_INPUT_LIMIT |
@@ -2339,7 +2414,6 @@ static int cm_fixed_fchg_enable(struct charger_manager *cm)
 
 	if (adapter_max_vbus >= CM_FAST_CHARGE_VOLTAGE_9V)
 		adapter_max_vbus = CM_FAST_CHARGE_VOLTAGE_9V;
-	//adapter_max_vbus = CM_FAST_CHARGE_VOLTAGE_9V;
 
 	ret = cm_adjust_fast_charge_voltage(cm, adapter_max_vbus);
 	if (ret) {
@@ -2462,7 +2536,11 @@ out:
 
 static bool cm_is_disable_fixed_fchg_check(struct charger_manager *cm)
 {
+#ifdef VENDOR_KERNEL
+	int batt_uV, batt_uA, ret;
+#else //not defined VENDOR_KERNEL
 	int batt_uV = 0, batt_uA = 0, ret = 0, cur_temp = 0, vbus_uV = 0;
+#endif //defined VENDOR_KERNEL
 
 	if (!cm->desc->enable_fast_charge)
 		return true;
@@ -2479,6 +2557,16 @@ static bool cm_is_disable_fixed_fchg_check(struct charger_manager *cm)
 		return false;
 	}
 
+#ifdef VENDOR_KERNEL      /* sprd 原生disable方案 */
+	if (batt_uV < CM_FAST_CHARGE_DISABLE_BATTERY_VOLTAGE ||
+	    batt_uA < CM_FAST_CHARGE_DISABLE_CURRENT)
+		cm->desc->fast_charge_disable_count++;
+	else
+		cm->desc->fast_charge_disable_count = 0;
+
+	if (cm->desc->fast_charge_disable_count < CM_FAST_CHARGE_DISABLE_COUNT)
+		return false;
+#else //not defined VENDOR_KERNEL
 	ret = get_charger_voltage(cm, &vbus_uV);
 	if (ret) {
 		dev_err(cm->dev, "failed to get vbus uV\n");
@@ -2490,16 +2578,6 @@ static bool cm_is_disable_fixed_fchg_check(struct charger_manager *cm)
 		dev_err(cm->dev, "failed to get battery temperature\n");
 		return false;
 	}
-#if 0      /* sprd Ô­Éúdisable·½°¸ */
-	if (batt_uV < CM_FAST_CHARGE_DISABLE_BATTERY_VOLTAGE ||
-	    batt_uA < CM_FAST_CHARGE_DISABLE_CURRENT)
-		cm->desc->fast_charge_disable_count++;
-	else
-		cm->desc->fast_charge_disable_count = 0;
-		
-	if (cm->desc->fast_charge_disable_count < CM_FAST_CHARGE_DISABLE_COUNT)
-		return false;
-#endif
 
 	cm->desc->fast_charge_disable_count = 0;
 
@@ -2523,12 +2601,23 @@ static bool cm_is_disable_fixed_fchg_check(struct charger_manager *cm)
 
 
 
+#ifdef CONFIG_HQ_USB_TEMP_CHECK
 	if (cm->desc->fast_charge_disable_count == CM_FAST_CHARGE_ENABLE_COUNT &&
 			(g_cool_down == 0 || g_factory_mode == 1 )&& vbus_uV >= 7000000 && !g_cc_vbus_status)
 		return 0;
 
 	dev_info(cm->dev, "batt_uA = %d, batt_uV = %d, vbus_uV = %d, cur_temp = %d, cap = %d, cool_down = %d g_cc_vbus_status = %d\n",
 			batt_uA, batt_uV, vbus_uV, cur_temp, cm->desc->cap, g_cool_down,g_cc_vbus_status);
+#else
+        if (cm->desc->fast_charge_disable_count == CM_FAST_CHARGE_ENABLE_COUNT &&
+                        (g_cool_down == 0 || g_factory_mode == 1 )&& vbus_uV >= 7000000)
+                return 0;
+
+        dev_info(cm->dev, "batt_uA = %d, batt_uV = %d, vbus_uV = %d, cur_temp = %d, cap = %d, cool_down = %d\n",
+                        batt_uA, batt_uV, vbus_uV, cur_temp, cm->desc->cap, g_cool_down);
+#endif
+#endif //not defined VENDOR_KERNEL
+
 	cm->desc->fast_charge_disable_count = 0;
 
 	return true;
@@ -3863,6 +3952,9 @@ static void try_wireless_charger_enable(struct charger_manager *cm, bool enable)
  * power source exists) except when CM needs to disable chargers forcibly
  * because of emergency causes; when the battery is overheated or too cold.
  */
+static int noplug_temperature = 0;
+static int noplug_batt_volt_max = 0;
+static int noplug_batt_volt_min = 0;
 static int try_charger_enable(struct charger_manager *cm, bool enable)
 {
 	int err = 0;
@@ -3871,7 +3963,7 @@ static int try_charger_enable(struct charger_manager *cm, bool enable)
 	/* Ignore if it's redundant command */
 	if (enable == cm->charger_enabled)
 		return 0;
-
+	dev_info(cm->dev, "try_charger_enable,enable:%d charger_enabled:%d",enable,cm->charger_enabled);
 	if (enable) {
 		if (cm->emergency_stop)
 			return -EAGAIN;
@@ -3890,6 +3982,9 @@ static int try_charger_enable(struct charger_manager *cm, bool enable)
 		 */
 		cm->charging_start_time = ktime_to_ms(ktime_get());
 		cm->charging_end_time = 0;
+		noplug_temperature = cm->desc->temperature;
+		get_vbat_now_uV(cm, &noplug_batt_volt_max);
+		get_vbat_now_uV(cm, &noplug_batt_volt_min);
 
 		err = try_charger_enable_by_psy(cm, enable);
 		cm_ir_compensation_enable(cm, enable);
@@ -3941,7 +4036,7 @@ static void cm_uevent_notify(struct charger_manager *cm)
 	int ret;
 	char *env[2] = { "CHGSTAT=1", NULL };
 
-	dev_info(cm->dev, "%s :0x%x\n", __func__, notify_code);
+	//dev_info(cm->dev, "%s :0x%x\n", __func__, notify_code);
 	ret = kobject_uevent_env(&cm->dev->kobj, KOBJ_CHANGE, env);
 	if (ret) {
 		dev_err(cm->dev, "%s :kobject_uevent_env fail!!\n", __func__);
@@ -4004,15 +4099,21 @@ static void fullbatt_vchk(struct work_struct *work)
 		}
 	}
 
-	if(prj_name == 1){
+#ifdef VENDOR_KERNEL
+//	if(prj_name == 1){//��Ҫȷ���Ƿ���prj 1
+		desc->fullbatt_vchkdrop_uV -= 5000;
+//	}
+#else //not defined VENDOR_KERNEL
+	if(prj_name == 1){//��Ҫȷ���Ƿ���prj 1
 		desc->fullbatt_vchkdrop_uV -= 5000;
 	}
+#endif //defined VENDOR_KERNEL
 
 	diff = desc->fullbatt_uV - batt_ocv;
 	if (diff < 0)
 		return;
 
-	dev_info(cm->dev, "VBATT dropped %duV after full-batt:%d\n", diff,desc->fullbatt_vchkdrop_uV);
+	//dev_info(cm->dev, "VBATT dropped %duV after full-batt:%d\n", diff,desc->fullbatt_vchkdrop_uV);
 }
 
 /**
@@ -4169,7 +4270,7 @@ static void cm_check_charge_voltage(struct charger_manager *cm)
 		dev_warn(cm->dev, "Fail to get charge vol, ret = %d.\n", ret);
 		return;
 	}
-	dev_info(cm->dev, "vbus= %d ovp cnt = %d\n",charge_vol, i_ovp);
+	//dev_info(cm->dev, "vbus= %d ovp cnt = %d\n",charge_vol, i_ovp);
 	if (cm->charger_enabled && charge_vol > desc->charge_voltage_max) {
 		dev_info(cm->dev, "Charging voltage %d is larger than %d\n",
 			 charge_vol, desc->charge_voltage_max);
@@ -4202,7 +4303,7 @@ static void cm_check_charge_voltage(struct charger_manager *cm)
 		power_supply_changed(cm->charger_psy);
 	} else {
 		mutex_unlock(&cm->desc->charge_info_mtx);
-		dev_info(cm->dev, "*******mutex_unlock cnt = %d\n", i_ovp);
+		//dev_info(cm->dev, "*******mutex_unlock cnt = %d\n", i_ovp);
 	}
 }
 
@@ -4251,7 +4352,7 @@ static void cm_bat_id_check(struct charger_manager *cm)
 {
 	int bat_id;
 
-	bat_id = cm_get_bat_id(cm);
+	bat_id = sc27xx_fgu_bat_id;
 	if (!is_batt_present(cm) || (bat_id == 3)) {
 		notify_code |= CHG_BAT_ID_STATUS;
 		try_charger_enable(cm, false);
@@ -4287,10 +4388,11 @@ static void cm_bat_ovp_check(struct charger_manager *cm)
 		notify_code &= ~CHG_BAT_OV_STATUS;
 		if(bbat_mode == false)
 		power_supply_changed(cm->charger_psy);
-		dev_err(cm->dev, "%s: bat volt:%d Charge!\n", __func__, batt_uV);
+		//dev_err(cm->dev, "%s: bat volt:%d Charge!\n", __func__, batt_uV);
 	}
 }
 
+#ifndef VENDOR_KERNEL
 static int cm_feed_watchdog(struct charger_manager *cm)
 {
 	union power_supply_propval val;
@@ -4318,6 +4420,7 @@ static int cm_feed_watchdog(struct charger_manager *cm)
 
 	return 0;
 }
+#endif //not defined VENDOR_KERNEL
 static bool cm_manager_adjust_current(struct charger_manager *cm, int jeita_status)
 {
 	struct charger_desc *desc = cm->desc;
@@ -4351,9 +4454,13 @@ static bool cm_manager_adjust_current(struct charger_manager *cm, int jeita_stat
 
 	cm->desc->ir_comp.us = term_volt;
 	cm->desc->ir_comp.us_lower_limit = term_volt;
+
+	/*odm.hq.bsp.luowenjiang@huaqin.com 2021.12.30 modify for error full charge status start*/
 	ret = get_vbat_now_uV(cm, &vbat);
 	if (ret)
 		dev_err(cm->dev, "get_vbat_now_uV error.\n");
+
+	/*odm.hq.bsp.luowenjiang@huaqin.com 2021.12.30 modify for error full charge status start*/
 	if (cm->desc->cp.cp_running && !cm_check_primary_charger_enabled(cm)) {
 		dev_info(cm->dev, "cp target terminate voltage = %d, target current = %d\n",
 			 term_volt, target_cur);
@@ -4369,12 +4476,14 @@ static bool cm_manager_adjust_current(struct charger_manager *cm, int jeita_stat
 				 SPRD_VOTE_TYPE_IBAT_ID_JEITA,
 				 SPRD_VOTE_CMD_MIN,
 				 target_cur, cm);
+
+/*odm.hq.bsp.luowenjiang@huaqin.com 2021.12.30 modify for error full charge status start*/
 	if(vbat < term_volt) {
-		cm->cm_charge_vote->vote(cm->cm_charge_vote, true,
-					 SPRD_VOTE_TYPE_CCCV,
-					 SPRD_VOTE_TYPE_CCCV_ID_JEITA,
-					 SPRD_VOTE_CMD_MIN,
-					 term_volt, cm);
+	cm->cm_charge_vote->vote(cm->cm_charge_vote, true,
+				 SPRD_VOTE_TYPE_CCCV,
+				 SPRD_VOTE_TYPE_CCCV_ID_JEITA,
+				 SPRD_VOTE_CMD_MIN,
+				 term_volt, cm);
 	dev_info(cm->dev, "target terminate voltage = %d, target current = %d\n",
 		 term_volt, target_cur);
 	} else {
@@ -4382,6 +4491,7 @@ static bool cm_manager_adjust_current(struct charger_manager *cm, int jeita_stat
 		try_charger_enable(cm, false);
 		dev_info(cm->dev,"stop_charge by error full status\n");
 	}
+/*odm.hq.bsp.luowenjiang@huaqin.com 2021.12.30 modify for error full charge status end*/
 
 exit:
 	cm->charging_status &= ~(CM_CHARGE_TEMP_OVERHEAT | CM_CHARGE_TEMP_COLD);
@@ -4467,9 +4577,9 @@ static int cm_manager_get_jeita_status(struct charger_manager *cm, int cur_temp)
 
 out:
 	last_temp = cur_temp;
-	dev_info(cm->dev, "%s: jeita status:(%d) %d %d, temperature:%d, jeita_size:%d\n",
-		 __func__, jeita_status, temp_status, recovery_temp_status,
-		 cur_temp, desc->jeita_tab_size);
+	//dev_info(cm->dev, "%s: jeita status:(%d) %d %d, temperature:%d, jeita_size:%d\n",
+	//	 __func__, jeita_status, temp_status, recovery_temp_status,
+	//	 cur_temp, desc->jeita_tab_size);
 
 	return jeita_status;
 }
@@ -4503,11 +4613,10 @@ static int cm_manager_jeita_current_monitor(struct charger_manager *cm)
 	}
 
 	cur_jeita_status = cm_manager_get_jeita_status(cm, desc->temperature);
-
-	dev_info(cm->dev, "current-last jeita status: %d-%d, current temperature: %d\n",
-		 cur_jeita_status, last_jeita_status, desc->temperature);
-
-
+	if(cur_jeita_status != last_jeita_status){
+		dev_info(cm->dev, "current-last jeita status: %d-%d, current temperature: %d\n",
+			cur_jeita_status, last_jeita_status, desc->temperature);
+	}
 	ret = get_vbat_now_uV(cm, &vbat);
 	if (ret)
 		dev_err(cm->dev, "get_vbat_now_uV error.\n");
@@ -4589,8 +4698,8 @@ static int cm_manager_step_charge_monitor(struct charger_manager *cm)
 	step_chg_cur = cm->desc->jeita_tab[cur_jeita_status].step_chg_cur;
 	step_chg_volt = cm->desc->jeita_tab[cur_jeita_status].step_chg_volt;
 
-	dev_info(cm->dev, "jeita_status = %d batt_uV = %d step_chg_volt = %d\n",
-		cur_jeita_status, batt_uV, step_chg_volt);
+	//dev_info(cm->dev, "jeita_status = %d batt_uV = %d step_chg_volt = %d\n",
+	//	cur_jeita_status, batt_uV, step_chg_volt);
 
 	if (batt_uV > step_chg_volt) {
 		bat_vol_shake_exit = 0;
@@ -4628,8 +4737,10 @@ static int cm_manager_step_charge_monitor(struct charger_manager *cm)
 	return ret;
 }
 
+#ifndef VENDOR_KERNEL
 void cm_set_otg_switch_status(bool value)
 {
+#ifdef CONFIG_HQ_USB_TEMP_CHECK
 	if(psc != NULL){
 		printk(KERN_ERR "[%s]: otg switch[%d]\n", __func__, value);
 		if(value){
@@ -4638,7 +4749,9 @@ void cm_set_otg_switch_status(bool value)
 			sc27xx_typec_set_sink(psc);
 		}
 	}
+#endif
 }
+#endif //not defined VENDOR_KERNEL
 
 static int cm_get_target_status(struct charger_manager *cm)
 {
@@ -4695,8 +4808,14 @@ static int cm_get_target_status(struct charger_manager *cm)
 
 	if(bat_ovp_flag == true){
 		dev_warn(cm->dev, "battery ovp is still abnormal\n");
+		return POWER_SUPPLY_STATUS_CHARGING;
+	}
+#ifdef WT_COMPILE_FACTORY_VERSION
+	if (cm_battery_status & CM_ATO_CHARGE_STATUS){
+		dev_warn(cm->dev, "ato charge still abnormal\n");
 		return POWER_SUPPLY_STATUS_NOT_CHARGING;
 	}
+#endif /* WT_COMPILE_FACTORY_VERSION */
 
 	if(charge_stop == 1 ||  runin_stop == 1){
 		dev_warn(cm->dev, "set charge stop\n");
@@ -4717,14 +4836,33 @@ static int cm_get_target_status(struct charger_manager *cm)
 		return POWER_SUPPLY_STATUS_NOT_CHARGING;
 	}
 
+/*odm.hq.bsp.luowenjiang@huaqin.com 2021.12.30 modify for error full charge status start*/
 	if(error_full_status == true) {
 		dev_warn(cm->dev, "error full status \n");
 		return POWER_SUPPLY_STATUS_NOT_CHARGING;
 	}
+/*odm.hq.bsp.luowenjiang@huaqin.com 2021.12.30 modify for error full charge status start*/
+
 	/* Charging is allowed. */
 	return POWER_SUPPLY_STATUS_CHARGING;
 }
-
+#ifdef WT_COMPILE_FACTORY_VERSION
+static void cm_ato_control_charge(struct charger_manager *cm, int fuel_cap)
+{
+    dev_info(cm->dev, "[%s] fuel_cap = %d\n", __func__, fuel_cap);
+    if (fuel_cap >= 680) {
+            set_batt_charge_status(ATO_SET, CM_ATO_CHARGE_STATUS, 0);
+            dev_info(cm->dev, "[%s] cap >= 68 stop charger\n", __func__);
+            try_charger_enable(cm, false);
+            power_supply_changed(cm->charger_psy);
+    } else if ((fuel_cap <= 650) && (cm_battery_status & CM_ATO_CHARGE_STATUS)) {
+            set_batt_charge_status(ATO_SET, CM_ATO_CHARGE_STATUS, 1);
+            dev_info(cm->dev, "[%s] cap <= 65 start charger\n", __func__);
+            try_charger_enable(cm, true);
+            power_supply_changed(cm->charger_psy);
+    }
+}
+#endif /* WT_COMPILE_FACTORY_VERSION */
 /**
  * _cm_monitor - Monitor the temperature and return true for exceptions.
  * @cm: the Charger Manager representing the battery.
@@ -4734,12 +4872,18 @@ static int cm_get_target_status(struct charger_manager *cm)
  */
 static bool _cm_monitor(struct charger_manager *cm)
 {
+#ifdef VENDOR_KERNEL
+	int i;
+#else //not defined VENDOR_KERNEL
 	int i, ret;
+#endif //defined VENDOR_KERNEL
+
 	static int last_target = -1;
 
 	#ifdef CONFIG_HQ_USB_TEMP_CHECK
 	int vbus;
 	#endif
+#ifndef VENDOR_KERNEL
 	/* Feed the charger watchdog if necessary */
 	ret = cm_feed_watchdog(cm);
 	if (ret) {
@@ -4747,6 +4891,7 @@ static bool _cm_monitor(struct charger_manager *cm)
 		last_target = -1;
 		return false;
 	}
+#endif //not defined VENDOR_KERNEL
 
 	for (i = 0; i < cm->desc->num_charger_regulators; i++) {
 		if (cm->desc->charger_regulators[i].externally_control) {
@@ -4756,6 +4901,7 @@ static bool _cm_monitor(struct charger_manager *cm)
 		}
 	}
 
+	/*odm.hq.bsp.luowenjiang@huaqin.com 2021.12.30 modify for usb temp protection start*/
 	#ifdef CONFIG_HQ_USB_TEMP_CHECK
 	if (false == bbat_mode && (prj_name == 2 || prj_name == 3)) {
 		ret = get_charger_voltage(cm, &vbus);
@@ -4767,6 +4913,7 @@ static bool _cm_monitor(struct charger_manager *cm)
 		}
 	}
 	#endif
+	/*odm.hq.bsp.luowenjiang@huaqin.com 2021.12.30 modify for usb temp protection end*/
 
 	cm->battery_status = cm_get_target_status(cm);
 
@@ -4794,8 +4941,8 @@ static bool _cm_monitor(struct charger_manager *cm)
 		power_supply_changed(cm->charger_psy);
 	}
 
-	dev_info(cm->dev, "battery_status %d, charging_status %d\n",
-		 cm->battery_status, cm->charging_status);
+	//dev_info(cm->dev, "battery_status %d, charging_status %d\n",
+	//	 cm->battery_status, cm->charging_status);
 	return (cm->battery_status == POWER_SUPPLY_STATUS_NOT_CHARGING);
 }
 
@@ -5134,11 +5281,6 @@ static void misc_event_handler(struct charger_manager *cm, enum cm_event_types t
 
 	if(is_full_warm)
 		is_full_warm = false;
-
-	if (bbat_mode){
-		runin_stop = 1;
-		set_hiz_mode(cm,true);
-	}
 
 	charge_stop = 0;
 
@@ -5501,6 +5643,20 @@ static int charger_get_property(struct power_supply *psy,
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_STATUS:
+#ifdef VENDOR_KERNEL
+		if (is_charging(cm)) {
+			cm->battery_status = POWER_SUPPLY_STATUS_CHARGING;
+		} else if (is_ext_pwr_online(cm)) {
+			if (is_full_charged(cm))
+				cm->battery_status = POWER_SUPPLY_STATUS_FULL;
+			else if(notify_code & (CHG_BAT_HIG_TEMP_STATUS | CHG_BAT_LOW_TEMP_STATUS))
+				cm->battery_status = POWER_SUPPLY_STATUS_CHARGING;
+			else
+				cm->battery_status = POWER_SUPPLY_STATUS_NOT_CHARGING;
+		} else {
+			cm->battery_status = POWER_SUPPLY_STATUS_DISCHARGING;
+		}
+#endif //defined VENDOR_KERNEL
 		cm_get_charging_status(cm, &val->intval);
 		break;
 
@@ -5526,6 +5682,9 @@ static int charger_get_property(struct power_supply *psy,
 
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 		ret = get_ibat_now_uA(cm, &val->intval);
+#ifdef VENDOR_KERNEL
+		val->intval *= -1;
+#endif //defined VENDOR_KERNEL
 		break;
 
 	case POWER_SUPPLY_PROP_TECHNOLOGY:
@@ -5680,31 +5839,37 @@ static int usb_set_property(struct power_supply *psy,
         switch (psp) {
         case POWER_SUPPLY_PROP_STATUS:
 				dev_info(&psy->dev, "------otg_switch_mode----\n");
+#ifndef VENDOR_KERNEL
 				otg_switch_state = val->intval;
 				if(prj_name == 2 || prj_name == 3){ //nicky typec
 					if(val->intval){
 						cm_set_otg_switch_status(true);
 					}else{
 						cm_set_otg_switch_status(false);
-				}
-				}else{
+					}
+				}else
+#endif //not defined VENDOR_KERNEL
+				{
 					otg_switch_mode(val->intval); //nico micro usb
 				}
                 break;
+
+#ifndef VENDOR_KERNEL
 		case POWER_SUPPLY_PROP_MANUFACTURER:
 				dev_err(&psy->dev, "to set UART value = [%d].\n", val->intval);
 				if (val->intval) {
 					if (sprd_pin_set_gpio("gpio_70_f3") == 0)
-						input_gpio(70);
+						pull_gpio(70,0);
 					if (sprd_pin_set_gpio("gpio_71_f3") == 0)
-						input_gpio(71);
+						pull_gpio(71,0);
 				} else {
 					gpio_free(70);
 					gpio_free(71);
 					sprd_pin_set_gpio("gpio_70_f3");
 					sprd_pin_set_gpio("gpio_71_f3");
 				}
-		break;
+                break;
+#endif //not defined VENDOR_KERNEL
         default:
                 ret = -EINVAL;
         }
@@ -5715,19 +5880,21 @@ static int usb_set_property(struct power_supply *psy,
 static int usb_property_is_writeable(struct power_supply *psy,
                                          enum power_supply_property psp)
 {
-        int ret = -1;
+	int ret = -1;
 
-        switch (psp) {
+	switch (psp) {
         case POWER_SUPPLY_PROP_STATUS:
-		case POWER_SUPPLY_PROP_MANUFACTURER:
-		ret = 1;
-		break;
+#ifndef VENDOR_KERNEL
+        case POWER_SUPPLY_PROP_MANUFACTURER:
+#endif //not defined VENDOR_KERNEL
+			ret = 1;
+			break;
 
         default:
 			ret = 0;
-        }
+	}
 
-        return ret;
+	return ret;
 }
 
 static int charger_property_is_writeable(struct power_supply *psy, enum power_supply_property psp)
@@ -5761,7 +5928,9 @@ static enum power_supply_property ac_props[] = {
 static enum power_supply_property usb_props[] = {
 	POWER_SUPPLY_PROP_ONLINE,
 	POWER_SUPPLY_PROP_STATUS,  // otg_switch
+#ifndef VENDOR_KERNEL
 	POWER_SUPPLY_PROP_MANUFACTURER,
+#endif //not defined VENDOR_KERNEL
 };
 
 static enum power_supply_property default_charger_props[] = {
@@ -5878,7 +6047,16 @@ static void cm_update_charger_type_status(struct charger_manager *cm)
 			wireless_main.WIRELESS_ONLINE = 0;
 			ac_main.AC_ONLINE = 0;
 			usb_main.USB_ONLINE = 1;
+#ifdef VENDOR_KERNEL
 			if (cm->desc->charger_type == POWER_SUPPLY_CHARGER_TYPE_UNKNOWN) {
+				pr_err("need for q work\r\n");
+				wireless_main.WIRELESS_ONLINE = 0;
+				usb_main.USB_ONLINE = 0;
+				ac_main.AC_ONLINE = 1;
+			}
+#else //not defined VENDOR_KERNEL
+			/*odm.hq.bsp modify for apple 5v2.4a oppo 5v4a charger start*/
+			if ((prj_name == 2 || prj_name == 3) && cm->desc->charger_type == POWER_SUPPLY_CHARGER_TYPE_UNKNOWN) {
 				pr_err("need for q work\r\n");
 				wireless_main.WIRELESS_ONLINE = 0;
 				usb_main.USB_ONLINE = 0;
@@ -5886,6 +6064,8 @@ static void cm_update_charger_type_status(struct charger_manager *cm)
 				queue_delayed_work(system_power_efficient_wq,
 					&cm->get_charger_type_work, HZ/5);
 			}
+			/*odm.hq.bsp modify for apple 5v2.4a oppo 5v4a charger end*/
+#endif //not defined VENDOR_KERNEL
 			break;
 		}
 	} else if (is_ext_wl_pwr_online(cm)) {
@@ -6371,6 +6551,20 @@ static ssize_t charger_externally_control_store(struct device *dev,
 	return count;
 }
 
+#ifdef VENDOR_KERNEL
+static ssize_t batt_param_noplug_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	/*struct charger_regulator *charger =
+		container_of(attr, struct charger_regulator, attr_batt_param_noplug);*/
+
+	//pr_err("%s:line%d: noplug_temperature[%d] noplug_batt_volt_max[%d] noplug_batt_volt_min[%d]\n", __func__, __LINE__, noplug_temperature,
+	//	noplug_batt_volt_max, noplug_batt_volt_min);
+
+	return sprintf(buf, "%d %d %d", noplug_temperature,
+		noplug_batt_volt_max, noplug_batt_volt_min);
+}
+#endif //defined VENDOR_KERNEL
+
 static ssize_t cp_num_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct charger_regulator *charger =
@@ -6434,12 +6628,14 @@ static ssize_t charger_notify_code_show(struct device *dev,
    return sprintf(buf, "%d\n", notify_code);
 }
 
+#ifndef VENDOR_KERNEL
 static ssize_t charger_otg_enable_show(struct device *dev,
 									struct device_attribute *attr,
 									char *buf)
 {
  	return sprintf(buf, "%d\n", otg_switch_state);
 }
+#endif //not defined VENDOR_KERNEL
 
 static ssize_t cool_down_store(struct device *dev,
 					   struct device_attribute *attr,
@@ -6463,6 +6659,7 @@ static ssize_t cool_down_show(struct device *dev,
 	return sprintf(buf, "%d\n", g_cool_down);
 }
 
+#ifndef VENDOR_KERNEL
 static ssize_t usb_type_role_show(struct device *dev,
 								  struct device_attribute *attr,
 								  char *buf)
@@ -6474,20 +6671,26 @@ static ssize_t typec_cc_polarity_show(struct device *dev,
 								struct device_attribute *attr,
 								char *buf)
 {
+  #ifdef CONFIG_HQ_USB_TEMP_CHECK
 	return sprintf(buf, "%d\n", g_cc_polarity);
+  #else
+  	return sprintf(buf, "%d\n", 0);
+  #endif
 }
+#endif //not defined VENDOR_KERNEL
 
 static ssize_t fast_charge_support_show(struct device *dev,
 								struct device_attribute *attr,
 								char *buf)
 {
 	int fastcharge_support = 0;
-	
+#ifndef VENDOR_KERNEL
 	if(prj_name == 2 || prj_name == 3){
 		fastcharge_support = 1;
 	} else {
 		fastcharge_support = 0;
 	}
+#endif
 	return sprintf(buf, "%d\n", fastcharge_support);
 }
 
@@ -6502,9 +6705,15 @@ static ssize_t runin_stop_store(struct device *dev,
 					   struct device_attribute *attr,
 					   const char *buf, size_t count)
 {
+#ifdef VENDOR_KERNEL
+	struct charger_regulator *charger
+		= container_of(attr, struct charger_regulator,
+			       attr_enable_power_path);
+#else //not defined VENDOR_KERNEL
 	struct charger_regulator *charger
 		= container_of(attr, struct charger_regulator,
 			       attr_runin_stop);
+#endif //defined VENDOR_KERNEL
 	struct charger_manager *cm = charger->cm;
 	bool runinstop;
 	int ret;
@@ -6561,12 +6770,14 @@ static ssize_t ship_mode_show(struct device *dev,
 	return sprintf(buf, "%d\n", ship_mode);
 }
 
+#ifndef VENDOR_KERNEL
 static ssize_t is_fast_charge_show(struct device *dev,
 								   struct device_attribute *attr,
 								   char *buf)
 {
 	return sprintf(buf, "%d\n", g_is_fast_charge);
 }
+#endif //not defined VENDOR_KERNEL
 
 static ssize_t batid_volt_show(struct device *dev,
 								   struct device_attribute *attr,
@@ -6575,6 +6786,7 @@ static ssize_t batid_volt_show(struct device *dev,
 	return sprintf(buf, "%d\n", batid_volt);
 }
 
+#ifndef VENDOR_KERNEL
 static ssize_t main_charger_current_show(struct device *dev,
 					 struct device_attribute *attr,
 					 char *buf)
@@ -6649,6 +6861,7 @@ static ssize_t is_factory_mode_store(struct device *dev,
 
    return count;
 }
+#endif //not defined VENDOR_KERNEL
 
 static ssize_t notify_code_store(struct device *dev,
 					  struct device_attribute *attr,
@@ -6669,14 +6882,102 @@ static ssize_t notify_code_store(struct device *dev,
    return count;
 }
 
+#ifdef VENDOR_KERNEL
+static ssize_t temp_debug_store(struct device *dev,
+					  struct device_attribute *attr,
+					  const char *buf, size_t count)
+{
+   int ret;
+
+   ret = sscanf(buf, "%d", &g_temp_debug);
+   if (ret == 0) {
+		ret = -EINVAL;
+		return ret;
+	}
+   return count;
+}
+static ssize_t temp_debug_show(struct device *dev,
+								  struct device_attribute *attr,
+								  char *buf)
+{
+   return sprintf(buf, "%d\n", g_temp_debug);
+}
+#endif //defined VENDOR_KERNEL
+
+/*************************************************************
+ *                        uart_switch                       *
+*************************************************************/
+struct pinctrl *p = NULL;
+
+static int sprd_pin_set_gpio(char *pinctrlName)
+{
+	struct pinctrl_state *pinctrl_state;
+	int ret;
+
+	pinctrl_state = pinctrl_lookup_state(p,pinctrlName);
+	pr_err("---retrieves a state handle from a pinctrl handle---\n");
+	ret = pinctrl_select_state(p, pinctrl_state);
+	pr_err("---select a pinctrl state to HW--- \n");
+
+	return 0;
+
+}
+
+static int pull_gpio(int num,int value)
+{
+	int ret;
+	struct gpio_desc *desc;
+
+	int gpio_num = 64 + num;
+	desc = gpio_to_desc(gpio_num);
+	ret = gpio_request(gpio_num, "change_to_gpio");
+	ret = gpio_direction_output(gpio_num, value);
+
+	return 0;
+}
+
+#ifdef VENDOR_KERNEL
+static ssize_t uart_switch_show(struct device *dev,
+				      struct device_attribute *attr,
+				      char *buf)
+{
+	pr_err("uart_switch_show");
+	return sprintf(buf, "%d\n", 1);
+}
+
+static ssize_t uart_switch_store(struct device *dev,
+				       struct device_attribute *attr,
+				       const char *buf, size_t count)
+{
+	pr_err("uart_switch_store");
+	sprd_pin_set_gpio("gpio_70_f3");
+	sprd_pin_set_gpio("gpio_71_f3");
+	pull_gpio(70,0);
+	pull_gpio(71,0);
+	return count;
+}
+
+static ssize_t charger_type_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+        char *state ="null";
+
+        if (ac_main.AC_ONLINE == 1)
+                state="AC";
+	else if (usb_main.USB_ONLINE == 1)
+		state="USB";
+	else
+		state="null";
+
+        return sprintf(buf, "%s\n", state);
+}
+#else //not defined VENDOR_KERNEL
 static ssize_t is_factory_mode_show(struct device *dev,
 								  struct device_attribute *attr,
 								  char *buf)
 {
    return sprintf(buf, "%d\n", g_is_fast_charge);
 }
-
-
+#endif //defined VENDOR_KERNEL
 /**
  * charger_manager_prepare_sysfs - Prepare sysfs entry for each charger
  * @cm: the Charger Manager representing the battery.
@@ -6716,8 +7017,28 @@ static int charger_manager_prepare_sysfs(struct charger_manager *cm)
 		charger->attrs[7] = &charger->attr_charge_pump_current.attr;
 		charger->attrs[8] = &charger->attr_enable_power_path.attr;
 		charger->attrs[9] = &charger->attr_notify_code.attr;
+#ifdef VENDOR_KERNEL
+		charger->attrs[10] = &charger->attr_batt_param_noplug.attr;
+#else //not defined VENDOR_KERNEL
 		charger->attrs[10] = &charger->attr_otg_enable.attr;
+#endif //defined VENDOR_KERNEL
 		charger->attrs[11] = &charger->attr_cool_down.attr;
+#ifdef VENDOR_KERNEL
+		//charger->attrs[12] = &charger->attr_usb_type_role.attr;
+		//charger->attrs[13] = &charger->attr_typec_cc_polarity.attr;
+		charger->attrs[12] = &charger->attr_fast_charge_support.attr;
+		charger->attrs[13] = &charger->attr_runin_stop.attr;
+		charger->attrs[14] = &charger->attr_ship_mode.attr;
+		//charger->attrs[17] = &charger->attr_is_fast_charge.attr;
+		charger->attrs[15] = &charger->attr_batid_volt.attr;
+		//charger->attrs[19] = &charger->attr_main_charger_current.attr;
+		//charger->attrs[20] = &charger->attr_second_charger_current.attr;
+		//charger->attrs[21] = &charger->attr_is_factory_mode.attr;
+		charger->attrs[16] =  &charger->attr_temp_debug.attr;
+		charger->attrs[17] = &charger->attr_uart_switch.attr;
+		charger->attrs[18] = &charger->attr_type.attr;
+		charger->attrs[19] = NULL;
+#else //not defined VENDOR_KERNEL
 		charger->attrs[12] = &charger->attr_usb_type_role.attr;
 		charger->attrs[13] = &charger->attr_typec_cc_polarity.attr;
 		charger->attrs[14] = &charger->attr_fast_charge_support.attr;
@@ -6729,6 +7050,7 @@ static int charger_manager_prepare_sysfs(struct charger_manager *cm)
 		charger->attrs[20] = &charger->attr_second_charger_current.attr;
 		charger->attrs[21] = &charger->attr_is_factory_mode.attr;
 		charger->attrs[22] = NULL;
+#endif //defined VENDOR_KERNEL
 
 		charger->attr_grp.name = name;
 		charger->attr_grp.attrs = charger->attrs;
@@ -6785,10 +7107,12 @@ static int charger_manager_prepare_sysfs(struct charger_manager *cm)
 		charger->attr_notify_code.show = charger_notify_code_show;
 		charger->attr_notify_code.store = notify_code_store;
 
+#ifndef VENDOR_KERNEL
 		sysfs_attr_init(&charger->attr_otg_enable.attr);
 		charger->attr_otg_enable.attr.name = "otg_enable";
 		charger->attr_otg_enable.attr.mode = 0444;
 		charger->attr_otg_enable.show = charger_otg_enable_show;
+#endif //not defined VENDOR_KERNEL
 
 		sysfs_attr_init(&charger->attr_cool_down.attr);
 		charger->attr_cool_down.attr.name = "cool_down";
@@ -6796,6 +7120,7 @@ static int charger_manager_prepare_sysfs(struct charger_manager *cm)
 		charger->attr_cool_down.show = cool_down_show;
 		charger->attr_cool_down.store = cool_down_store;
 
+#ifndef VENDOR_KERNEL
 		sysfs_attr_init(&charger->attr_usb_type_role.attr);
 		charger->attr_usb_type_role.attr.name = "usb_type_role";
 		charger->attr_usb_type_role.attr.mode = 0444;
@@ -6805,34 +7130,44 @@ static int charger_manager_prepare_sysfs(struct charger_manager *cm)
 		charger->attr_typec_cc_polarity.attr.name = "typec_cc_polarity";
 		charger->attr_typec_cc_polarity.attr.mode = 0444;
 		charger->attr_typec_cc_polarity.show = typec_cc_polarity_show;
+#endif //not defined VENDOR_KERNEL
 
 		sysfs_attr_init(&charger->attr_fast_charge_support.attr);
 		charger->attr_fast_charge_support.attr.name = "fast_charge_support";
 		charger->attr_fast_charge_support.attr.mode = 0444;
 		charger->attr_fast_charge_support.show = fast_charge_support_show;
-		
+
 		sysfs_attr_init(&charger->attr_runin_stop.attr);
 		charger->attr_runin_stop.attr.name = "runin_stop";
 		charger->attr_runin_stop.attr.mode = 0644;
 		charger->attr_runin_stop.show = runin_stop_show;
 		charger->attr_runin_stop.store = runin_stop_store;
-		
+
 		sysfs_attr_init(&charger->attr_ship_mode.attr);
 		charger->attr_ship_mode.attr.name = "ship_mode";
 		charger->attr_ship_mode.attr.mode = 0644;
 		charger->attr_ship_mode.show = ship_mode_show;
 		charger->attr_ship_mode.store = ship_mode_store;
 
+#ifndef VENDOR_KERNEL
 		sysfs_attr_init(&charger->attr_is_fast_charge.attr);
 		charger->attr_is_fast_charge.attr.name = "is_fast_charge";
 		charger->attr_is_fast_charge.attr.mode = 0444;
 		charger->attr_is_fast_charge.show = is_fast_charge_show;
-		
+#endif //not defined VENDOR_KERNEL
+
 		sysfs_attr_init(&charger->attr_batid_volt.attr);
 		charger->attr_batid_volt.attr.name = "batid_volt";
 		charger->attr_batid_volt.attr.mode = 0444;
 		charger->attr_batid_volt.show = batid_volt_show;
 
+#ifdef VENDOR_KERNEL
+		sysfs_attr_init(&charger->attr_temp_debug.attr);
+		charger->attr_temp_debug.attr.name = "temp_debug";
+		charger->attr_temp_debug.attr.mode = 0644;
+		charger->attr_temp_debug.show = temp_debug_show;
+		charger->attr_temp_debug.store = temp_debug_store;
+#else //not defined VENDOR_KERNEL
 		sysfs_attr_init(&charger->attr_main_charger_current.attr);
 		charger->attr_main_charger_current.attr.name = "main_charger_current";
 		charger->attr_main_charger_current.attr.mode = 0444;
@@ -6848,7 +7183,7 @@ static int charger_manager_prepare_sysfs(struct charger_manager *cm)
 		charger->attr_is_factory_mode.attr.mode = 0644;
 		charger->attr_is_factory_mode.show = is_factory_mode_show;
 		charger->attr_is_factory_mode.store = is_factory_mode_store;
-
+#endif //defined VENDOR_KERNEL
 
 		sysfs_attr_init(&charger->attr_externally_control.attr);
 		charger->attr_externally_control.attr.name
@@ -6858,6 +7193,24 @@ static int charger_manager_prepare_sysfs(struct charger_manager *cm)
 				= charger_externally_control_show;
 		charger->attr_externally_control.store
 				= charger_externally_control_store;
+
+#ifdef VENDOR_KERNEL
+		sysfs_attr_init(&charger->attr_batt_param_noplug.attr);
+		charger->attr_batt_param_noplug.attr.name = "batt_param_noplug";
+		charger->attr_batt_param_noplug.attr.mode = 0444;
+		charger->attr_batt_param_noplug.show = batt_param_noplug_show;
+
+		sysfs_attr_init(&charger->attr_uart_switch.attr);
+		charger->attr_uart_switch.attr.name = "uart_switch";
+		charger->attr_uart_switch.attr.mode = 0644;
+		charger->attr_uart_switch.show = uart_switch_show;
+		charger->attr_uart_switch.store = uart_switch_store;
+
+		sysfs_attr_init(&charger->attr_type.attr);
+                charger->attr_type.attr.name = "type";
+                charger->attr_type.attr.mode = 0444;
+                charger->attr_type.show = charger_type_show;
+#endif //defined VENDOR_KERNEL
 
 		if (!desc->charger_regulators[i].externally_control ||
 				!chargers_externally_control)
@@ -7327,33 +7680,34 @@ static void cm_uvlo_check_work(struct work_struct *work)
 		cm->desc->uvlo_trigger_cnt = 0;
 
 	if (cm->desc->uvlo_trigger_cnt >= CM_UVLO_CALIBRATION_CNT_THRESHOLD) {
+		dev_err(cm->dev, "WARN: batt_uV less than uvlo, cap %d\n", cm->desc->cap);
 		if (DIV_ROUND_CLOSEST(cm->desc->cap, 10) <= 0) {
 			dev_err(cm->dev, "WARN: trigger  uvlo, will shutdown with uisoc less than 1%\n");
 			set_batt_cap(cm, 0);
-		switch (cm->desc->uvlo_shutdown_mode) {
-		case CM_SHUTDOWN_MODE_ORDERLY:
-			orderly_poweroff(true);
-			break;
+			switch (cm->desc->uvlo_shutdown_mode) {
+			case CM_SHUTDOWN_MODE_ORDERLY:
+				orderly_poweroff(true);
+				break;
 
-		case CM_SHUTDOWN_MODE_KERNEL:
-			kernel_power_off();
-			break;
+			case CM_SHUTDOWN_MODE_KERNEL:
+				kernel_power_off();
+				break;
 
-		case CM_SHUTDOWN_MODE_ANDROID:
-			cancel_delayed_work_sync(&cm->cap_update_work);
-			cm->desc->cap = 0;
-			power_supply_changed(cm->charger_psy);
-			break;
+			case CM_SHUTDOWN_MODE_ANDROID:
+				cancel_delayed_work_sync(&cm->cap_update_work);
+				cm->desc->cap = 0;
+				power_supply_changed(cm->charger_psy);
+				break;
 
-		default:
-			dev_warn(cm->dev, "Incorrect uvlo_shutdown_mode (%d)\n",
-				 cm->desc->uvlo_shutdown_mode);
-		}
-			} else if (batt_uV <= cm->desc->shutdown_voltage) {
-				dev_err(cm->dev, "WARN: batt_uV less than shutdown voltage, will shutdown, "
-					"and force capacity to 0%\n");
-				adjust_fuel_cap(cm, 0);
+			default:
+				dev_warn(cm->dev, "Incorrect uvlo_shutdown_mode (%d)\n",
+					 cm->desc->uvlo_shutdown_mode);
 			}
+	 	} else if (batt_uV <= cm->desc->shutdown_voltage) {
+				dev_err(cm->dev, "WARN: batt_uV less than shutdown voltage, will shutdown, "
+					"and force capacity to 0\n");
+				adjust_fuel_cap(cm, 0);
+		}
 	}
 
 	if (batt_uV < CM_UVLO_CALIBRATION_VOLTAGE_THRESHOLD)
@@ -7373,17 +7727,17 @@ static void cm_jeita_temp_check(struct charger_manager *cm)
 	if (cur_temp > JEITA_HIGHEST_TEMPE) {
 		notify_code |= CHG_BAT_HIG_TEMP_STATUS;
 		dev_err(cm->dev, "%s: batt_temp:%d over temp limit!\n", __func__, cur_temp);
-	} else if (cur_temp <= NTC_DISCONNECT_TEMP) {		
+	} else if (cur_temp <= NTC_DISCONNECT_TEMP) {
 		if(cm_ntc_get_current_temp(cm) == 2)
 		{
-			notify_code |= CHG_BAT_ID_STATUS;		
+			notify_code |= CHG_BAT_ID_STATUS;
 			dev_err(cm->dev, "%s: batt_temp:%d NTC below temp limit!\n", __func__, cur_temp);
 		}
 	}else if (cur_temp < JEITA_LOWEST_TEMPE) {
 		if(cm_ntc_get_current_temp(cm) == 1)
 		{
 			notify_code |= CHG_BAT_LOW_TEMP_STATUS;
-			dev_err(cm->dev, "%s: batt_temp:%d below temp limit!\n", __func__, cur_temp);		
+			dev_err(cm->dev, "%s: batt_temp:%d below temp limit!\n", __func__, cur_temp);
 		}
 	} else if (notify_code & CHG_BAT_HIG_TEMP_STATUS) {
 		notify_code &= ~CHG_BAT_HIG_TEMP_STATUS;
@@ -7416,9 +7770,10 @@ int cm_ntc_get_current_temp(struct charger_manager *cm)
 	else
 	{
 		return 2;
-	}		
+	}
 }
 
+/*odm.hq.bsp.luowenjiang@huaqin.com 2021.11.04 modify for usb temp protection start*/
 #ifdef CONFIG_HQ_USB_TEMP_CHECK
 struct voltage_temp {
 	int voltage;
@@ -7605,19 +7960,19 @@ static void cm_convert_vlotage_to_temp(int voltage,int *temp)
 	int temp_voltage = 0;
 
 	temp_voltage = voltage * CONVERT_FACTORT;
-	
+
 	if(temp_voltage >= VOL_MAX ) 
 		index = 0;
 
 	if(temp_voltage <= VOL_MIN ) 
 		index = ARRAY_SIZE(voltage_temp_table) - 1;
-	
+
 	for(i = 1;i < ARRAY_SIZE(voltage_temp_table) - 1; i++)
 		if ( temp_voltage <= voltage_temp_table[i].voltage && temp_voltage > voltage_temp_table[i+1].voltage) {
 			index = i;
 			break;
 		}
-	
+
 	*temp = voltage_temp_table[index].temp;
 }
 
@@ -7627,13 +7982,13 @@ static int cm_get_usbs_temp(struct charger_manager *cm,int *temp1,int *temp2)
 	int rc;
 	int voltage1,voltage2;
 	int t1,t2;
-	
+
 	rc = iio_read_channel_processed(cm->usb_conn_ntc_1,&voltage1);
 	if ( rc < 0) {
 		pr_err("ERROR:%s:%u Failed to get usb ADC temp,rc = %d\n",__func__,__LINE__,rc);
 		return rc;
 	}
-	
+
 	rc = iio_read_channel_processed(cm->usb_conn_ntc_2,&voltage2);
 	if ( rc < 0) {
 		pr_err("ERROR:%s:%u Failed to get usb ADC temp,rc = %d\n",__func__,__LINE__,rc);
@@ -7656,19 +8011,19 @@ static int cm_parse_gpio(struct charger_manager *cm)
 	int rc = 0;
 	struct device_node *np = NULL;
 	np = cm->dev->of_node;
-	
+
 	if(np == NULL) {
 		pr_err("ERROR:%s:%u device_node pointer is NULL",__func__,__LINE__);
 		return -EINVAL;
 	}
-	
+
 	cm->charge_enable_gpio = of_get_named_gpio(np, "cm-charge-gpio", 0);
 	if(!gpio_is_valid(cm->charge_enable_gpio)) {
 		pr_err("ERROR:%s:%u Faile to get charge GPIO from tree,rc = %d \n",
 			__func__,__LINE__,cm->charge_enable_gpio);
 		return -EINVAL;
 	}
-	
+
 	rc =  gpio_request(cm->charge_enable_gpio,"charge_enable");
 	if (rc < 0) {
 		pr_err("ERROR:%s:%u Failed to request GPIO rc = %d\n",__func__,__LINE__,rc);
@@ -7764,6 +8119,7 @@ int cm_usb_temp_check_thread(void *data)
 		} else {
 			cm->vbus_status = false;
 			cc_vbus = false;
+/*odm.hq.bsp.luowenjiang@huaqin.com 2021.03.03 modify for usb ntc short protection start*/
 			if (ntc_short) {
 				ntc_short = false;
 				runin_stop = 0;
@@ -7778,9 +8134,11 @@ int cm_usb_temp_check_thread(void *data)
 					dev_err(cm->dev,"runin stop try charger enable fail\n");
 				}
 			}
+/*odm.hq.bsp.luowenjiang@huaqin.com 2021.03.03 modify for usb ntc short protection start*/
 			goto recheck;
 		}
 
+/*odm.hq.bsp.luowenjiang@huaqin.com 2021.03.03 modify for usb ntc short protection start*/
 		if ((usb_temp_1 == 125 || usb_temp_2 == 125) && !ntc_short ) {
 			ntc_short = true;
 			runin_stop = 1;
@@ -7797,6 +8155,7 @@ int cm_usb_temp_check_thread(void *data)
 
 			pr_info("%s:%u:ADC stop_charge by ntc short\n",__func__,__LINE__);
 		}
+/*odm.hq.bsp.luowenjiang@huaqin.com 2022.03.03 modify for usb ntc short protection end*/
 
 		rc = cm_get_usbs_temp(cm,&usb_temp_1,&usb_temp_2);
 		if(rc < 0) {
@@ -7956,6 +8315,10 @@ static void cm_wake_up_usbtemp_thread(void)
 }
 
 #endif
+/*odm.hq.bsp.luowenjiang@huaqin.com 2021.11.04 modify for usb temp protection end*/
+
+#ifdef CONFIG_HQ_USB_TEMP_CHECK
+/*odm.hq.bsp.luowenjiang@huaqin.com 2022.01.08 modify for cc short to vbus start*/
 static void cm_cc_vbus_check_work(struct work_struct *work)
 {
 	struct delayed_work *dwork = to_delayed_work(work);
@@ -8013,6 +8376,8 @@ static void cm_cc_vbus_check_work(struct work_struct *work)
 	schedule_delayed_work(&cm->cc_vbus_check_work, msecs_to_jiffies(250));
 
 }
+/*odm.hq.bsp.luowenjiang@huaqin.com 2022.01.08 modify for cc short to vbus end*/
+#endif //defined CONFIG_HQ_USB_TEMP_CHECK
 
 static void cm_batt_works(struct work_struct *work)
 {
@@ -8025,9 +8390,11 @@ static void cm_batt_works(struct work_struct *work)
 	int chg_cur = 0, chg_limit_cur = 0, input_cur = 0;
 	int chg_vol = 0, vbat_avg = 0, ibat_avg = 0, recharge_uv = 0;
 	static int last_fuel_cap = CM_MAGIC_NUM;
-	static int uvlo_check_cnt;
-	int work_cycle = 0;
+	static int uvlo_check_cnt = 0;
+	int work_cycle = CM_CAP_CYCLE_TRACK_TIME;
+#ifdef CONFIG_HQ_USB_TEMP_CHECK
 	int usb_temp_1 = 0,usb_temp_2 = 0;
+#endif //not defined VENDOR_KERNEL
 	cm_bat_id_check(cm);
 	cm_bat_ovp_check(cm);
 	cm_jeita_temp_check(cm);
@@ -8078,7 +8445,7 @@ static void cm_batt_works(struct work_struct *work)
 	else
 		ret = get_charger_input_current(cm, &input_cur);
 	if (ret)
-		dev_warn(cm->dev, "cant not get input_cur.\n");
+		dev_dbg(cm->dev, "cant not get input_cur.\n");
 
 	ret = get_charger_voltage(cm, &chg_vol);
 	if (ret)
@@ -8091,11 +8458,13 @@ static void cm_batt_works(struct work_struct *work)
 	}
 
 	cm->desc->temperature = cur_temp;
+	if (g_temp_debug)
+		cm->desc->temperature = g_temp_debug;
 
 	ret = cm_get_battery_temperature(cm, &board_temp);
 	if (ret)
 		dev_warn(cm->dev, "failed to get board temperature\n");
-
+#ifndef VENDOR_KERNEL /* zhangnaifeng del for 4046920*/
 	if (cur_temp <= CM_LOW_TEMP_REGION &&
 	    batt_uV <= CM_LOW_TEMP_SHUTDOWN_VALTAGE) {
 		if (cm->desc->low_temp_trigger_cnt++ > 1)
@@ -8103,7 +8472,7 @@ static void cm_batt_works(struct work_struct *work)
 	} else if (cm->desc->low_temp_trigger_cnt != 0) {
 		cm->desc->low_temp_trigger_cnt = 0;
 	}
-
+#endif //not defined VENDOR_KERNEL
 	if (fuel_cap > CM_CAP_FULL_PERCENT)
 		fuel_cap = CM_CAP_FULL_PERCENT;
 	else if (fuel_cap < 0)
@@ -8150,6 +8519,7 @@ static void cm_batt_works(struct work_struct *work)
 	else
 		cm->desc->charger_status = cm->battery_status;
 
+	/*odm.hq.bsp.luowenjiang@huaqin.com 2021.12.28 monitor usb temp start*/
 	#ifdef CONFIG_HQ_USB_TEMP_CHECK
 	if (false == bbat_mode && (prj_name == 2 || prj_name == 3)) {
 		ret = cm_get_usbs_temp(cm,&usb_temp_1,&usb_temp_2);
@@ -8158,8 +8528,6 @@ static void cm_batt_works(struct work_struct *work)
 					__func__, __LINE__, ret);
 		}
 	}
-	#endif
-
 	dev_info(cm->dev, "vbat: %d, vbat_avg: %d, OCV: %d, ibat: %d, ibat_avg: %d, ibus: %d,"
 		 " vbus: %d, msoc: %d, uisoc: %d, chg_sts: %d, frce_full: %d, chg_lmt_cur: %d,"
 		 " inpt_lmt_cur: %d, chgr_type: %d, Tboard: %d, Tbatt: %d, thm_cur: %d,"
@@ -8169,22 +8537,34 @@ static void cm_batt_works(struct work_struct *work)
 		 cm->desc->charger_type, board_temp, cur_temp,
 		 cm->desc->thm_info.thm_adjust_cur, cm->desc->thm_info.thm_pwr,
 		 cm->desc->is_fast_charge, cm->desc->enable_fast_charge, flush_time, period_time, prj_name,usb_temp_1,usb_temp_2, g_cool_down);
-	
+	#else
+	dev_info(cm->dev, "vbat: %d, vbat_avg: %d, OCV: %d, ibat: %d, ibat_avg: %d, ibus: %d,"
+		 " vbus: %d, msoc: %d, uisoc: %d, chg_sts: %d, bat_sts: %d, force_full: %d, is_full_warm: %d,chg_lmt_cur: %d,"
+		 " inpt_lmt_cur: %d, chgr_type: %d, Tboard: %d, Tbatt: %d, thm_cur: %d,"
+		 " thm_pwr: %d, is_fchg: %d, fchg_en: %d, tflush: %d, tperiod: %d, notify_code 0x%x\n",
+		 batt_uV, vbat_avg, batt_ocV, batt_uA, ibat_avg, input_cur, chg_vol, fuel_cap, cm->desc->cap,
+		 cm->desc->charger_status, cm->battery_status, cm->desc->force_set_full, is_full_warm, chg_cur, chg_limit_cur,
+		 cm->desc->charger_type, board_temp, cur_temp,
+		 cm->desc->thm_info.thm_adjust_cur, cm->desc->thm_info.thm_pwr,
+		 cm->desc->is_fast_charge, cm->desc->enable_fast_charge, flush_time, period_time, notify_code);
+	#endif
+	/*odm.hq.bsp.luowenjiang@huaqin.com 2021.12.28 monitor usb temp end*/
+
 	ret = dump_charger_reg_info(cm);
 		work_cycle = CM_CAPACITY_CAP_CYCLE_15S;
 		cm->desc->cap_one_time = CM_CAPACITY_CAP_ONE_TIME_30S;
-		if (batt_uV < CM_UVLO_CALIBRATION_VOLTAGE_THRESHOLD &&
+		if (cm->desc->uvlo_trigger_cnt >= CM_UVLO_CALIBRATION_CNT_THRESHOLD &&
 			(cm->desc->charger_status == POWER_SUPPLY_STATUS_DISCHARGING ||
 			cm->desc->charger_status == POWER_SUPPLY_STATUS_NOT_CHARGING)) {
-			if (++uvlo_check_cnt > 2) {
-				work_cycle = CM_CAPACITY_CAP_CYCLE_10S;
-				cm->desc->cap_one_time = CM_CAPACITY_CAP_ONE_TIME_20S;
-			}
+			//if (++uvlo_check_cnt > 2) {
+				work_cycle = CM_CAPACITY_CAP_CYCLE_15S;
+				cm->desc->cap_one_time = CM_CAPACITY_CAP_ONE_TIME_30S;
+			//}
 		} else {
 			uvlo_check_cnt = 0;
 		}
 
-		dev_info(cm->dev, "work_cycle = %ds, cap_one_time = %ds\n", work_cycle, cm->desc->cap_one_time);
+		//dev_info(cm->dev, "work_cycle = %ds, cap_one_time = %ds\n", work_cycle, cm->desc->cap_one_time);
 
 	switch (cm->desc->charger_status) {
 	case POWER_SUPPLY_STATUS_CHARGING:
@@ -8276,9 +8656,13 @@ static void cm_batt_works(struct work_struct *work)
 			if (period_time < cm->desc->cap_one_time) {
 				if ((cm->desc->cap - fuel_cap) >= 5)
 					fuel_cap = cm->desc->cap - 5;
+				if ((cm->desc->cap >= 10) && (cm->desc->uvlo_trigger_cnt >= CM_UVLO_CALIBRATION_CNT_THRESHOLD)) /* low 3.3V */
+					fuel_cap = cm->desc->cap - 10;
+				else if ((cm->desc->cap >= 5) && (cm->desc->uvlo_trigger_cnt >= CM_UVLO_CALIBRATION_CNT_THRESHOLD)) /* low 3.4V */
+					fuel_cap = cm->desc->cap - 5;
 				if (flush_time < cm->desc->cap_one_time &&
-				    DIV_ROUND_CLOSEST(fuel_cap, 10) !=
-				    DIV_ROUND_CLOSEST(cm->desc->cap, 10))
+					(DIV_ROUND_CLOSEST(fuel_cap, 10) != DIV_ROUND_CLOSEST(cm->desc->cap, 10)) &&
+					(batt_uV > cm->desc->shutdown_voltage))
 					fuel_cap = cm->desc->cap;
 			} else {
 				/*
@@ -8315,20 +8699,26 @@ static void cm_batt_works(struct work_struct *work)
 		break;
 	}
 
-	
+	power_supply_changed(cm->charger_psy);
+
 	if(cur_temp > OVER_HIGH_TEMP){
 			dev_info(cm->dev, "cur_temp over high temp\n");
+#ifdef VENDOR_KERNEL // for beidou_T
+			orderly_poweroff(true);
+#else
 			kernel_power_off();
+#endif
 	}
 
 
-	dev_info(cm->dev, "new_uisoc = %d, old_uisoc = %d\n", fuel_cap, cm->desc->cap);
-
+	//dev_info(cm->dev, "new_uisoc = %d, old_uisoc = %d\n", fuel_cap, cm->desc->cap);
+#ifdef WT_COMPILE_FACTORY_VERSION
+	cm_ato_control_charge(cm, cm->desc->cap);
+#endif /* WT_COMPILE_FACTORY_VERSION */
 	if (fuel_cap != cm->desc->cap) {
 		if (DIV_ROUND_CLOSEST(fuel_cap, 10) != DIV_ROUND_CLOSEST(cm->desc->cap, 10)) {
 			cm->desc->cap = fuel_cap;
 			cm->desc->update_capacity_time = cur_time.tv_sec;
-			if(bbat_mode == false)
 			power_supply_changed(cm->charger_psy);
 		}
 
@@ -8367,6 +8757,7 @@ static int get_boot_mode(void)
 	return 0;
 }
 
+#ifndef VENDOR_KERNEL
 static ssize_t store_runin_stop(struct device *dev, struct device_attribute *attr,\
         const char *buf, size_t count)
 {
@@ -8431,15 +8822,23 @@ static void get_charger_type(struct work_struct *work)
 	struct delayed_work *dwork = to_delayed_work(work);
 	struct charger_manager *cm = container_of(dwork,
 			struct charger_manager, get_charger_type_work);
-						
+
 	ret = get_usb_charger_type(cm, &cm->desc->charger_type);
 	pr_err("%s:line%d: charger_type: %d\n", __func__, __LINE__, cm->desc->charger_type);
 	if (ret)
 		dev_warn(cm->dev, "Fail to get usb charger type, ret = %d", ret);
 	if (cm->desc->charger_type == POWER_SUPPLY_CHARGER_TYPE_UNKNOWN) {
-		wireless_main.WIRELESS_ONLINE = 0;
-		usb_main.USB_ONLINE = 0;
-		ac_main.AC_ONLINE = 1;
+		/* odm.hq.bsp modify for apple 5v2.4a oppo 5v4a charger */
+		if (!is_ext_usb_pwr_online(cm)){
+			pr_info("%s:line%d: is_ext_usb_pwr_online false\n", __func__, __LINE__);
+			wireless_main.WIRELESS_ONLINE = 0;
+			ac_main.AC_ONLINE = 0;
+			usb_main.USB_ONLINE = 0;
+		} else {
+			wireless_main.WIRELESS_ONLINE = 0;
+			usb_main.USB_ONLINE = 0;
+			ac_main.AC_ONLINE = 1;
+		}
 	} else if (cm->desc->charger_type == POWER_SUPPLY_USB_CHARGER_TYPE_CDP) {
 		wireless_main.WIRELESS_ONLINE = 0;
 		usb_main.USB_ONLINE = 1;
@@ -8447,6 +8846,7 @@ static void get_charger_type(struct work_struct *work)
 	}
 	power_supply_changed(cm->charger_psy);
 }
+#endif //not defined VENDOR_KERNEL
 
 static int charger_manager_probe(struct platform_device *pdev)
 {
@@ -8458,9 +8858,10 @@ static int charger_manager_probe(struct platform_device *pdev)
 	struct power_supply *fuel_gauge;
 	struct power_supply_config psy_cfg = {};
 	struct timespec64 cur_time;
+
 	p= devm_pinctrl_get(&pdev->dev);
 	dev_err(&pdev->dev,"---obtain a pinctrl handle--- \n");
-	
+
 	if (IS_ERR(desc)) {
 		dev_err(&pdev->dev, "No platform data (desc) found\n");
 		return PTR_ERR(desc);
@@ -8487,12 +8888,14 @@ static int charger_manager_probe(struct platform_device *pdev)
 	 * Some of the following do not need to be errors.
 	 * Users may intentionally ignore those features.
 	 */
+#ifndef VENDOR_KERNEL
 	if (desc->fullbatt_uV == 0) {
 		dev_info(&pdev->dev, "Ignoring full-battery voltage threshold as it is not supplied\n");
 	}
 
 	if (desc->fullbatt_uA == 0)
 		dev_info(&pdev->dev, "Ignoring full-battery current threshold as it is not supplied\n");
+#endif //not defined VENDOR_KERNEL
 
 	if (!desc->fullbatt_vchkdrop_ms || !desc->fullbatt_vchkdrop_uV) {
 		dev_info(&pdev->dev, "Disabling full-battery voltage drop checking mechanism as it is not supplied\n");
@@ -8538,9 +8941,9 @@ static int charger_manager_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "failed to get bat-id-vol IIO channel\n");
 		return PTR_ERR(cm->bat_id_cha);
 	}
-	
+
 	cm_get_bat_id(cm);
-	
+
 	/* Check if charger's supplies are present at probe */
 	for (i = 0; desc->psy_charger_stat[i]; i++) {
 		struct power_supply *psy;
@@ -8652,7 +9055,11 @@ static int charger_manager_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&cm->fixed_fchg_work, cm_fixed_fchg_work);
 	INIT_DELAYED_WORK(&cm->cp_work, cm_cp_work);
 	INIT_DELAYED_WORK(&cm->ir_compensation_work, cm_ir_compensation_works);
+#ifndef VENDOR_KERNEL
 	INIT_DELAYED_WORK(&cm->get_charger_type_work, get_charger_type);
+#endif //not defined VENDOR_KERNEL
+
+	/*odm.hq.bsp.luowenjiang@huaqin.com 2021.11.04 modify for usb temp protection start*/
 	#ifdef CONFIG_HQ_USB_TEMP_CHECK
 	if (false == bbat_mode && (prj_name == 2 || prj_name == 3)) {
 		my_cm = cm;
@@ -8675,11 +9082,14 @@ static int charger_manager_probe(struct platform_device *pdev)
 		cm_set_charge_gpio(cm,GPIO_LOW);
 		cm_usb_temp_thread_init(my_cm);
 		INIT_DELAYED_WORK(&cm->usb_temp_work, cm_usb_temp_revovery_work);
+		/*odm.hq.bsp.luowenjiang@huaqin.com 2022.01.08 modify for cc short to vbus start*/
 		INIT_DELAYED_WORK(&cm->cc_vbus_check_work,cm_cc_vbus_check_work);
 		schedule_delayed_work(&cm->cc_vbus_check_work, msecs_to_jiffies(5000));
+		/*odm.hq.bsp.luowenjiang@huaqin.com 2022.01.08 modify for cc short to vbus end*/
 	}
 	#endif
-	
+	/*odm.hq.bsp.luowenjiang@huaqin.com 2021.11.04 modify for usb temp protection end*/
+
 	mutex_init(&cm->desc->charge_info_mtx);
 
 	/* Register sysfs entry for charger(regulator) */
@@ -8735,10 +9145,12 @@ static int charger_manager_probe(struct platform_device *pdev)
 		goto err_reg_extcon;
 	}
 
+#ifndef VENDOR_KERNEL
 	ret = sysfs_create_group(&(pdev->dev.kobj), &bbat_attribute_group);
 	if (ret < 0) {
 		dev_err(&pdev->dev,"sysfs_create_group failed!\n");
 	}
+#endif //not defined VENDOR_KERNEL
 	/* Add to the list */
 	mutex_lock(&cm_list_mtx);
 	list_add(&cm->entry, &cm_list);
@@ -8784,6 +9196,7 @@ static int charger_manager_probe(struct platform_device *pdev)
 	cm_monitor();
 
 	schedule_work(&setup_polling);
+	set_batt_charge_status(ATO_SET, CM_ATO_CHARGE_STATUS, 1);//znf add for err.must del
 
 	queue_delayed_work(system_power_efficient_wq, &cm->cap_update_work, CM_CAP_CYCLE_TRACK_TIME * HZ);
 	INIT_DELAYED_WORK(&cm->uvlo_work, cm_uvlo_check_work);
@@ -8816,7 +9229,9 @@ static int charger_manager_remove(struct platform_device *pdev)
 	cancel_delayed_work_sync(&cm->cap_update_work);
 	cancel_delayed_work_sync(&cm->fullbatt_vchk_work);
 	cancel_delayed_work_sync(&cm->uvlo_work);
+#ifndef VENDOR_KERNEL
 	cancel_delayed_work_sync(&cm->get_charger_type_work);
+#endif //not defined VENDOR_KERNEL
 
 	for (i = 0 ; i < desc->num_charger_regulators ; i++)
 		regulator_put(desc->charger_regulators[i].consumer);
@@ -8839,7 +9254,9 @@ static void charger_manager_shutdown(struct platform_device *pdev)
 	cancel_delayed_work_sync(&cm_monitor_work);
 	cancel_delayed_work_sync(&cm->fullbatt_vchk_work);
 	cancel_delayed_work_sync(&cm->cap_update_work);
+#ifndef VENDOR_KERNEL
 	cancel_delayed_work_sync(&cm->get_charger_type_work);
+#endif //not defined VENDOR_KERNEL
 }
 
 static const struct platform_device_id charger_manager_id[] = {
@@ -8873,7 +9290,9 @@ static int cm_suspend_prepare(struct device *dev)
 		cancel_delayed_work(&cm->fullbatt_vchk_work);
 		cancel_delayed_work_sync(&cm->cap_update_work);
 		cancel_delayed_work_sync(&cm->uvlo_work);
+#ifndef VENDOR_KERNEL
 		cancel_delayed_work_sync(&cm->get_charger_type_work);
+#endif //not defined VENDOR_KERNEL
 	}
 
 	return 0;
@@ -9038,7 +9457,11 @@ void cm_notify_event(struct power_supply *psy, enum cm_event_types type,
 		}
 
 		if (cm->desc->psy_fuel_gauge) {
-			if (match_string(&cm->desc->psy_fuel_gauge, -1,
+			/*
+			 * fgu has only one string and no null pointer at the end,
+			 * only needs to compare once before exiting th loop, so 1 here and -1 elsewhere.
+			 */
+			if (match_string(&cm->desc->psy_fuel_gauge, 1,
 					 psy->desc->name) >= 0) {
 				found_power_supply = true;
 				break;

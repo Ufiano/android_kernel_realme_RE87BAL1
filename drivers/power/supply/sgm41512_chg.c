@@ -828,7 +828,7 @@ static int sgm41512_charger_set_limit_current(struct sgm41512_charger_info *info
 					     u32 limit_cur)
 {
 	u8 reg_val;
-	int ret;	
+	int ret;
 
 	limit_cur = limit_cur / 1000;
 	if (limit_cur >= REG00_IINLIM_MAX)
@@ -957,10 +957,8 @@ static int sgm41512_charger_set_status(struct sgm41512_charger_info *info,
 	int ret = 0;
 
 	if (val == CM_FAST_CHARGE_OVP_ENABLE_CMD) {
-
-		//sgm41512_set_vac_ovp(info,SGM41512_OVP_10500mV);
+		dev_err(info->dev, "maybe need to set vindpm\n");//??
 	} else if (val == CM_FAST_CHARGE_OVP_DISABLE_CMD) {
-		//sgm41512_set_vac_ovp(info,SGM41512_OVP_6500mV);
 		if (input_vol > SGM41512_FAST_CHG_VOL_MAX)
 			info->need_disable_Q1 = true;
 	} else if (val == false) {
@@ -1004,7 +1002,7 @@ static void sgm41512_charger_work(struct work_struct *data)
 		schedule_delayed_work(&info->wdt_work, 0);
 	else
 		cancel_delayed_work_sync(&info->wdt_work);
-	
+
 	dev_info(info->dev, "battery present = %d, charger type = %d\n",
 		 present, info->usb_phy->chg_type);
 	if(runin_stop == 0 || !info->limit)
@@ -1372,7 +1370,7 @@ static int sgm41512_charger_usb_set_property(struct power_supply *psy,
 
 	if (!info)
 		return -ENOMEM;
-	
+
 	if (psp == POWER_SUPPLY_PROP_STATUS || psp == POWER_SUPPLY_PROP_CALIBRATE) {
 		bat_present = sgm41512_charger_is_bat_present(info);
 		ret = sgm41512_charger_get_charge_voltage(info, &input_vol);
@@ -1421,7 +1419,9 @@ static int sgm41512_charger_usb_set_property(struct power_supply *psy,
 		} else if (val->intval == CM_DUMP_CHARGER_REGISTER_CMD) {
 			sgm41512_charger_dump_register(info);
 			break;
-		} else if (val->intval == CM_HIZ_ENABLE_CMD) {
+		}
+#ifndef VENDOR_KERNEL
+		 else if (val->intval == CM_HIZ_ENABLE_CMD) {
 			ret = sgm41512_set_hiz_en(info,true);
 			if (ret < 0)
 				dev_err(info->dev, "set hizmode failed\n");
@@ -1437,26 +1437,23 @@ static int sgm41512_charger_usb_set_property(struct power_supply *psy,
 				dev_err(info->dev, "feed charger watchdog failed\n");
 			break;
 		}
-		
+#endif //not defined VENDOR_KERNEL
+
 		ret = sgm41512_charger_set_status(info, val->intval, input_vol, bat_present);
 		if (ret < 0)
 			dev_err(info->dev, "set charge status failed\n");
 		break;
 
 	case POWER_SUPPLY_PROP_TYPE:
-	/*	if (val->intval == POWER_SUPPLY_WIRELESS_CHARGER_TYPE_BPP) {
-	
+		if (val->intval == POWER_SUPPLY_WIRELESS_CHARGER_TYPE_BPP) {
 			ret = sgm41512_set_vac_ovp(info, SGM41512_OVP_6500mV);
 		} else if (val->intval == POWER_SUPPLY_WIRELESS_CHARGER_TYPE_EPP) {
-			
 			ret = sgm41512_set_vac_ovp(info, SGM41512_OVP_14000mV);
 		} else {
-			
 			ret = sgm41512_set_vac_ovp(info, SGM41512_OVP_6500mV);
 		}
 		if (ret)
-			dev_err(info->dev, "failed to set fast charge ovp\n");*/
-
+			dev_err(info->dev, "failed to set fast charge ovp\n");
 		break;
 
 	default:

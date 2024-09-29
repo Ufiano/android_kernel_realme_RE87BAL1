@@ -10,6 +10,7 @@
 #include <linux/migrate.h>
 #include <linux/stackdepot.h>
 #include <linux/seq_file.h>
+#include <linux/sched/clock.h>
 
 #include "internal.h"
 
@@ -25,6 +26,13 @@ struct page_owner {
 	gfp_t gfp_mask;
 	depot_stack_handle_t handle;
 	depot_stack_handle_t free_handle;
+#ifdef CONFIG_SPRD_PAGE_OWNER
+	u64 ts_nsec;
+	u64 free_ts_nsec;
+	char comm[TASK_COMM_LEN];
+	pid_t pid;
+	pid_t tgid;
+#endif
 };
 
 static bool page_owner_enabled = false;
@@ -145,6 +153,9 @@ void __reset_page_owner(struct page *page, unsigned int order)
 	struct page_ext *page_ext;
 	depot_stack_handle_t handle = 0;
 	struct page_owner *page_owner;
+#ifdef CONFIG_SPRD_PAGE_OWNER
+	u64 free_ts_nsec = local_clock();
+#endif
 
 	handle = save_stack(GFP_NOWAIT | __GFP_NOWARN);
 
@@ -155,6 +166,9 @@ void __reset_page_owner(struct page *page, unsigned int order)
 		__clear_bit(PAGE_EXT_OWNER_ALLOCATED, &page_ext->flags);
 		page_owner = get_page_owner(page_ext);
 		page_owner->free_handle = handle;
+#ifdef CONFIG_SPRD_PAGE_OWNER
+		page_owner->free_ts_nsec = free_ts_nsec;
+#endif
 		page_ext = page_ext_next(page_ext);
 	}
 }
@@ -172,6 +186,12 @@ static inline void __set_page_owner_handle(struct page *page,
 		page_owner->order = order;
 		page_owner->gfp_mask = gfp_mask;
 		page_owner->last_migrate_reason = -1;
+#ifdef CONFIG_SPRD_PAGE_OWNER
+		page_owner->pid = current->pid;
+		page_owner->tgid = current->tgid;
+		page_owner->ts_nsec = local_clock();
+		strlcpy(page_owner->comm, current->comm, sizeof(page_owner->comm));
+#endif
 		__set_bit(PAGE_EXT_OWNER, &page_ext->flags);
 		__set_bit(PAGE_EXT_OWNER_ALLOCATED, &page_ext->flags);
 
@@ -236,6 +256,11 @@ void __copy_page_owner(struct page *oldpage, struct page *newpage)
 	new_page_owner->last_migrate_reason =
 		old_page_owner->last_migrate_reason;
 	new_page_owner->handle = old_page_owner->handle;
+#ifdef CONFIG_SPRD_PAGE_OWNER
+	new_page_owner->pid = old_page_owner->pid;
+	new_page_owner->ts_nsec = old_page_owner->ts_nsec;
+	new_page_owner->free_ts_nsec = old_page_owner->ts_nsec;
+#endif
 
 	/*
 	 * We don't clear the bit on the oldpage as it's going to be freed
@@ -349,10 +374,17 @@ print_page_owner(char __user *buf, size_t count, unsigned long pfn,
 	if (!kbuf)
 		return -ENOMEM;
 
+#ifdef CONFIG_SPRD_PAGE_OWNER
+	ret = snprintf(kbuf, count,
+			"Page allocated via order %u, mask %#x(%pGg), pid %d, tgid %d (%s), ts %llu ns, free_ts %llu ns\n",
+			page_owner->order, page_owner->gfp_mask, &page_owner->gfp_mask, page_owner->pid, page_owner->tgid,
+			page_owner->comm, page_owner->ts_nsec, page_owner->free_ts_nsec);
+#else
 	ret = snprintf(kbuf, count,
 			"Page allocated via order %u, mask %#x(%pGg)\n",
 			page_owner->order, page_owner->gfp_mask,
 			&page_owner->gfp_mask);
+#endif
 
 	if (ret >= count)
 		goto err;
@@ -428,8 +460,14 @@ void __dump_page_owner(struct page *page)
 	else
 		pr_alert("page_owner tracks the page as freed\n");
 
+#ifdef CONFIG_SPRD_PAGE_OWNER
+	pr_alert("page last allocated via order %u, gfp_mask %#x(%pGg), pid %d(%s), ts %llu, free_ts %llu\n",
+		page_owner->order, gfp_mask, &gfp_mask, page_owner->pid, page_owner->comm,
+		page_owner->ts_nsec, page_owner->free_ts_nsec);
+#else
 	pr_alert("page last allocated via order %u, migratetype %s, gfp_mask %#x(%pGg)\n",
 		 page_owner->order, migratetype_names[mt], gfp_mask, &gfp_mask);
+#endif
 
 	handle = READ_ONCE(page_owner->handle);
 	if (!handle) {
@@ -439,6 +477,7 @@ void __dump_page_owner(struct page *page)
 		stack_trace_print(entries, nr_entries, 0);
 	}
 
+#ifndef CONFIG_SPRD_PAGE_OWNER
 	handle = READ_ONCE(page_owner->free_handle);
 	if (!handle) {
 		pr_alert("page_owner free stack trace missing\n");
@@ -451,6 +490,7 @@ void __dump_page_owner(struct page *page)
 	if (page_owner->last_migrate_reason != -1)
 		pr_alert("page has been migrated, last migrate reason: %s\n",
 			migrate_reason_names[page_owner->last_migrate_reason]);
+#endif
 }
 
 static ssize_t
@@ -542,6 +582,120 @@ read_page_owner(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 
 	return 0;
 }
+
+#ifdef CONFIG_SPRD_PAGE_OWNER
+static ssize_t
+sprd_read_page_owner(struct file *file, char __user *buf, size_t count, loff_t *ppos)
+{
+	unsigned long pfn;
+	struct page *page;
+	struct page_ext *page_ext;
+	struct page_owner *page_owner;
+	depot_stack_handle_t handle;
+
+	if (!static_branch_unlikely(&page_owner_inited))
+		return -EINVAL;
+
+	page = NULL;
+	pfn = min_low_pfn + *ppos;
+
+	/* Find a valid PFN or the start of a MAX_ORDER_NR_PAGES area */
+	while (!pfn_valid(pfn) && (pfn & (MAX_ORDER_NR_PAGES - 1)) != 0)
+		pfn++;
+
+	drain_all_pages(NULL);
+
+	/* Find an allocated page and skip LRU,SLAB,ZRAM,compound page */
+	for (; pfn < max_pfn; pfn++) {
+		/*
+		 * If the new page is in a new MAX_ORDER_NR_PAGES area,
+		 * validate the area as existing, skip it if not
+		 */
+		if ((pfn & (MAX_ORDER_NR_PAGES - 1)) == 0 && !pfn_valid(pfn)) {
+			pfn += MAX_ORDER_NR_PAGES - 1;
+			continue;
+		}
+
+		/* Check for holes within a MAX_ORDER area */
+		if (!pfn_valid_within(pfn))
+			continue;
+
+		page = pfn_to_online_page(pfn);
+
+		if (PageBuddy(page)) {
+			unsigned long freepage_order = page_order_unsafe(page);
+
+			if (freepage_order < MAX_ORDER)
+				pfn += (1UL << freepage_order) - 1;
+			continue;
+		}
+
+		/* skip reserved page */
+		if (PageReserved(page))
+			continue;
+
+		/* skip page in LRU */
+		if (PageLRU(page))
+			continue;
+
+		/* skip compound and higher-order page */
+		if (PageCompound(page)) {
+			pfn += compound_nr(page);
+			continue;
+		}
+
+		/* skip order0 slab page */
+		if (PageSlab(page))
+			continue;
+
+		/* skip zspage/vmalloc/privatte page */
+		if (PagePrivate(page))
+			continue;
+
+		page_ext = lookup_page_ext(page);
+		if (unlikely(!page_ext))
+			continue;
+
+		/*
+		 * Some pages could be missed by concurrent allocation or free,
+		 * because we don't hold the zone lock.
+		 */
+		if (!test_bit(PAGE_EXT_OWNER, &page_ext->flags))
+			continue;
+
+		/*
+		 * Although we do have the info about past allocation of free
+		 * pages, it's not relevant for current memory usage.
+		 */
+		if (!test_bit(PAGE_EXT_OWNER_ALLOCATED, &page_ext->flags))
+			continue;
+
+		page_owner = get_page_owner(page_ext);
+
+		/*
+		 * Don't print "tail" pages of high-order allocations as that
+		 * would inflate the stats.
+		 */
+		if (!IS_ALIGNED(pfn, 1 << page_owner->order))
+			continue;
+		/*
+		 * Access to page_ext->handle isn't synchronous so we should
+		 * be careful to access it.
+		 */
+		handle = READ_ONCE(page_owner->handle);
+		if (!handle)
+			continue;
+
+		/* Record the next PFN to read in the file offset */
+		*ppos = (pfn - min_low_pfn) + 1;
+
+		return print_page_owner(buf, count, pfn, page,
+				page_owner, handle);
+	}
+
+	return 0;
+}
+#endif
 
 static void init_pages_in_zone(pg_data_t *pgdat, struct zone *zone)
 {
@@ -640,6 +794,12 @@ static const struct file_operations proc_page_owner_operations = {
 	.read		= read_page_owner,
 };
 
+#ifdef CONFIG_SPRD_PAGE_OWNER
+static const struct file_operations proc_sprd_page_owner_operations = {
+	.read		= sprd_read_page_owner,
+};
+#endif
+
 static int __init pageowner_init(void)
 {
 	if (!static_branch_unlikely(&page_owner_inited)) {
@@ -649,6 +809,11 @@ static int __init pageowner_init(void)
 
 	debugfs_create_file("page_owner", 0400, NULL, NULL,
 			    &proc_page_owner_operations);
+
+#ifdef CONFIG_SPRD_PAGE_OWNER
+	debugfs_create_file("sprd_page_owner", 0400, NULL, NULL,
+			    &proc_sprd_page_owner_operations);
+#endif
 
 	return 0;
 }

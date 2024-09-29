@@ -14,8 +14,8 @@
 
 #include <linux/delay.h>
 #include <linux/device.h>
-#include <linux/iio/consumer.h>
 #include <linux/io.h>
+#include <linux/iio/consumer.h>
 #include <linux/mfd/syscon.h>
 #include <linux/module.h>
 #include <linux/of.h>
@@ -64,8 +64,9 @@
 #define TFREGRES_TUNE_VALUE		(0xe << 19)
 #define DEFAULT_HOST_EYE_PATTERN					0x04f3d1c0
 #define DEFAULT_DEVICE_EYE_PATTERN					0x04f3d1c0
+#ifndef VENDOR_KERNEL
 extern enum usb_charger_type sgm4154x_charger_detect(void);
-extern enum usb_charger_type sgm4154x_charger_redetect(void);
+#endif
 extern int prj_name;
 struct sprd_hsphy {
 	struct device		*dev;
@@ -83,18 +84,17 @@ struct sprd_hsphy {
 	atomic_t		reset;
 	atomic_t		inited;
 	bool			is_host;
-	struct iio_channel	*dp;
-	struct iio_channel	*dm;	
+    struct iio_channel    *dp;
+    struct iio_channel    *dm;
 };
 
 #define FULLSPEED_USB33_TUNE		2700000
-#define SC2730_CHARGE_DET_FGU_CTRL	0x3A0
-#define SC2730_ADC_OFFSET		0x1800
-#define BIT_DP_DM_AUX_EN		BIT(1)
-#define BIT_DP_DM_BC_ENB		BIT(0)
-#define VOLT_LO_LIMIT			1200
-#define VOLT_HI_LIMIT			600
-
+#define SC2730_CHARGE_DET_FGU_CTRL    0x3A0
+#define SC2730_ADC_OFFSET        0x1800
+#define BIT_DP_DM_AUX_EN        BIT(1)
+#define BIT_DP_DM_BC_ENB        BIT(0)
+#define VOLT_LO_LIMIT            1200
+#define VOLT_HI_LIMIT            600
 static enum usb_charger_type sc27xx_charger_detect(struct regmap *regmap)
 {
 	enum usb_charger_type type;
@@ -492,85 +492,14 @@ static enum usb_charger_type sprd_hsphy_charger_detect(struct usb_phy *x)
 	struct sprd_hsphy *phy = container_of(x, struct sprd_hsphy, phy);
 
 	if (prj_name == 2 || prj_name == 3)
+#ifdef VENDOR_KERNEL
+		return UNKNOWN_TYPE;
+#else
 		return sgm4154x_charger_detect();
+#endif
 	else
 		return sc27xx_charger_detect(phy->pmic);
 }
-
-static int sc2730_voltage_cali(int voltage)
-{
-	return voltage*3/2;
-}
-
-enum usb_charger_type sprd_hsphy_retry_charger_detect(struct usb_phy *x)
-{
-	struct sprd_hsphy *phy = container_of(x, struct sprd_hsphy, phy);
-	enum usb_charger_type type = UNKNOWN_TYPE;
-	int dm_voltage, dp_voltage;
-	int cnt = 20;
-	
-	if (prj_name == 2 || prj_name == 3)
-	{
-		enum usb_charger_type type = sgm4154x_charger_redetect();
-		dev_dbg(x->dev, "correct type is %x\n", type);
-		if (type != UNKNOWN_TYPE) {
-			x->chg_type = type;
-			schedule_work(&x->chg_work);
-		}
-		return type;
-	} 
-
-	if (!phy->dm || !phy->dp) {
-		dev_info(x->dev, "iio resource is not ready, try again\n");
-		phy->dp = devm_iio_channel_get(x->dev, "dp");
-		phy->dm = devm_iio_channel_get(x->dev, "dm");
-		if (!phy->dm || !phy->dp) {
-			dev_err(x->dev, "phy->dp:%p, phy->dm:%p\n",
-			phy->dp, phy->dm);
-			return UNKNOWN_TYPE;
-		}
-	}
-
-	regmap_update_bits(phy->pmic,
-		SC2730_ADC_OFFSET | SC2730_CHARGE_DET_FGU_CTRL,
-		BIT_DP_DM_AUX_EN | BIT_DP_DM_BC_ENB,
-		BIT_DP_DM_AUX_EN);
-
-	msleep(300);
-	iio_read_channel_processed(phy->dp, &dp_voltage);
-	dp_voltage = sc2730_voltage_cali(dp_voltage);
-	if (dp_voltage > VOLT_LO_LIMIT) {
-		do {
-			iio_read_channel_processed(phy->dm, &dm_voltage);
-			dm_voltage = sc2730_voltage_cali(dm_voltage);
-			if (dm_voltage > VOLT_LO_LIMIT) {
-				type = DCP_TYPE;
-				break;
-			}
-			msleep(100);
-			cnt--;
-			iio_read_channel_processed(phy->dp, &dp_voltage);
-			dp_voltage = sc2730_voltage_cali(dp_voltage);
-			if (dp_voltage  < VOLT_HI_LIMIT) {
-				type = SDP_TYPE;
-				break;
-			}
-		} while ((x->chg_state == USB_CHARGER_PRESENT) && cnt > 0);
-	}
-
-	regmap_update_bits(phy->pmic,
-		SC2730_ADC_OFFSET | SC2730_CHARGE_DET_FGU_CTRL,
-		BIT_DP_DM_AUX_EN | BIT_DP_DM_BC_ENB, 0);
-
-	dev_dbg(x->dev, "correct type is %x\n", type);
-	if (type != UNKNOWN_TYPE) {
-		x->chg_type = type;
-		schedule_work(&x->chg_work);
-	}
-	return type;
-}
-
-EXPORT_SYMBOL_GPL(sprd_hsphy_retry_charger_detect);
 
 int sprd_hsphy_cali_mode(void)
 {
@@ -593,7 +522,79 @@ int sprd_hsphy_cali_mode(void)
 	else
 		return 0;
 }
+static int sc2730_voltage_cali(int voltage)
+{
+    return voltage*3/2;
+}
+struct usb_phy *g_usb_phy = NULL;
+enum usb_charger_type sprd_hsphy_retry_charger_detect(void)
+{
+	struct usb_phy *x = g_usb_phy;
+    struct sprd_hsphy *phy = NULL;
+    enum usb_charger_type type = UNKNOWN_TYPE;
+    int dm_voltage, dp_voltage;
+    int cnt = 20;
+    int ret = 0;
+    u32 val = 0;
+    struct regmap *regmap = NULL; 
 
+	if(NULL == x){
+		return UNKNOWN_TYPE;
+	}
+    phy = container_of(x, struct sprd_hsphy, phy);
+	regmap = phy->pmic;
+    ret = regmap_read(regmap, SC2730_CHARGE_STATUS, &val);
+    dev_info(x->dev, "%s %d sc2730_charge_status val = %d, ret = %d.\n", __func__, __LINE__, val, ret);
+    if (!phy->dm || !phy->dp) {
+        dev_err(x->dev, "iio resource is not ready, try again\n");
+        phy->dp = devm_iio_channel_get(x->dev, "dp");
+        phy->dm = devm_iio_channel_get(x->dev, "dm");
+        if (!phy->dm || !phy->dp) {
+            dev_err(x->dev, "phy->dp:%p, phy->dm:%p\n",
+            phy->dp, phy->dm);
+            return UNKNOWN_TYPE;
+        }
+    }
+    regmap_update_bits(phy->pmic,
+        SC2730_ADC_OFFSET | SC2730_CHARGE_DET_FGU_CTRL,
+        BIT_DP_DM_AUX_EN | BIT_DP_DM_BC_ENB,
+        BIT_DP_DM_AUX_EN);
+		
+    msleep(300);
+    iio_read_channel_processed(phy->dp, &dp_voltage);
+    dp_voltage = sc2730_voltage_cali(dp_voltage);
+    dev_info(x->dev, "%s %d dp_voltage = %d.\n", __func__, __LINE__, dp_voltage);
+    if (dp_voltage > VOLT_LO_LIMIT) {
+        do {
+            iio_read_channel_processed(phy->dm, &dm_voltage);
+            dm_voltage = sc2730_voltage_cali(dm_voltage);
+            dev_info(x->dev, "%s %d dm_voltage = %d.\n", __func__, __LINE__, dm_voltage);
+            if (dm_voltage > VOLT_LO_LIMIT) {
+                type = DCP_TYPE;
+                break;
+            }
+            msleep(100);
+            cnt--;
+            iio_read_channel_processed(phy->dp, &dp_voltage);
+            dp_voltage = sc2730_voltage_cali(dp_voltage);
+            dev_info(x->dev, "%s %d dp_voltage = %d.\n", __func__, __LINE__, dp_voltage);
+            if (dp_voltage  < VOLT_HI_LIMIT) {
+                type = SDP_TYPE;
+                break;
+            }
+        } while ((x->chg_state == USB_CHARGER_PRESENT) && cnt > 0);
+    }
+    regmap_update_bits(phy->pmic,
+        SC2730_ADC_OFFSET | SC2730_CHARGE_DET_FGU_CTRL,
+        BIT_DP_DM_AUX_EN | BIT_DP_DM_BC_ENB, 0);
+    dev_err(x->dev, "correct type is %x\n", type);
+    if (type != UNKNOWN_TYPE) {
+        x->chg_type = type;
+        schedule_work(&x->chg_work);
+    }
+    return type;
+}
+EXPORT_SYMBOL_GPL(sprd_hsphy_retry_charger_detect);
 static int sprd_hsphy_probe(struct platform_device *pdev)
 {
 	struct device_node *regmap_np;
@@ -691,16 +692,6 @@ static int sprd_hsphy_probe(struct platform_device *pdev)
 		dev_err(dev, "unable to get hsphy-host-eye-pattern node\n");
 		phy->host_eye_pattern = DEFAULT_HOST_EYE_PATTERN;
 	}
-	phy->dp = devm_iio_channel_get(dev, "dp");
-	phy->dm = devm_iio_channel_get(dev, "dm");
-	if (IS_ERR(phy->dp)) {
-		phy->dp = NULL;
-		dev_warn(dev, "failed to get dp or dm channel\n");
-	}
-	if (IS_ERR(phy->dm)) {
-		phy->dm = NULL;
-		dev_warn(dev, "failed to get dp or dm channel\n");
-	}
 
 	/* enable usb module */
 	reg = msk = (MASK_AON_APB_OTG_UTMI_EB | MASK_AON_APB_ANA_EB);
@@ -726,6 +717,8 @@ static int sprd_hsphy_probe(struct platform_device *pdev)
 	phy->phy.type = USB_PHY_TYPE_USB2;
 	phy->phy.vbus_nb.notifier_call = sprd_hsphy_vbus_notify;
 	phy->phy.charger_detect = sprd_hsphy_charger_detect;
+	//phy->phy.retry_charger_detect = sprd_hsphy_retry_charger_detect;
+	g_usb_phy = &phy->phy;
 	otg->usb_phy = &phy->phy;
 
 	device_init_wakeup(phy->dev, true);

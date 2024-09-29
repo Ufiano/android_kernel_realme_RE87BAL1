@@ -32,4 +32,4 @@ obj-$(CONFIG_RMI4_CORE)		+= rmi4/
 
 obj-$(CONFIG_LCM_BIAS_VOLTAGE_ON)		+= lcd_bias/
 
-obj-m += fingerprint/
+obj-y += fingerprint/

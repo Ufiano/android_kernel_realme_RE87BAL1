@@ -36,7 +36,9 @@
 #include <linux/usb/phy.h>
 #include <uapi/linux/usb/charger.h>
 #include <linux/power/sprd_battery_info.h>
+/*odm.hq.bsp.luowenjiang@huaqin.com 2021.12.03 modify for usb temp protection start*/
 #include <linux/power/charger-manager.h>
+/*odm.hq.bsp.luowenjiang@huaqin.com 2021.12.03 modify for usb temp protection end*/
 
 
 //#define __SGM41511_CHARGE_DEV__
@@ -366,9 +368,11 @@ struct sgm4154x_charger_info {
 	struct alarm otg_timer;
 	struct sgm4154x_charger_sysfs *sysfs;
 	int reg_id;
+#ifndef VENDOR_KERNEL
 	struct workqueue_struct *charge_wq;
 	struct work_struct qc_voltage_adjust_work;
 	u32 qc_voltage;
+#endif //not defined VENDOR_KERNEL
 };
 
 struct sgm4154x_charger_reg_tab {
@@ -381,7 +385,7 @@ enum SGM4154x_VINDPM_OS {
 	VINDPM_OS_3900mV,
 	VINDPM_OS_5900mV,
 	VINDPM_OS_7500mV,
-	VINDPM_OS_10500mV,		
+	VINDPM_OS_10500mV,
 };
 
 static struct sgm4154x_charger_reg_tab reg_tab[SGM4154x_REG_NUM + 1] = {
@@ -517,25 +521,25 @@ int sgm4154x_get_vindpm_offset_os(struct sgm4154x_charger_info *info)
 
 	ret = regmap_read(info->pmic, SGM4154x_REG_0F, &reg_val);
 	if (ret)
-		return ret;	
+		return ret;
 
-	reg_val = reg_val & REG0F_VINDPM_OS_MASK;	
+	reg_val = reg_val & REG0F_VINDPM_OS_MASK;
 
 	return reg_val;
 }
 
 static int sgm4154x_set_vindpm_offset_os(struct sgm4154x_charger_info *info,u8 offset_os)
 {
-	int ret;	
-	
+	int ret;
+
 	ret = sgm4154x_update_bits(info, SGM4154x_REG_0F,
 				  REG0F_VINDPM_OS_MASK, offset_os);
-	
+
 	if (ret){
 		pr_err("%s fail\n",__func__);
 		return ret;
 	}
-	
+
 	return ret;
 }
 
@@ -548,24 +552,24 @@ static int sgm4154x_charger_set_vindpm(struct sgm4154x_charger_info *info, u32 v
 		vol = REG06_VINDPM_MIN;
 	else if (vol > REG06_VINDPM_MAX)
 		vol = REG06_VINDPM_MAX;
-	return 0;
+
 	if (vol < 5900){
 		os_val = VINDPM_OS_3900mV;
 		offset = 3900;
-	}		
+	}
 	else if (vol >= 5900 && vol < 7500){
 		os_val = VINDPM_OS_5900mV;
 		offset = 5900; //mv
-	}		
+	}
 	else if (vol >= 7500 && vol < 10500){
 		os_val = VINDPM_OS_7500mV;
 		offset = 7500; //mv
-	}		
+	}
 	else{
 		os_val = VINDPM_OS_10500mV;
 		offset = 10500; //mv
-	}		
-	
+	}
+
 	sgm4154x_set_vindpm_offset_os(info, os_val);
 	reg_val = (vol - offset) / REG06_VINDPM_STEP;
 
@@ -581,7 +585,7 @@ static int sgm4154x_charger_set_termina_vol(struct sgm4154x_charger_info *info, 
 		vol = REG04_VREG_MIN;
 	else if (vol >= REG04_VREG_MAX)
 		vol = REG04_VREG_MAX;
-	reg_val = (vol - REG04_VREG_OFFSET) / REG04_VREG_STEP;	
+	reg_val = (vol - REG04_VREG_OFFSET) / REG04_VREG_STEP;
 
 	return sgm4154x_update_bits(info, SGM4154x_REG_04, REG04_VREG_MASK,
 				   reg_val << REG04_VREG_SHIFT);
@@ -709,6 +713,7 @@ static int sgm4154x_charger_set_limit_current(struct sgm4154x_charger_info *info
 	return ret;
 }
 
+#ifndef VENDOR_KERNEL
 static int sgm4154x_charger_force_limit_current_to_100ma(struct sgm4154x_charger_info *info,
 					     u32 limit_cur)
 {
@@ -731,7 +736,7 @@ static int sgm4154x_charger_force_limit_current_to_100ma(struct sgm4154x_charger
 
 	return ret;
 }
-
+#endif //not defined VENDOR_KERNEL
 
 static u32 sgm4154x_charger_get_limit_current(struct sgm4154x_charger_info *info,
 					     u32 *limit_cur)
@@ -769,7 +774,9 @@ int sgm4154x_enable_qc20_hvdcp_9v(struct sgm4154x_charger_info *info)
 	val = 0xe << 1;
 	ret = sgm4154x_update_bits(info, SGM4154x_REG_0D,
 				  GENMASK(4,1), val); //dp 3.3v dm 0.6v
+#ifndef VENDOR_KERNEL
 	sgm4154x_charger_force_limit_current_to_100ma(info, 100);
+#endif //not defined VENDOR_KERNEL
 
 	return ret;
 }
@@ -791,7 +798,7 @@ int sgm4154x_enable_qc20_hvdcp_12v(struct sgm4154x_charger_info *info)
 	}
 
 	dm_val = 0x2<<1;
-	
+
 	ret = sgm4154x_update_bits(info, SGM4154x_REG_0D,
 				  REG0D_DM_VSEL_MASK, dm_val); //dm 0.6V
     if (ret)
@@ -837,7 +844,7 @@ void sc27xx_force_dpdm(void)
 
 	if (NULL == pinfo)
 		return;
-	
+
     val = 0;
     sgm4154x_update_bits(pinfo, SGM4154x_REG_0D,
 				  GENMASK(4,1), val); //dp/dm Hiz
@@ -903,9 +910,8 @@ static int sgm4154x_qc_adjust_voltage(struct sgm4154x_charger_info *info, u32 va
 {
 	int i = 0, cnt = 0, ret = 0;
 	int val = 0xe << 1;
-	
+
 	if (value == SGM4154x_NORMAL_CHARGER_VOLTAGE) {
-		sgm4154x_charger_force_limit_current_to_100ma(info, 100);
 		ret = sgm4154x_disable_hvdcp(info);
 		dev_info(info->dev, "adjust 5v success\n");
 		return  ret;
@@ -928,7 +934,7 @@ static int sgm4154x_qc_adjust_voltage(struct sgm4154x_charger_info *info, u32 va
 				msleep(100);
 			} while (!sgm4154x_is_hvdcp(info) && cnt++ < 5);
 		}
-		
+
 		if (sgm4154x_is_hvdcp(info))
 			dev_info(info->dev, "adjust 9v success\n");
 		else
@@ -938,14 +944,16 @@ static int sgm4154x_qc_adjust_voltage(struct sgm4154x_charger_info *info, u32 va
 	return -EINVAL;
 }
 
+#ifndef VENDOR_KERNEL
 static void sgm4154x_charger_qc_adjust_voltage_work(struct work_struct *work)
 {
 	struct sgm4154x_charger_info *info =
 		container_of(work, struct sgm4154x_charger_info, qc_voltage_adjust_work);
-	
-	dev_info(info->dev, "sgm4154x_charger_qc_adjust_voltage_work vol = %d\n", info->qc_voltage);	
+
+	dev_info(info->dev, "sgm4154x_charger_qc_adjust_voltage_work vol = %d\n", info->qc_voltage);
 	sgm4154x_qc_adjust_voltage(info, info->qc_voltage);
 }
+#endif //not defined VENDOR_KERNEL
 
 static void sgm4154x_charger_qc_detection_work(struct work_struct *work)
 {
@@ -1004,8 +1012,11 @@ static void sgm4154x_charger_qc_detection_work(struct work_struct *work)
 		if (info->qc_dete_count < 3 && vbus > 3000000)
 		{
 			info->qc_dete_count++;
-			//schedule_work(&info->qc_detection_work);
+#ifdef VENDOR_KERNEL
+			schedule_work(&info->qc_detection_work);
+#else //not defined VENDOR_KERNEL
 			queue_work(info->charge_wq, &info->qc_detection_work);
+#endif //defined VENDOR_KERNEL
 		}
 	}
 }
@@ -1050,7 +1061,7 @@ static int sgm4154x_charger_hw_init(struct sgm4154x_charger_info *info)
 
 	if (sc27xx_fgu_bat_id == 2)
 		num = 1;
-	
+
 	ret = sprd_battery_get_battery_info(info->psy_usb, &bat_info, num);
 	if (ret) {
 		dev_warn(info->dev, "no battery information is supplied\n");
@@ -1125,9 +1136,9 @@ static int sgm4154x_charger_hw_init(struct sgm4154x_charger_info *info)
 		if (ret)
 			dev_err(info->dev, "set sgm4154x set prechrg failed\n");
 
-		/*ret = sgm4154x_charger_set_vindpm(info,4500);
+		ret = sgm4154x_charger_set_vindpm(info,4500);
 		if (ret)
-           	dev_err(info->dev, "set sgm4154x set vindpm failed\n");*/
+           	dev_err(info->dev, "set sgm4154x set vindpm failed\n");
 
 		ret = sgm4154x_vdmp_bat_track_set(info,1);
 		if (ret)
@@ -1300,7 +1311,7 @@ static int sgm4154x_charger_feed_watchdog(struct sgm4154x_charger_info *info)
 
 	if (info->otg_enable)
 		return 0;
-	
+
 	ret = sgm4154x_charger_get_limit_current(info, &limit_cur);
 	if (ret) {
 		dev_err(info->dev, "get limit cur failed\n");
@@ -1333,7 +1344,7 @@ static int sgm4154x_charger_set_status(struct sgm4154x_charger_info *info,
 	int ret = 0;
 
 	if (val == CM_FAST_CHARGE_OVP_ENABLE_CMD) {
-		pr_err("ovp do nothing");
+		dev_err(info->dev, "maybe need to set vindpm\n");//??
 	} else if (val == CM_FAST_CHARGE_OVP_DISABLE_CMD) {
 		if (input_vol > SGM4154x_FAST_CHG_VOL_MAX)
 			info->need_disable_Q1 = true;
@@ -1377,8 +1388,10 @@ static int sgm4154x_charger_set_status(struct sgm4154x_charger_info *info,
 	  	return;
 
 	  if (info->usb_phy->chg_type != UNKNOWN_TYPE) {
+#ifndef VENDOR_KERNEL
 		if (info->usb_phy->chg_type == DCP_TYPE)
 			schedule_work(&info->work);
+#endif //not defined VENDOR_KERNEL
 	  	return;
 	  }
 	  usb_type = sgm4154x_charger_redetect();
@@ -1415,7 +1428,7 @@ static void sgm4154x_charger_work(struct work_struct *data)
 		schedule_delayed_work(&info->wdt_work, 0);
 	else
 		cancel_delayed_work_sync(&info->wdt_work);
-	
+
 	dev_info(info->dev, "battery present = %d, charger type = %d, vbus = %d\n",
 		 present, info->usb_phy->chg_type, vbus);
 	if(runin_stop == 0 || !info->limit){
@@ -1427,8 +1440,11 @@ static void sgm4154x_charger_work(struct work_struct *data)
 			  pr_info("sgm4154x_charger_work start qc detect\n");
 			  info->qc_dete_count = 0;
 			  mdelay(1);
-			  //schedule_work(&info->qc_detection_work);
+#ifdef VENDOR_KERNEL
+			  schedule_work(&info->qc_detection_work);
+#else //not defined VENDOR_KERNEL
 			  queue_work(info->charge_wq, &info->qc_detection_work);
+#endif //defined VENDOR_KERNEL
 			} else {
 			  pr_info("sgm4154x_charger_work start redetect work\n");
               schedule_delayed_work(&info->recharge_detect_work, HZ);
@@ -1804,7 +1820,7 @@ static int sgm4154x_charger_usb_set_property(struct power_supply *psy,
 
 	if (!info)
 		return -ENOMEM;
-	
+
 	if (psp == POWER_SUPPLY_PROP_STATUS || psp == POWER_SUPPLY_PROP_CALIBRATE) {
 		bat_present = sgm4154x_charger_is_bat_present(info);
 		ret = sgm4154x_charger_get_charge_voltage(info, &input_vol);
@@ -1835,8 +1851,12 @@ static int sgm4154x_charger_usb_set_property(struct power_supply *psy,
 		break;
 
 	case POWER_SUPPLY_PROP_VOLTAGE_MAX:
+#ifdef VENDOR_KERNEL
+		ret = sgm4154x_qc_adjust_voltage(info, val->intval);
+#else //not defined VENDOR_KERNEL
 		info->qc_voltage = val->intval;
 		queue_work(info->charge_wq, &info->qc_voltage_adjust_work);
+#endif //defined VENDOR_KERNEL
 		if (ret < 0)
 			dev_err(info->dev, "failed to qc adjust voltage\n");
 		break;
@@ -1865,7 +1885,9 @@ static int sgm4154x_charger_usb_set_property(struct power_supply *psy,
 				sgm4154x_charger_dump_register(info);
 			}
 			break;
-		} else if (val->intval == CM_HIZ_ENABLE_CMD) {
+		}
+#ifndef VENDOR_KERNEL
+		 else if (val->intval == CM_HIZ_ENABLE_CMD) {
 			ret = sgm4154x_set_hiz_en(info,true);
 			if (ret < 0)
 				dev_err(info->dev, "set hizmode failed\n");
@@ -1881,25 +1903,23 @@ static int sgm4154x_charger_usb_set_property(struct power_supply *psy,
 				dev_err(info->dev, "feed charger watchdog failed\n");
 			break;
 		}
+#endif //not defined VENDOR_KERNEL
 
 		ret = sgm4154x_charger_set_status(info, val->intval, input_vol, bat_present);
 		if (ret < 0)
 			dev_err(info->dev, "set charge status failed\n");
-		
+
 		break;
 	case POWER_SUPPLY_PROP_TYPE:
-		/*if (val->intval == POWER_SUPPLY_WIRELESS_CHARGER_TYPE_BPP) {
-			
+		if (val->intval == POWER_SUPPLY_WIRELESS_CHARGER_TYPE_BPP) {
 			ret = sgm4154x_charger_set_vindpm(info, VINDPM_OS_5900mV);
 		} else if (val->intval == POWER_SUPPLY_WIRELESS_CHARGER_TYPE_EPP) {
-			
 			ret = sgm4154x_charger_set_vindpm(info, VINDPM_OS_10500mV);
 		} else {
-			
 			ret = sgm4154x_charger_set_vindpm(info, VINDPM_OS_5900mV);
 		}
 		if (ret)
-			dev_err(info->dev, "failed to set fast charge ovp\n");*/
+			dev_err(info->dev, "failed to set fast charge ovp\n");
 
 		break;
 
@@ -2387,12 +2407,14 @@ static int sgm4154x_charger_probe(struct i2c_client *client,
 
 	bat_present = sgm4154x_charger_is_bat_present(info);
 	mutex_init(&info->lock);
+#ifndef VENDOR_KERNEL
 	info->charge_wq = alloc_ordered_workqueue("sgm4154x_charge_wq",
   						   WQ_MEM_RECLAIM);
   	if (info->charge_wq == NULL) {
   		dev_err(info->dev, "failed to create work queue\n");
   		return -ENOMEM;
   	}
+#endif //not defined VENDOR_KERNEL
 	INIT_DELAYED_WORK(&info->recharge_detect_work,
 			  sgm4154x_charger_redetect_work);
 
@@ -2486,11 +2508,13 @@ static int sgm4154x_charger_probe(struct i2c_client *client,
 		dev_err(dev, "failed to sgm4154x_charger_hw_init\n");
 		goto err_mutex_lock;
 	}
-	
+
 	sgm4154x_charger_stop_charge(info, bat_present);
 
 	INIT_WORK(&info->qc_detection_work, sgm4154x_charger_qc_detection_work);
+#ifndef VENDOR_KERNEL
 	INIT_WORK(&info->qc_voltage_adjust_work, sgm4154x_charger_qc_adjust_voltage_work);
+#endif //not defined VENDOR_KERNEL
 
 	device_init_wakeup(info->dev, true);
 	info->usb_notify.notifier_call = sgm4154x_charger_usb_change;
@@ -2566,7 +2590,7 @@ static int sgm4154x_charger_suspend(struct device *dev)
 
 	if (info->otg_enable || info->limit)
 		sgm4154x_charger_feed_watchdog(info);
-	
+
 	if (!info->otg_enable)
 		return 0;
 
@@ -2609,7 +2633,9 @@ static void sgm4154x_charger_shutdown(struct i2c_client *client)
 
 	cancel_work_sync(&info->qc_detection_work);
 	cancel_delayed_work_sync(&info->wdt_work);
+#ifndef VENDOR_KERNEL
 	cancel_work_sync(&info->qc_voltage_adjust_work);
+#endif //not defined VENDOR_KERNEL
 	if (info->otg_enable) {
 		info->otg_enable = false;
 		cancel_delayed_work_sync(&info->otg_work);

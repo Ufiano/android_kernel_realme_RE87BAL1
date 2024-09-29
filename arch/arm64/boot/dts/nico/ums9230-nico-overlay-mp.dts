@@ -129,6 +129,11 @@
 				};
 			};
 	
+			virtual_typec: virtual_typec {
+				compatible = "sprd,virtual-typec";
+				extcon = <&extcon_gpio>;
+				status = "okay";
+			};
 
 			charger-manager {
 				compatible = "charger-manager";
@@ -349,6 +354,7 @@
 				status = "okay";
 			};
 
+			/*Used to check the RF antenna*/
 			op_rf_cable {
 				compatible = "op,rf_cable";
 				status = "okay";
@@ -536,6 +542,7 @@
 		reg = <0x1b>;
 		chg_pump_en_gpio = <&ap_gpio 147 GPIO_ACTIVE_HIGH>;
 	};
+/*odm.hq.bsp.licheng@huaqin.com 2021.9.21 modify for bring up lcd*/
 /*
 	nu1619_rx: charger@61 {
 		compatible = "nuvolta,wl_charger_nu1619";
@@ -557,7 +564,7 @@
 
 
 	touchscreen@0 {
-			compatible = "oplus,touchscreen";
+			compatible = "oppo,touchscreen";
 			spi-max-frequency = <9600000>;
 			reg = <0>;
 			/*touch,irq-gpio = <&ap_gpio 144 GPIO_ACTIVE_HIGH>;*/
@@ -1798,8 +1805,8 @@
 	sprd,calib-resistance-spec = <20000>;
 	first-calib-voltage = <3580000>;
 	first-calib-capacity = <50>;
-	io-channels = <&pmic_adc 0>, <&pmic_adc 14>;
-	io-channel-names = "bat-temp", "charge-vol";
+	io-channels = <&pmic_adc 0>, <&pmic_adc 14>, <&pmic_adc 3>;
+	io-channel-names = "bat-temp", "charge-vol", "bat-id-vol";
 	fgu-capacity-track;
 	phys = <&hsphy>;
 

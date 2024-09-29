@@ -94,7 +94,7 @@
 #define headset_reg_set_bits(reg, bits) \
 	sci_adi_set(CODEC_REG((reg)), (bits))
 
-extern void tp_headset_status_switch(int status);
+//extern void tp_headset_status_switch(int status);
 
 const char * const eic_name[HDST_ALL_EIC + 1] = {
 	[HDST_INSERT_ALL_EIC] = TO_STRING(HDST_INSERT_ALL_EIC),
@@ -2215,7 +2215,7 @@ static void sprd_headset_type_report(struct sprd_headset *hdst)
 	case HEADSET_4POLE_NORMAL:
 		hdst->headphone = HEADSET_4POLE_NORMAL;
 		sprd_process_4pole_type(hdst, headset_type);
-		tp_headset_status_switch(1);
+		//tp_headset_status_switch(1);
 		pr_info("type_report headset plug in\n");
 		break;
 	default:
@@ -2259,7 +2259,7 @@ static void sprd_headset_insert_all_plugout(struct sprd_headset *hdst)
 		pr_info("headphone plug out\n");
 		break;
 	case HEADSET_4POLE_NORMAL:
-		tp_headset_status_switch(0);
+		//tp_headset_status_switch(0);
 		pr_info("headset plug out\n");
 		break;
 	default:
@@ -3056,7 +3056,7 @@ int sprd_headset_soc_probe(struct snd_soc_component *codec)
 		 pdata->gpios[HDST_GPIO_AUD_DET_INT_ALL]);
 	gpio_desc_test = gpio_to_desc(pdata->gpios[HDST_GPIO_AUD_DET_INT_ALL]);
 	/* used to test, we can operate this gpio with command */
-	gpiod_export(gpio_desc_test, true);
+	//gpiod_export(gpio_desc_test, true);
 
 	sema_init(&hdst->sem, 1);
 
@@ -3573,7 +3573,7 @@ static int sprd_headset_read_efuse(struct platform_device *pdev,
 static int sprd_get_adc_cal_from_efuse(struct platform_device *pdev)
 {
 	u8 delta[4];
-	s8 calib_delta3;
+        s8 calib_delta3;
 	u32 test[2], ret, data = 0;
 	unsigned int adie_chip_id;
 
@@ -3597,7 +3597,8 @@ static int sprd_get_adc_cal_from_efuse(struct platform_device *pdev)
 	delta[1] = (test[0] & 0xFF00) >> 8;
 	delta[2] = test[1] & 0xFF;
 	delta[3] = (test[1] & 0xFF00) >> 8;
-        if ((delta[3] & 0x80) != 0) {
+
+	if ((delta[3] & 0x80) != 0) {
 		calib_delta3 = -(delta[3] & 0x7F);
 		pr_info("%s delta3[0x%x] is a minor value!\n", __func__, calib_delta3);
 	} else {

@@ -462,8 +462,9 @@ static struct sprd_dsi *sprd_dpu_dsi_attach(struct sprd_dpu *dpu)
 		DRM_ERROR("dpu attach dsi failed\n");
 		return NULL;
 	}
-
+#ifdef LCD_CONFIG_POWER_ESD_ON
 	dsi->dpu = dpu;
+#endif
 
 	return dsi;
 }

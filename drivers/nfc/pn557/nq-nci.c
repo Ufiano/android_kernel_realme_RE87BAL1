@@ -45,6 +45,9 @@ struct nqx_platform_data {
 	const char *clk_src_name;
 	/* NFC_CLK pin voting state */
 	bool clk_pin_voting;
+
+	const char *bbclk_name;
+	bool bbclk_pin;
 	struct clk *clk_26m;
 	struct clk *clk_parent;
 	struct clk *clk_enable;
@@ -203,17 +206,18 @@ static irqreturn_t nqx_dev_irq_handler(int irq, void *dev_id)
 
 	return IRQ_HANDLED;
 }
-
+/*
 static irqreturn_t nqx_dev_clk_irq_handler(int irq, void *dev_id)
 {
-        //struct nqx_dev *nqx_dev = dev_id;
-	//printk("%s always open nfc clk irq state: %d \n",__func__,gpio_get_value(nqx_dev->pdata->clkreq_gpio));
-	//printk("%s  clk irq state: %d clk_enabled state: %d\n",__func__,gpio_get_value(nqx_dev->pdata->clkreq_gpio) , nqx_dev->clk_enabled);
+	struct nqx_dev *nqx_dev = dev_id;
+	printk("%s always open nfc clk irq state: %d \n",__func__,gpio_get_value(nqx_dev->pdata->clkreq_gpio));
+	printk("%s  clk irq state: %d clk_enabled state: %d\n",__func__,gpio_get_value(nqx_dev->pdata->clkreq_gpio) , nqx_dev->clk_enabled);
 
-	/*if(gpio_get_value(nqx_dev->pdata->clkreq_gpio)){
+	if(gpio_get_value(nqx_dev->pdata->clkreq_gpio)){
 	    if(!nqx_dev->clk_enabled){
 	        clk_prepare_enable(nqx_dev->pdata->clk_26m);
 	        clk_prepare_enable(nqx_dev->pdata->clk_enable);
+	        pmic_refout_update(refout_num,refout_state_on);
 	        nqx_dev->clk_enabled = true;
 	        printk("%s nfc clk irq handle done , enable success\n",__func__);
 	    }
@@ -221,14 +225,16 @@ static irqreturn_t nqx_dev_clk_irq_handler(int irq, void *dev_id)
 	    if(nqx_dev->clk_enabled){
 	       clk_disable_unprepare(nqx_dev->pdata->clk_26m);
 	        clk_disable_unprepare(nqx_dev->pdata->clk_enable);
+	        pmic_refout_update(refout_num,refout_state_off);
 	        nqx_dev->clk_enabled = false;
 	        printk("%s nfc clk irq handle done , disable success\n",__func__);
 	    }
-	}*/
+	}
 
         return IRQ_HANDLED;
 }
 
+*/
 static int is_data_available_for_read(struct nqx_dev *nqx_dev)
 {
 	int ret;
@@ -919,6 +925,11 @@ int nfc_ioctl_power_states(struct file *filp, unsigned long arg)
 				dev_err(&nqx_dev->client->dev, "unable to disable clock\n");
 		}
 		nqx_dev->nfc_ven_enabled = false;
+		dev_err(&nqx_dev->client->dev, "pmic_refout_update open pmic ref4 out 26M clk\n");
+		printk("%s  pmic_refout_update open pmic ref4 out 26M clk\n",__func__);
+		pmic_refout_update(refout_num,refout_state_off);
+		//refout_num –  0~4;
+		//Refout_state – ，0-off ，1 on
 	} else if (arg == NFC_POWER_ON) {
 		nqx_enable_irq(nqx_dev);
 		dev_dbg(&nqx_dev->client->dev,
@@ -937,14 +948,11 @@ int nfc_ioctl_power_states(struct file *filp, unsigned long arg)
 				dev_err(&nqx_dev->client->dev, "unable to enable clock\n");
 		}
 		nqx_dev->nfc_ven_enabled = true;
-		//使用clk为pmic提供
-		//enable nfc 26M clk
-                //clk_prepare_enable(nqx_dev->pdata->clk_26m);
-                //clk_prepare_enable(nqx_dev->pdata->clk_enable);
 		dev_err(&nqx_dev->client->dev, "pmic_refout_update open pmic ref4 out 26M clk\n");
 		printk("%s  pmic_refout_update open pmic ref4 out 26M clk\n",__func__);
-		pmic_refout_update(refout_num,refout_state_on);//refout_num – 等待配置的refout的编号，从0~4;
-					//Refout_state – 配置refout的状态，0表示关闭，1表示开启；
+		pmic_refout_update(refout_num,refout_state_on);
+		//refout_num –  0~4;
+		//Refout_state – ，0-off ，1 on；
 	} else if (arg == NFC_FW_DWL_VEN_TOGGLE) {
 		/*
 		 * We are switching to Dowload Mode, toggle the enable pin
@@ -976,6 +984,11 @@ int nfc_ioctl_power_states(struct file *filp, unsigned long arg)
 		if (gpio_is_valid(nqx_dev->firm_gpio)) {
 			gpio_set_value(nqx_dev->firm_gpio, 1);
 			usleep_range(10000, 10100);
+		dev_err(&nqx_dev->client->dev, "pmic_refout_update open pmic ref4 out 26M clk\n");
+		printk("%s  pmic_refout_update open pmic ref4 out 26M clk\n",__func__);
+		pmic_refout_update(refout_num,refout_state_on);
+		//refout_num –  0~4;
+		//Refout_state – ，0-off ，1 on
 		} else
 			dev_err(&nqx_dev->client->dev,
 				"firm_gpio is invalid\n");
@@ -988,6 +1001,11 @@ int nfc_ioctl_power_states(struct file *filp, unsigned long arg)
 		if (gpio_is_valid(nqx_dev->firm_gpio)) {
 			gpio_set_value(nqx_dev->firm_gpio, 0);
 			usleep_range(10000, 10100);
+		dev_err(&nqx_dev->client->dev, "pmic_refout_update open pmic ref4 out 26M clk\n");
+		printk("%s  pmic_refout_update open pmic ref4 out 26M clk\n",__func__);
+		pmic_refout_update(refout_num,refout_state_off);
+		//refout_num –  0~4;
+		//Refout_state – ，0-off ，1 on
 		} else {
 			dev_err(&nqx_dev->client->dev,
 				"firm_gpio is invalid\n");
@@ -1477,9 +1495,6 @@ static int nqx_clock_select(struct nqx_dev *nqx_dev)
 	if (nqx_dev->s_clk == NULL)
 		goto err_clk;
 
-	if (!nqx_dev->clk_run)
-		r = pmic_refout_update(refout_num,refout_state_on);
-
 	if (r)
 		goto err_clk;
 
@@ -1502,7 +1517,6 @@ static int nqx_clock_deselect(struct nqx_dev *nqx_dev)
 	if (nqx_dev->s_clk != NULL) {
 		if (nqx_dev->clk_run) {
 			//clk_disable_unprepare(nqx_dev->s_clk);
-		        pmic_refout_update(refout_num,refout_state_off);
 			nqx_dev->clk_run = false;
 		}
 		return 0;
@@ -1543,6 +1557,10 @@ static int nfc_parse_dt(struct device *dev, struct nqx_platform_data *pdata)
 	else
 		pdata->clk_pin_voting = true;
 
+	if (of_property_read_string(np, "bb-clocks", &pdata->bbclk_name))
+		pdata->bbclk_pin = false;
+	else
+		pdata->bbclk_pin = true;
 	// optional property
 	r = of_property_read_u32_array(np, NFC_LDO_VOL_DT_NAME,
 			(u32 *) pdata->vdd_levels,
@@ -1563,6 +1581,7 @@ static int nfc_parse_dt(struct device *dev, struct nqx_platform_data *pdata)
 	}
 
 	pdata->clkreq_gpio = of_get_named_gpio(np, "nxp,clkreq-gpio", 0);
+	//#ifdef sprd
 	pdata->clk_26m = devm_clk_get(dev, "pn557_clk");
 	if (IS_ERR(pdata->clk_26m)) {
 	    pr_err("can't get nfc clock dts config: clk_26m\n");
@@ -1579,6 +1598,7 @@ static int nfc_parse_dt(struct device *dev, struct nqx_platform_data *pdata)
 	    pr_err("can't get nfc clock dts config: enable\n");
 	    return -1;
 	}
+	//#endif
 
 	// return success as above properties are optional
 	return 0;
@@ -1834,14 +1854,16 @@ static int nqx_probe(struct i2c_client *client,
 	}
 	nqx_disable_irq(nqx_dev);
 
+	//#ifdef sprd vendor
 	nqx_dev->clk_enabled = false;
 	clk_set_rate(nqx_dev->pdata->clk_26m, NFC_CLK_FREQ);
-	r = request_threaded_irq(irqn_clk,NULL,nqx_dev_clk_irq_handler,
+	/*r = request_threaded_irq(irqn_clk,NULL,nqx_dev_clk_irq_handler,
 			  IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING | IRQF_ONESHOT, "nfc_clk_irq", nqx_dev);
 	if (r) {
 		dev_err(&client->dev, "%s: request_clk_irq failed\n", __func__);
 		goto err_request_clk_irq_failed;
 	}
+	*/
 	//endif
 
 	r = nfc_ldo_config(client, nqx_dev);
@@ -1851,7 +1873,7 @@ static int nqx_probe(struct i2c_client *client,
 	}
 
 	dev_err(&client->dev, "%s: open 26m pmic clk\n", __func__);
-	pmic_refout_update(refout_num,refout_state_on);//refout_num – 等待配置的refout的编号，从0~4;
+
 	/*
 	 * To be efficient we need to test whether nfcc hardware is physically
 	 * present before attempting further hardware initialisation.
@@ -1916,7 +1938,7 @@ err_request_hw_check_failed:
 	}
 err_ldo_config_failed:
 	free_irq(client->irq, nqx_dev);
-err_request_clk_irq_failed:
+//err_request_clk_irq_failed:
 err_request_irq_failed:
 	device_destroy(nqx_dev->nqx_class, nqx_dev->devno);
 err_device_create:
@@ -1968,10 +1990,6 @@ static int nqx_remove(struct i2c_client *client)
 		goto err;
 	}
 
-	//close 26m clk
-	//clk_disable_unprepare(nqx_dev->pdata->clk_26m);
-	//clk_disable_unprepare(nqx_dev->pdata->clk_enable);
-	pmic_refout_update(refout_num,refout_state_off);
 	gpio_set_value(nqx_dev->en_gpio, 0);
 	//nqx_disable_clkirq(nqx_dev);
 	// HW dependent delay before LDO goes into LPM mode

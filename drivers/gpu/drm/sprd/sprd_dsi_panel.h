@@ -29,10 +29,12 @@ enum {
 	CMD_CODE_RESERVED3,
 	CMD_CODE_RESERVED4,
 	CMD_CODE_RESERVED5,
+	/* likaisheng@ODM.Multimedia.LCD  2021/02/20 add cabc func  start*/
 	CMD_CODE_CABC_OFF,
 	CMD_CODE_CABC_UI,
 	CMD_CODE_CABC_STILL_IMAGE,
 	CMD_CODE_CABC_VIDEO,
+	/* likaisheng@ODM.Multimedia.LCD  2021/02/20 add cabc func  end*/
 	CMD_CODE_MAX,
 };
 
@@ -49,6 +51,7 @@ enum {
 	ESD_MODE_MIX_CHECK,
 };
 
+/*add for lcd esd by licheng@huaqin.com 2021.11.23*/
 enum {
         ESD_EVENT_TP_SUSPEND,
         ESD_EVENT_TP_RESUME,
@@ -103,9 +106,14 @@ struct panel_info {
 	u32 lp_rate;
 	u32 mode_flags;
 	bool use_dcs;
-	
 	/* delay time between set lcd avdd and avee */
-	u32 power_gpio_delay;
+	u32 power_on_avdd_delay;
+	u32 power_on_avee_delay;
+	u32 power_off_avdd_delay;
+	u32 power_off_avee_delay;
+	u32 last_brightness;
+	u32 backlight_first_delay;
+	u32 start_frame_rate_flag;
 };
 
 struct sprd_panel {
@@ -121,7 +129,9 @@ struct sprd_panel {
 	bool esd_work_pending;
 	bool esd_work_backup;
 	struct mutex lock;
+#ifdef LCD_CONFIG_POWER_ESD_ON
 	struct notifier_block panic_nb;
+#endif
 	bool enabled;
 };
 
@@ -134,9 +144,15 @@ struct sprd_oled {
 	int max_level;
 };
 
+struct oplus_brightness_alpha {
+	u32 brightness;
+	u32 alpha;
+};
+
 int sprd_panel_parse_lcddtb(struct device_node *lcd_node,
 	struct sprd_panel *panel);
 
+/*add for lcd esd by licheng@huaqin.com 2021.11.23*/
 int esd_tp_reset_notifier_register(struct notifier_block *nb);
 int esd_tp_reset_notifier_unregister(struct notifier_block *nb);
 //extern int touch_black_test;

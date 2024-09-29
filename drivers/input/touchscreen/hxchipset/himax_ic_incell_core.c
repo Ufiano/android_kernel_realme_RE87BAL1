@@ -55,8 +55,7 @@ EXPORT_SYMBOL(ovl_idx);
 	A[1] = B[1];\
 	A[0] = B[0];\
 	}
-
-static const uint8_t fw_four_i_arr[]= {
+	static const uint8_t fw_four_i_arr[]= {
 	#include "Nico_Huaqin_CID3502_D00_C01_20220429.i"
 	};
 
@@ -3714,7 +3713,7 @@ int hx_0f_op_file_dirly(char *file_name)
 {
 	int err = NO_ERR, ret;
 	const struct firmware *tmp_fw_entry = NULL;
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 	struct firmware *request_fw_headfile = NULL;
     if (strcmp(MPAP_FWNAME, file_name) == 0) {
     	I("%s, Entering,file name = %s\n", __func__, file_name);
@@ -3732,7 +3731,7 @@ int hx_0f_op_file_dirly(char *file_name)
                 __func__, __LINE__, ret);
             return ret;	
 		}
-    } else if( strcmp(MPAP_FWNAME_FOUR, file_name) == 0 ){
+		} else if( strcmp(MPAP_FWNAME_FOUR, file_name) == 0 ){
 		I("%s, Entering,file name = %s\n", __func__, file_name);
         ret = request_firmware(&tmp_fw_entry, file_name, private_ts->dev);
         if (ret < 0) {
@@ -3760,7 +3759,7 @@ int hx_0f_op_file_dirly(char *file_name)
        
        	} else if(private_ts->firmware_headfile.data != NULL){
        		I("request firmware failed, get from headfile\n");
-		if(strstr(lcd_himax_name_for_tp, "hx83102d_txd")){
+       		if(strstr(lcd_himax_name_for_tp, "hx83102d_txd")){
        			request_fw_headfile->size =sizeof(fw_four_i_arr);
        			request_fw_headfile->data = fw_four_i_arr;
 		}else{
@@ -3804,14 +3803,14 @@ int hx_0f_op_file_dirly(char *file_name)
 	g_core_fp.fp_firmware_update_0f(tmp_fw_entry);
 	g_f_0f_updat = 0;
 mcu_0f_operation_dirly_fail:
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
  if ( strcmp(MPAP_FWNAME, file_name) == 0 ) {
      if (ret >= 0)
          release_firmware(tmp_fw_entry);
  }else if( strcmp(MPAP_FWNAME_FIVE, file_name) == 0){
 	 if (ret >= 0)
 	 	release_firmware(tmp_fw_entry);
- }else if( strcmp(MPAP_FWNAME_FOUR, file_name) == 0){
+		}else if( strcmp(MPAP_FWNAME_FOUR, file_name) == 0){
 	 if (ret >= 0)
 	 	release_firmware(tmp_fw_entry);
  }else {
@@ -4119,7 +4118,7 @@ int himax_mcu_0f_overlay(int ovl_type, int mode)
 }
 #endif
 #endif
-#ifdef OPLUS_PROC_NODE	
+#ifdef OPPO_PROC_NODE	
 
 static void himax_mcu_tx_chg_set(uint8_t cmd)
 {
@@ -4401,7 +4400,7 @@ static void himax_mcu_fp_init(void)
 	g_core_fp.fp_read_DD_status = himax_mcu_read_DD_status;
 	g_core_fp._clr_fw_reord_dd_sts = hx_clr_fw_reord_dd_sts;
 	g_core_fp._ap_notify_fw_sus = hx_ap_notify_fw_sus;
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 	g_core_fp.fp_tx_freq_chg_test = himax_mcu_tx_chg_set;
 	g_core_fp.fp_ultra_enter = himax_mcu_ultra_enter;
 	g_core_fp.fp_black_gest_en = himax_mcu_black_gest_en;
@@ -4890,10 +4889,10 @@ void himax_mcu_in_cmd_init(void)
 	himax_parse_assign_cmd(fw_data_ulpm_aa, pfw_op->data_ulpm_aa,
 		sizeof(pfw_op->data_ulpm_aa));
 #endif
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
     himax_parse_assign_cmd(fw_addr_fw_edge_limit, pfw_op->addr_fw_edge_limit, sizeof(pfw_op->addr_fw_edge_limit));
 	himax_parse_assign_cmd(fw_addr_fw_no_jiter_en, pfw_op->addr_fw_no_jiter_en, sizeof(pfw_op->addr_fw_no_jiter_en));
-	himax_parse_assign_cmd(fw_oplus_tp_direction, pfw_op->addr_oplus_tp_direction, sizeof(pfw_op->addr_oplus_tp_direction));
+	himax_parse_assign_cmd(fw_oppo_tp_direction, pfw_op->addr_oppo_tp_direction, sizeof(pfw_op->addr_oppo_tp_direction));
 	himax_parse_assign_cmd(fw_addr_tx_chg_test, pfw_op->addr_tx_jump_test, sizeof(pfw_op->addr_tx_jump_test));	
 #endif
 /* CORE_FW */

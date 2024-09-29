@@ -42,11 +42,8 @@
 #include <linux/version.h>
 #include "linux/hardware_info.h"
 #include "../nt36xxx/touch.h"
-#if defined(SPREADTRUM_NOTIFY_MODE)
-#include <linux/notifier.h>
-#endif
 
-#include "../../../gpu/drm/sprd/sprd_drm_notifier.h"
+
 
 #if defined(CONFIG_OF)
 	#include <linux/of_gpio.h>
@@ -96,10 +93,10 @@
 /*=============================================*/
 
 /* Enable it if driver go into suspend/resume twice */
-#undef HX_CONFIG_FB
+/*#undef HX_CONFIG_FB*/
 
 /* Enable it if driver go into suspend/resume twice */
-#undef HX_CONFIG_DRM
+//#undef HX_CONFIG_DRM
 
 #if defined(HX_CONFIG_FB)
 #include <linux/notifier.h>
@@ -118,13 +115,14 @@
 
 //#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0))
 #define KERNEL_VER_ABOVE_4_19
+//#endif
 
 #if defined(HX_ZERO_FLASH)
 /*zero flash case, you need to setup the fix_touch_info of module*/
 /*Please set the size according to IC*/
 #define DSRAM_SIZE HX_32K_SZ
 #define HX_RESUME_SET_FW
-#define OPLUS_PROC_NODE
+#define OPPO_PROC_NODE
 #define HX_CODE_OVERLAY
 /*Independent threads run the notification chain notification function resume*/
 /*#define HX_CONTAINER_SPEED_UP*/
@@ -132,12 +130,11 @@
 #define HX_TP_PROC_GUEST_INFO
 #endif
 
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 	//#define HX_TP_USB_NOTIFIER
 	//#define HX_TP_HEADSET_NOTIFIER
 	//#define HX_UPDATE_FW_NOTIFIER
-	#define OPLUS_HX_UPDATE_FW   /* OPLUS bootup upgrade function by thread */
-	#define SPREADTRUM_NOTIFY_MODE
+	#define OPPO_HX_UPDATE_FW   /* OPPO bootup upgrade function by thread */
 #endif
 
 #if defined(HX_BOOT_UPGRADE) || defined(HX_ZERO_FLASH)
@@ -147,7 +144,7 @@
 #define BOOT_UPGRADE_FWNAME_FOUR "Nico_Huaqin_CID3502_D00_C01_20220429.bin"
 #define MPAP_FWNAME_FOUR "Nico_Huaqin_CID3501_D00_C81_20220429.bin"
 #if defined(HX_ZERO_FLASH)
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 	#define BOOT_UPGRADE_FWNAME_SIGNED "Himax_firmware_signed.bin"
 	#define BOOT_UPGRADE_FWNAME_FIVE "Himax_firmware_five.bin"
 	#define FW_UPDATE_COMPLETE_TIMEOUT  msecs_to_jiffies(40*1000)
@@ -198,8 +195,6 @@ int fb_notifier_callback(struct notifier_block *self,
 #elif defined(HX_CONFIG_DRM)
 int drm_notifier_callback(struct notifier_block *self,
 			unsigned long event, void *data);
-#elif defined(SPREADTRUM_NOTIFY_MODE)
-int himax_drm_notifier_callback(struct notifier_block *self, unsigned long event, void *data);
 #endif
 
 /* command[2] + address[4] + data[64k] */
@@ -359,7 +354,7 @@ enum fix_touch_info {
 #endif
 };
 
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 struct edge_limit {
 	int in_which_area;
 	int limit_area;
@@ -519,7 +514,7 @@ struct himax_report_data {
 	uint8_t *hx_rawdata_buf;
 	uint8_t rawdata_frame_size;
 };
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 struct firmware_head_struct {
         const uint8_t *data;
         size_t size;
@@ -549,7 +544,7 @@ struct himax_ts_data {
 	uint8_t irq_enabled;
 	uint8_t diag_self[50];
 	
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPPO_PROC_NODE)
 	uint8_t backup_flag;
 	uint8_t psensor_stus;
 	int 	gesture_bak;
@@ -557,9 +552,6 @@ struct himax_ts_data {
 	uint8_t	Freq_hop_delay_work_start;
 	struct  workqueue_struct *himax_Freq_hop_test_wq;
 	struct  delayed_work himax_Freq_hop_test_wrok;
-#if defined(SPREADTRUM_NOTIFY_MODE)
-	struct notifier_block drm_notifier;
-#endif
 	uint8_t limit_enable;
 	uint8_t limit_edge;
 	uint8_t limit_corner;
@@ -646,7 +638,7 @@ struct himax_ts_data {
 	int suspend_resume_done;
 	int bus_speed;
 
-#if defined(HX_CONFIG_FB) || defined(HX_CONFIG_DRM) || defined(SPREADTRUM_NOTIFY_MODE)
+#if defined(HX_CONFIG_FB) || defined(HX_CONFIG_DRM)
 	struct notifier_block fb_notif;
 	struct workqueue_struct *himax_att_wq;
 	struct delayed_work work_att;
@@ -752,7 +744,7 @@ extern struct device *g_device;
 
 extern int HX_TOUCH_INFO_POINT_CNT;
 
-extern bool ic_boot_done;
+extern int ic_boot_done;
 
 int himax_parse_dt(struct himax_ts_data *ts,
 			struct himax_i2c_platform_data *pdata);

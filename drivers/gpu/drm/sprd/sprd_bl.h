@@ -14,7 +14,6 @@ struct sprd_backlight {
 	u32 dft_level;
 	u32 scale;
 	u32 *levels;
-	u32 num;
 
 	/* cabc backlight parameters */
 	bool cabc_en;

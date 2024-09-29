@@ -17,7 +17,12 @@
 #define SPRD_PWM_DUTY		0x8
 #define SPRD_PWM_ENABLE		0x18
 
+#ifdef VENDOR_KERNEL
+#define SPRD_PWM_MOD_MAX	GENMASK(11, 0)
+#else
 #define SPRD_PWM_MOD_MAX	GENMASK(9, 0)
+#endif
+
 #define SPRD_PWM_DUTY_MSK	GENMASK(15, 0)
 #define SPRD_PWM_PRESCALE_MSK	GENMASK(7, 0)
 #define SPRD_PWM_ENABLE_BIT	BIT(0)
@@ -166,10 +171,24 @@ static int sprd_pwm_config(struct sprd_pwm_chip *spc, struct pwm_device *pwm,
 	 * The hardware can ensures that current running period is completed
 	 * before changing a new configuration to avoid mixed settings.
 	 */
+#ifdef VENDOR_KERNEL
+	if(pwm->hwpwm ==0){
+		if (654321 == period_ns){
+			sprd_pwm_write(spc, pwm->hwpwm, SPRD_PWM_PRESCALE, 0x05);
+			sprd_pwm_write(spc, pwm->hwpwm, SPRD_PWM_MOD, 0x63);
+			sprd_pwm_write(spc, pwm->hwpwm, SPRD_PWM_DUTY, duty_ns);
+			printk("wtdd pwm = %d, period_ns = %d\n",duty_ns, period_ns);
+		}
+	} else {
+			sprd_pwm_write(spc, pwm->hwpwm, SPRD_PWM_PRESCALE, prescale);
+			sprd_pwm_write(spc, pwm->hwpwm, SPRD_PWM_MOD, SPRD_PWM_MOD_MAX);
+			sprd_pwm_write(spc, pwm->hwpwm, SPRD_PWM_DUTY, duty);
+	}
+#else
 	sprd_pwm_write(spc, pwm->hwpwm, SPRD_PWM_PRESCALE, prescale);
 	sprd_pwm_write(spc, pwm->hwpwm, SPRD_PWM_MOD, SPRD_PWM_MOD_MAX);
 	sprd_pwm_write(spc, pwm->hwpwm, SPRD_PWM_DUTY, duty);
-
+#endif
 	return 0;
 }
 

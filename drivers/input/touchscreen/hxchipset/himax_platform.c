@@ -32,7 +32,7 @@ EXPORT_SYMBOL(lcd_himax_name_for_tp);
 
 
 int i2c_error_count;
-bool ic_boot_done;
+int ic_boot_done;
 struct spi_device *spi;
 
 struct himax_ts_data *esd_ts;
@@ -40,7 +40,6 @@ struct himax_ts_data *esd_ts;
 
 static uint8_t *gBuffer;
 static uint8_t *g_read_xfer_data;
-
 
 int tp_hx83102d_txd = 0;
 int tp_hx83112a_inx = 0;
@@ -63,10 +62,9 @@ int get_himax_lcd_name(void)
 			E("%s:lcd name: %s\n", __func__, lcd_himax_name_for_tp);
 		}
 	}
-
+	
 	if (strstr(lcd_himax_name_for_tp, "hx83102d_txd"))
         tp_hx83102d_txd = 1;
-	
 	if (strstr(lcd_himax_name_for_tp, "hx83112a_inx"))
         tp_hx83112a_inx = 1;
 
@@ -893,6 +891,14 @@ int himax_int_register_trigger(void)
 			IRQF_TRIGGER_LOW | IRQF_ONESHOT| IRQF_NO_SUSPEND, HIMAX_common_NAME, ts);
 	}
 
+	if (ret != 0) {
+				printk("%s request_threaded_irq failed\n", __func__);
+			} else {
+				disable_irq_nosync(ts->hx_irq);
+				private_ts->irq_enabled = 0; //disable irq
+				printk("%s disable irq \n", __func__);
+		}
+
 	return ret;
 }
 
@@ -1103,21 +1109,6 @@ int drm_notifier_callback(struct notifier_block *self,
 
 	return 0;
 }
-#elif defined(SPREADTRUM_NOTIFY_MODE)
-int himax_drm_notifier_callback(struct notifier_block *self, unsigned long event, void *data)
-{
-   I("liang event = %d", event);
-   if (event == DISPC_POWER_OFF) {
-       himax_common_suspend(esd_ts->dev);
-		I("DISPC_POWER_OFF\n");
-   }else if (event == DISPC_POWER_ON) {
-       himax_common_resume(esd_ts->dev);
-		I("DISPC_POWER_ON\n");
-	}
-   else
-       I("liang wrong event");
-    return 0;
-}
 #endif
 
 static int esd_tp_reset_notify_callback(struct notifier_block *nb,
@@ -1210,6 +1201,9 @@ int himax_chip_common_probe(struct spi_device *spi)
     esd_ts=ts;
     esd_tp_reset_notifier_register(&esd_tp_reset_notifier);
 	get_hardware_info_data(HWID_CTP_DRIVER,lcd_himax_name_for_tp);
+
+	enable_irq(ts->hx_irq);
+	private_ts->irq_enabled = 1; //enable irq
 	
 	return ret;
 
@@ -1253,7 +1247,7 @@ static const struct dev_pm_ops himax_common_pm_ops = {
 
 #if defined(CONFIG_OF)
 static const struct of_device_id himax_match_table[] = {
-	{.compatible = "oplus,touchscreen" },
+	{.compatible = "oppo,touchscreen" },
 	{},
 };
 #else

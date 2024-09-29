@@ -84,8 +84,6 @@ int sprd_dphy_init(struct sprd_dphy *dphy)
 	struct dphy_context *ctx = &dphy->ctx;
 	int ret;
 
-	pr_info("lanes : %d\n", ctx->lanes);
-	pr_info("freq : %d\n", ctx->freq);
 
 	dphy_hal_rstz(dphy, 0);
 	dphy_hal_shutdownz(dphy, 0);

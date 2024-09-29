@@ -113,11 +113,11 @@ struct gesture_info {
 	struct coordinate Point_4th;
 };
 
-struct oplus_debug_info {
+struct oppo_debug_info {
 	struct coordinate coordinate[10];
 };
 
-struct oplus_debug_gesture_record_info {
+struct oppo_debug_gesture_record_info {
 	struct coordinate coordinate[1024];
 };
 
@@ -148,8 +148,8 @@ struct oplus_debug_gesture_record_info {
 #define CHECK_PEN_DATA_CHECKSUM 0
 
 //---OPPO Customized Info---
-#define OPLUS_TOUCHPANEL_NAME "touchpanel"
-#define OPLUS_DEBUG_INFO "debug_info"
+#define OPPO_TOUCHPANEL_NAME "touchpanel"
+#define OPPO_DEBUG_INFO "debug_info"
 
 struct nvt_fw_debug_info {
 	uint8_t rek_info;
@@ -229,10 +229,10 @@ struct nvt_ts_data {
 	uint8_t gesture_enable_by_suspend;
 	uint8_t gesture_enable;
 	uint8_t fw_debug_info_enable;
-	struct oplus_debug_info oplus_debug_info;
-	struct oplus_debug_gesture_record_info oplus_debug_gesture_record_info;
+	struct oppo_debug_info oppo_debug_info;
+	struct oppo_debug_gesture_record_info oppo_debug_gesture_record_info;
 	struct nvt_fw_debug_info nvt_fw_debug_info;
-    struct proc_dir_entry *oplus_touchpanel_proc;
+    struct proc_dir_entry *oppo_touchpanel_proc;
 	struct proc_dir_entry *debug_info;
 #if NVT_PM_WAIT_SPI_I2C_RESUME_COMPLETE
 	bool dev_pm_suspend;

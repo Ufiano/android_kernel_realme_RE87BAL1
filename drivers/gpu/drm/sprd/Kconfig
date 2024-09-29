@@ -42,7 +42,7 @@ config DRM_SPRD_DSI
 	select BACKLIGHT_CLASS_DEVICE
 	help
 	  Choose this option if you want to use DSI host controller.
-
-# source "drivers/gpu/drm/sprd/oplus_display_private_api/Kconfig"
+	  
+# source "drivers/gpu/drm/sprd/oppo_display_private_api/Kconfig"
 
 endif

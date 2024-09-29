@@ -138,7 +138,6 @@ const struct mtk_chip_config spi_ctrdata = {
 };
 #endif
 
-
 /*******************************************************
 Description:
 	Novatek touchscreen jianrong function.
@@ -973,7 +972,7 @@ static void nvt_ts_wakeup_gesture_coordinate(uint8_t *data)
 	}
 }
 
-enum {	/* oplus gesture type */
+enum {	/* oppo gesture type */
 	UnkownGesture = 0,
 	DouTap        = 1,
 	UpVee,
@@ -1985,10 +1984,10 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 
 			finger_cnt++;
 			
-			/* backup oplus debug coordinate info */
+			/* backup oppo debug coordinate info */
 			finger_last = input_id - 1;
-			ts->oplus_debug_info.coordinate[input_id-1].x = (uint16_t) input_x;
-			ts->oplus_debug_info.coordinate[input_id-1].y = (uint16_t) input_y;
+			ts->oppo_debug_info.coordinate[input_id-1].x = (uint16_t) input_x;
+			ts->oppo_debug_info.coordinate[input_id-1].y = (uint16_t) input_y;
 		}
 	}
 
@@ -2024,16 +2023,16 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 				last_st = press_id[0];
 				NVT_LOG("Touchpanel id %d :Down [%4d, %4d]\n",
 						i,
-						ts->oplus_debug_info.coordinate[0].x,
-						ts->oplus_debug_info.coordinate[0].y);
+						ts->oppo_debug_info.coordinate[0].x,
+						ts->oppo_debug_info.coordinate[0].y);
 			}
 			else if ((finger_cnt == 0) && (i == finger_last)) { //finger up
 				finger_last = 0;
 				last_st = press_id[0];
 				NVT_LOG("Touchpanel id %d :Up   [%4d, %4d]\n",
 						i,
-						ts->oplus_debug_info.coordinate[i].x,
-						ts->oplus_debug_info.coordinate[i].y);
+						ts->oppo_debug_info.coordinate[i].x,
+						ts->oppo_debug_info.coordinate[i].y);
 			}
 		}
 
@@ -2041,8 +2040,8 @@ static irqreturn_t nvt_ts_work_func(int irq, void *data)
 			if (press_id[i] == 1) {
 				NVT_LOG("Touchpanel id %d :     [%4d, %4d]\n",
 						i,
-						ts->oplus_debug_info.coordinate[i].x,
-						ts->oplus_debug_info.coordinate[i].y);
+						ts->oppo_debug_info.coordinate[i].x,
+						ts->oppo_debug_info.coordinate[i].y);
 			}
 		}
 	}
@@ -2295,7 +2294,6 @@ static const struct attribute_group nvt_attr_group = {
 	.attrs = nvt_attrs,
 };
 
-
 static int esd_tp_reset_notify_callback(struct notifier_block *nb,
                                 unsigned long action, void *data)
 {
@@ -2513,7 +2511,7 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 	memset(&ts->gesture, 0, sizeof(struct gesture_info));
 	input_set_capability(ts->input_dev, EV_KEY, KEY_POWER);
 #endif
-	memset(&ts->oplus_debug_info, 0, sizeof(struct oplus_debug_info));
+	memset(&ts->oppo_debug_info, 0, sizeof(struct oppo_debug_info));
 
 	sprintf(ts->phys, "input/ts");
 	ts->input_dev->name = NVT_TS_NAME;
@@ -2652,13 +2650,13 @@ static int32_t nvt_ts_probe(struct spi_device *client)
 #endif
 
 #if NVT_TOUCH_EXT_PROC
-	ts->oplus_touchpanel_proc = proc_mkdir(OPLUS_TOUCHPANEL_NAME, NULL);
-	if(ts->oplus_touchpanel_proc == NULL) {
-		NVT_ERR("create oplus_touchpanel_proc fail\n");
+	ts->oppo_touchpanel_proc = proc_mkdir(OPPO_TOUCHPANEL_NAME, NULL);
+	if(ts->oppo_touchpanel_proc == NULL) {
+		NVT_ERR("create oppo_touchpanel_proc fail\n");
 		goto err_extra_proc_init_failed;
 	}
 
-	ts->debug_info = proc_mkdir(OPLUS_DEBUG_INFO, ts->oplus_touchpanel_proc);
+	ts->debug_info = proc_mkdir(OPPO_DEBUG_INFO, ts->oppo_touchpanel_proc);
 	if(ts->debug_info == NULL) {
 		NVT_ERR("create debug_info fail\n");
 		goto err_extra_proc_init_failed;
@@ -2870,7 +2868,6 @@ static int32_t nvt_ts_remove(struct spi_device *client)
 {
 	NVT_LOG("Removing driver...\n");
     esd_tp_reset_notifier_unregister(&esd_tp_reset_notifier);
-
 #if !defined(CONFIG_ARCH_SPRD)
 #if defined(CONFIG_FB)
 #if defined(CONFIG_DRM_PANEL)
@@ -3307,7 +3304,7 @@ static const struct spi_device_id nvt_ts_id[] = {
 
 #ifdef CONFIG_OF
 static struct of_device_id nvt_match_table[] = {
-	{ .compatible = "oplus,touchscreen",},
+	{ .compatible = "oppo,touchscreen",},
 	{ },
 };
 #endif

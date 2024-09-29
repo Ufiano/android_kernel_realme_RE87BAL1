@@ -652,6 +652,7 @@ static int gnss_ext_dump_data(unsigned int start_addr, int len)
 dump_data_done:
 	kfree(buf);
 	set_fs(fs);
+	vfree(iram_buffer);
 	return ret;
 }
 

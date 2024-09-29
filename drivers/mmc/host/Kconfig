@@ -449,7 +449,7 @@ config MMC_OMAP_HS
 
 config MMC_WBSD
 	tristate "Winbond W83L51xD SD/MMC Card Interface support"
-	depends on ISA_DMA_API
+	depends on ISA_DMA_API && !M68K
 	help
 	  This selects the Winbond(R) W83L51xD Secure digital and
 	  Multimedia card Interface.
@@ -650,6 +650,22 @@ config MMC_SWCQ
 	  This enables eMMC software Command Queuing support by Spreadtrum.
 	  Say Y if you want to
 	  use eMMC Command Queuing scheme.
+	  If unsure, say N.
+
+config MMC_SPRD_BOOTDEVICE
+	tristate "Spreadtrum SDIO3 -mmc0-EMMC information"
+	help
+	  This selects to display sdio3-mmc0-EMMC information in proc/bootdevice.
+	  If you need to create a node in proc/bootdevice to display emmc info, say Y or M here.
+
+	  If unsure, say N.
+
+config MMC_SPRD_MMCHEALTH
+	tristate "Spreadtrum SDIO3 -mmc0-EMMC information"
+	help
+	  This selects to display sdio3-mmc0-EMMC information in proc/mmchealth.
+	  If you need to create a node in proc/mmchealth to display emmc info, say Y or M here.
+
 	  If unsure, say N.
 
 config MMC_TMIO_CORE
