@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- *Copyright (C) 2019 Spreadtrum Communications Inc.
- *
- *This software is licensed under the terms of the GNU General Public
- *License version 2, as published by the Free Software Foundation, and
- *may be copied, distributed, and modified under those terms.
- *
- *This program is distributed in the hope that it will be useful,
- *but WITHOUT ANY WARRANTY; without even the implied warranty of
- *MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #define pr_fmt(fmt) "sprd-backlight: " fmt
@@ -20,8 +12,9 @@
 #include <linux/pwm.h>
 
 #include "sprd_bl.h"
+#include "sprd_dpu.h"
 
-#define U_MAX_LEVEL	4095
+#define U_MAX_LEVEL	255
 #define U_MIN_LEVEL	0
 
 void sprd_backlight_normalize_map(struct backlight_device *bd, u16 *level)
@@ -29,12 +22,9 @@ void sprd_backlight_normalize_map(struct backlight_device *bd, u16 *level)
 	struct sprd_backlight *bl = bl_get_data(bd);
 
 	if (!bl->num) {
-		if (!bd->props.brightness)
-			*level = 0;
-		else
-			*level = DIV_ROUND_CLOSEST_ULL((bl->max_level - bl->min_level) *
-				(bd->props.brightness - U_MIN_LEVEL),
-				U_MAX_LEVEL - U_MIN_LEVEL) + bl->min_level;
+		*level = DIV_ROUND_CLOSEST_ULL((bl->max_level - bl->min_level) *
+			(bd->props.brightness - U_MIN_LEVEL),
+			U_MAX_LEVEL - U_MIN_LEVEL) + bl->min_level;
 	} else
 		*level = bl->levels[bd->props.brightness];
 }
@@ -214,13 +204,13 @@ static int sprd_backlight_probe(struct platform_device *pdev)
 		return PTR_ERR(bd);
 	}
 
-	bd->props.max_brightness = 4095;
+	bd->props.max_brightness = 255;
 	bd->props.state &= ~BL_CORE_FBBLANK;
 	bd->props.power = FB_BLANK_UNBLANK;
 
-	div = ((bl->max_level - bl->min_level) << 12) / 4095;
+	div = ((bl->max_level - bl->min_level) << 8) / 255;
 	if (div > 0) {
-		bd->props.brightness = (bl->dft_level << 12) / div;
+		bd->props.brightness = (bl->dft_level << 8) / div;
 	} else {
 		dev_err(&pdev->dev, "failed to calc default brightness level\n");
 		return -EINVAL;
@@ -240,17 +230,13 @@ static const struct of_device_id sprd_backlight_of_match[] = {
 	{ }
 };
 
-MODULE_DEVICE_TABLE(of, pwm_backlight_of_match);
-
-static struct platform_driver sprd_backlight_driver = {
+struct platform_driver sprd_backlight_driver = {
 	.driver		= {
 		.name		= "sprd-backlight",
 		.of_match_table	= sprd_backlight_of_match,
 	},
 	.probe		= sprd_backlight_probe,
 };
-
-module_platform_driver(sprd_backlight_driver);
 
 MODULE_AUTHOR("Kevin Tang <kevin.tang@unisoc.com>");
 MODULE_DESCRIPTION("SPRD Base Backlight Driver");

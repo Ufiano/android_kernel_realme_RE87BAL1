@@ -769,6 +769,8 @@ static ssize_t flash_info_show(struct device *dev,
 }
 static DEVICE_ATTR(info, S_IRUGO, flash_info_show, NULL);
 
+//for GKI
+#if 0
 static ssize_t read_flash_show(struct device *dev,
         struct device_attribute *attr, char *buf)
 {
@@ -821,10 +823,9 @@ static ssize_t read_flash_show(struct device *dev,
     }
 
     if (argc == 3) {
-        struct file *file;
+        //struct file *file;
 
         cts_info("Write flash data to file '%s'", argv[2]);
-
         file = filp_open(argv[2], O_RDWR | O_CREAT | O_TRUNC, 0666);
         if (IS_ERR(file)) {
             count += scnprintf(buf, PAGE_SIZE, "Open file '%s' failed %ld",
@@ -897,6 +898,7 @@ static ssize_t read_flash_store(struct device *dev,
     return count;
 }
 static DEVICE_ATTR(read, S_IWUSR | S_IRUGO, read_flash_show, read_flash_store);
+#endif
 
 /* echo addr size > erase */
 static ssize_t erase_flash_store(struct device *dev,
@@ -971,7 +973,7 @@ static DEVICE_ATTR(erase, S_IWUSR, NULL, erase_flash_store);
 
 static struct attribute *cts_dev_flash_attrs[] = {
     &dev_attr_info.attr,
-    &dev_attr_read.attr,
+    //&dev_attr_read.attr,
     &dev_attr_erase.attr,
 
     NULL
@@ -1555,7 +1557,8 @@ static ssize_t factory_test_show(struct device *dev,
     int short_test_result = 0;
     int comp_cap_test_result = 0;
     int count = 0;
-    struct timeval  ktv;
+    //struct timeval  ktv;
+	struct timespec64 ktv;
     struct rtc_time rtc_tm;
     char touch_data_filepath[256];
     ktime_t start_time, end_time, delta_time;
@@ -1570,7 +1573,9 @@ static ssize_t factory_test_show(struct device *dev,
     comp_cap_test_param.min = &comp_cap_min;
     comp_cap_test_param.max = &comp_cap_max;
 
-    do_gettimeofday(&ktv);
+    //do_gettimeofday(&ktv);
+	ktime_get_real_ts64(&ktv);
+	
     ktv.tv_sec -= sys_tz.tz_minuteswest * 60;
     rtc_time_to_tm(ktv.tv_sec, &rtc_tm);
 
@@ -2321,6 +2326,8 @@ static ssize_t baseline_show(struct device *dev,
 }
 static DEVICE_ATTR(baseline, S_IRUGO, baseline_show, NULL);
 
+//for GKI
+#if 0
 static ssize_t manualdiffdata_show(struct device *dev,
         struct device_attribute *attr, char *buf)
 {
@@ -2354,10 +2361,12 @@ static ssize_t manualdiffdata_show(struct device *dev,
         if (ret) {
             return scnprintf(buf, PAGE_SIZE, "Invalid frame num\n");
         }
+
         file = filp_open(argv[1], O_RDWR | O_CREAT | O_TRUNC, 0666);
         if (IS_ERR(file)) {
             return scnprintf(buf, PAGE_SIZE, "Can't open file:%s", argv[1]);
         }
+
     }
     else {
         frame = 1;
@@ -2513,6 +2522,7 @@ err_manual_diff_store:
 }
 
 static DEVICE_ATTR(manualdiff, S_IRUSR|S_IWUSR, manualdiffdata_show, manualdiffdata_store);
+#endif
 
 static ssize_t jitter_store(struct device *dev,
         struct device_attribute *attr, const char *buf, size_t count)
@@ -2928,7 +2938,7 @@ static struct attribute *cts_dev_misc_atts[] = {
     &dev_attr_rawdata.attr,
     &dev_attr_diffdata.attr,
     &dev_attr_baseline.attr,
-    &dev_attr_manualdiff.attr,
+    //&dev_attr_manualdiff.attr,
     &dev_attr_jitter.attr,
 #ifdef CFG_CTS_HAS_RESET_PIN
     &dev_attr_reset_pin.attr,

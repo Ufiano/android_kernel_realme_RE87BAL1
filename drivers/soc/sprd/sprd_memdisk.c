@@ -10,11 +10,12 @@
 #include <linux/vmalloc.h>
 #include <linux/genhd.h>
 #include <linux/blkdev.h>
+#include <linux/blk-mq.h>
 #include <linux/hdreg.h>
 
 MODULE_LICENSE("Dual BSD/GPL");
 
-static int memdisk_major = 0;
+static int memdisk_major;
 module_param(memdisk_major, int, 0);
 static int hardsect_size = 512;
 module_param(hardsect_size, int, 0);
@@ -38,9 +39,9 @@ struct memdisk_partition_info {
 struct memdisk_dev {
 	unsigned long size;	/* Device size in sectors */
 	spinlock_t lock;	/* For mutual exclusion */
-	short users; /* How many users */
 	struct request_queue *queue;	/* The device request queue */
 	struct gendisk *gd;	/* The gendisk structure */
+	struct blk_mq_tag_set tag_set;
 	struct memdisk_partition_info *memdiskp[];
 };
 static int memdisks_count;
@@ -56,11 +57,6 @@ static void memdisk_transfer(struct memdisk_dev *dev, sector_t sector,
 	struct memdisk_partition_info *memdiskp = NULL;
 	unsigned long offset = sector * hardsect_size;
 	unsigned long nbytes = nsect * hardsect_size;
-
-	if (!buffer) {
-		pr_info("memdisk:Failed to allocate memory for buffer\n");
-		return;
-	}
 
 	if ((offset + nbytes) > (dev->size * hardsect_size)) {
 		pr_notice("memdisk: Beyond-end write (%ld %ld)\n",
@@ -80,56 +76,50 @@ static void memdisk_transfer(struct memdisk_dev *dev, sector_t sector,
 	if (i == memdisks_count)
 		return;
 
-	if (!memdiskp) {
-		pr_info("the memdisk partition does not exist\n");
-		return;
-	}
-
 	if (write)
 		memcpy(memdiskp->data + offset, buffer, nbytes);
 	else
 		memcpy(buffer, memdiskp->data + offset, nbytes);
 }
 
-static void memdisk_request(struct request_queue *q)
+static blk_status_t memdisk_queue_rq(struct blk_mq_hw_ctx *hctx,
+					const struct blk_mq_queue_data *bd)
 {
-	struct request *req;
+	struct request *req = bd->rq;
+	struct request_queue *q = hctx->queue;
 	struct memdisk_dev *dev = q->queuedata;
+	struct bio_vec bvec;
+	struct req_iterator iter;
+	sector_t sector = blk_rq_pos(req);
 
-	req = blk_fetch_request(q);
-	while (req != NULL) {
-		if (blk_rq_is_passthrough(req)) {
-			pr_notice("Skip non-CMD request/n");
-			__blk_end_request_all(req, BLK_STS_IOERR);
-			continue;
-		}
-		memdisk_transfer(dev, blk_rq_pos(req), blk_rq_cur_sectors(req),
-				 bio_data(req->bio), rq_data_dir(req));
-		if (!__blk_end_request_cur(req, 0)) {
-			req = blk_fetch_request(q);
-		}
+	blk_mq_start_request(req);
+	spin_lock_irq(&memdisks->lock);
+
+	if (blk_rq_is_passthrough(req)) {
+		pr_notice("Skip non-CMD request/n");
+		blk_mq_end_request(req, BLK_STS_IOERR);
+		spin_unlock_irq(&memdisks->lock);
+		return BLK_STS_IOERR;
 	}
+
+	rq_for_each_segment(bvec, req, iter) {
+		char *buffer = kmap_atomic(bvec.bv_page) + bvec.bv_offset;
+		unsigned nsecs = bvec.bv_len >> SECTOR_SHIFT;
+		memdisk_transfer(dev, sector, nsecs,
+				buffer, rq_data_dir(req));
+		sector += nsecs;
+		kunmap_atomic(buffer);
+	}
+
+	blk_mq_end_request(req, BLK_STS_OK);
+	spin_unlock_irq(&memdisks->lock);
+	return BLK_STS_OK;
 }
 
-static int memdisk_open(struct block_device *bd, fmode_t mode)
-{
-	struct memdisk_dev *dev = bd->bd_disk->private_data;
+static const struct blk_mq_ops memdisk_mq_ops = {
+	.queue_rq = memdisk_queue_rq,
+};
 
-	spin_lock(&dev->lock);
-	dev->users++;
-	spin_unlock(&dev->lock);
-
-	return 0;
-}
-
-static void memdisk_release(struct gendisk *disk, fmode_t mode)
-{
-	struct memdisk_dev *dev = disk->private_data;
-
-	spin_lock(&dev->lock);
-	dev->users--;
-	spin_unlock(&dev->lock);
-}
 
 /*
  * The HDIO_GETGEO ioctl is handled in blkdev_ioctl(), i
@@ -156,9 +146,7 @@ int memdisk_getgeo(struct block_device *bd, struct hd_geometry *geo)
  */
 static struct block_device_operations memdisk_ops = {
 	.owner = THIS_MODULE,
-	.getgeo = memdisk_getgeo,
-	.open = memdisk_open,
-	.release = memdisk_release
+	.getgeo = memdisk_getgeo
 };
 
 /*
@@ -167,17 +155,21 @@ static struct block_device_operations memdisk_ops = {
 static void memdisk_setup_device(void)
 {
 	int i;
+#ifdef CONFIG_SPRD_MEMDISK_PARTITION
 	sector_t len;
 	struct partition_meta_info info;
 	struct hd_struct *part;
 	sector_t start = 0;
+#endif
 
 
 	spin_lock_init(&memdisks->lock);
 
-	memdisks->queue = blk_init_queue(memdisk_request, &memdisks->lock);
+	memdisks->queue = blk_mq_init_sq_queue(&memdisks->tag_set, &memdisk_mq_ops,
+							1, BLK_MQ_F_SHOULD_MERGE);
+
 	if (memdisks->queue == NULL) {
-		pr_notice("memdisk_setup_device blk_init_queue failure. \n");
+		pr_notice("memdisk_setup_device blk_mq_init_sq_queue failure. \n");
 		return;
 	}
 
@@ -197,19 +189,24 @@ static void memdisk_setup_device(void)
 	memdisks->gd->queue = memdisks->queue;
 	memdisks->gd->private_data = memdisks;
 
+#ifdef CONFIG_SPRD_MEMDISK_PARTITION
 	sprintf(memdisks->gd->disk_name,  "memdisk0");
+#else
+	sprintf(memdisks->gd->disk_name,  "memdisk0p1");
+#endif
 	for (i = 0; i < memdisks_count; i++)
 		memdisks->size += memdisks->memdiskp[i]->size;
 
 	set_capacity(memdisks->gd,
-		     (sector_t)(memdisks->size) * (hardsect_size / KERNEL_SECTOR_SIZE));
+		     (sector_t)(memdisks->size * (hardsect_size / KERNEL_SECTOR_SIZE)));
 	add_disk(memdisks->gd);
 
+#ifdef CONFIG_SPRD_MEMDISK_PARTITION
 	for (i = 0; i < memdisks_count; i++) {
-		snprintf(info.volname, sizeof(info.volname), "%s", memdisks->memdiskp[i]->partition_name);
-		snprintf(info.uuid, sizeof(info.uuid), "memdisk0.p%d", i);
-		len = (sector_t)(memdisks->memdiskp[i]->size) * (hardsect_size / KERNEL_SECTOR_SIZE);
-		start = (sector_t)(memdisks->memdiskp[i]->start) * (hardsect_size / KERNEL_SECTOR_SIZE);
+		sprintf(info.volname, "%s", memdisks->memdiskp[i]->partition_name);
+		sprintf(info.uuid, "memdisk0.p%d", i);
+		len = (sector_t)(memdisks->memdiskp[i]->size * (hardsect_size / KERNEL_SECTOR_SIZE));
+		start = memdisks->memdiskp[i]->start * (hardsect_size / KERNEL_SECTOR_SIZE);
 		part = add_partition(memdisks->gd, i+1, start, len, ADDPART_FLAG_NONE, &info);
 		if (IS_ERR(part)) {
 			printk(KERN_ERR " %s: p%d could not be added: %ld\n",
@@ -217,6 +214,7 @@ static void memdisk_setup_device(void)
 			continue;
 		}
 	}
+#endif
 
 	pr_notice("memdisk_setup_device i:%d success.\n", i);
 	return;
@@ -234,11 +232,6 @@ static void *memdisk_ram_vmap(phys_addr_t start, size_t size,
 
 	page_start = start - offset_in_page(start);
 	page_count = DIV_ROUND_UP(size + offset_in_page(start), PAGE_SIZE);
-
-	if (!page_count) {
-		pr_err("%s:The page_count value cannot be 0\n", __func__);
-		return NULL;
-	}
 
 	if (memtype)
 		prot = pgprot_noncached(PAGE_KERNEL);
@@ -262,7 +255,7 @@ static void *memdisk_ram_vmap(phys_addr_t start, size_t size,
 	return vaddr;
 }
 
-static int memdisk_init(void)
+static int __init memdisk_init(void)
 {
 	int i = 0;
 	int ret = 0;
@@ -370,7 +363,7 @@ err_1:
 	return ret;
 }
 
-static void memdisk_exit(void)
+static void __exit memdisk_exit(void)
 {
 	int i;
 

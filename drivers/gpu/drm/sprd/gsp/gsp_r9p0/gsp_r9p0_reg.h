@@ -1,14 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #ifndef _GSP_R9P0_REG_H
@@ -85,98 +77,6 @@
 
 #define R9P0_SCALE_COEF_ADDR(base)	(base + 0x300 + R9P0_GSP_BASE_OFFSET)
 #define R9P0_SCALE_COEF_OFFSET		0x200
-
-/*HDR2SDR*/
-#define R9P0_HDR0_CFG(base)		(base + 0x1810 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR1_CFG(base)		(base + 0x1814 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR2_CFG(base)		(base + 0x1818 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR3_CFG(base)		(base + 0x181c + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR4_CFG(base)		(base + 0x1820 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR5_CFG(base)		(base + 0x1824 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR6_CFG(base)		(base + 0x1828 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR7_CFG(base)		(base + 0x182c + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR8_CFG(base)		(base + 0x1830 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR9_CFG(base)		(base + 0x1834 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR10_CFG(base)		(base + 0x1838 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR11_CFG(base)		(base + 0x183c + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR12_CFG(base)		(base + 0x1840 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR13_CFG(base)		(base + 0x1844 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR14_CFG(base)		(base + 0x1848 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR15_CFG(base)		(base + 0x184c + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR16_CFG(base)		(base + 0x1850 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR17_CFG(base)		(base + 0x1854 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR18_CFG(base)		(base + 0x1858 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR19_CFG(base)		(base + 0x185c + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR20_CFG(base)		(base + 0x1860 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR21_CFG(base)		(base + 0x1864 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR22_CFG(base)		(base + 0x1868 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR23_CFG(base)		(base + 0x186c + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR24_CFG(base)		(base + 0x1870 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR25_CFG(base)		(base + 0x1874 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR26_CFG(base)		(base + 0x1878 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR27_CFG(base)		(base + 0x187c + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR28_CFG(base)		(base + 0x1880 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR29_CFG(base)		(base + 0x1884 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR30_CFG(base)		(base + 0x1888 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR31_CFG(base)		(base + 0x188c + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR32_CFG(base)		(base + 0x1890 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR33_CFG(base)		(base + 0x1894 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR34_CFG(base)		(base + 0x1898 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR35_CFG(base)		(base + 0x189c + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR36_CFG(base)		(base + 0x18a0 + R9P0_GSP_BASE_OFFSET)
-#define R9P0_HDR37_CFG(base)		(base + 0x18a4 + R9P0_GSP_BASE_OFFSET)
-
-/* r9p0 gsp qos config reg */
-struct GSP_QOS_REG_STRUCT {
-	unsigned int offset;
-	unsigned int mask;
-	unsigned int value;
-
-};
-
-struct GSP_QOS_REG_STRUCT  r9p0_gsp_mtx_qos[] = {
-	{ 0x0000, 0x00000001, 0x00000001},
-	{ 0x0004, 0xffffffff, 0x84889090},
-	{ 0x0008, 0x3f3f3f3f, 0x02060402},
-	{ 0x000C, 0x3f3fffff, 0x10040402},
-	{ 0x0060, 0x80000003, 0x00000003},
-	{ 0x0064, 0x3fff3fff, 0x06660666},
-	{ 0x0068, 0x00000701, 0x00000001},
-
-	{ 0x0080, 0x00000001, 0x00000001},
-	{ 0x0084, 0xffffffff, 0x01889090},
-	{ 0x0088, 0x3f3f3f3f, 0x04040202},
-	{ 0x008C, 0x3f3fffff, 0x08080804},
-	{ 0x00E0, 0x80000003, 0x00000003},
-	{ 0x00E4, 0x3fff3fff, 0x06660666},
-	{ 0x00E8, 0x00000701, 0x00000001},
-
-	{ 0x0100, 0x00000001, 0x00000001},
-	{ 0x0104, 0xffffffff, 0x01889090},
-	{ 0x0108, 0x3f3f3f3f, 0x10101010},
-	{ 0x010C, 0x3f3fffff, 0x20100808},
-	{ 0x014C, 0xffffffff, 0x0190014e},
-	{ 0x0150, 0x073fffff, 0x04040800},
-	{ 0x0160, 0x80000003, 0x00000003},
-	{ 0x0164, 0x3fff3fff, 0x08881a88},
-	{ 0x0168, 0x00000701, 0x00000001},
-
-	{ 0x0180, 0x00000001, 0x00000001},
-	{ 0x0184, 0xffffffff, 0x08848484},
-	{ 0x0188, 0x3f3f3f3f, 0x04201008},
-	{ 0x018C, 0x3f3fffff, 0x20080808},
-	{ 0x01E0, 0x80000003, 0x00000003},
-	{ 0x01E4, 0x3fff3fff, 0x18881a88},
-	{ 0x01E8, 0x00000701, 0x00000001},
-
-	{ 0x0200, 0x00000001, 0x00000001},
-	{ 0x0204, 0xffffffff, 0x08848484},
-	{ 0x0208, 0x3f3f3f3f, 0x04201008},
-	{ 0x020C, 0x3f3fffff, 0x20080808},
-	{ 0x0260, 0x80000003, 0x00000003},
-	{ 0x0264, 0x3fff3fff, 0x18881a88},
-	{ 0x0268, 0x00000701, 0x00000001},
-};
 
 struct R9P0_GSP_GLB_CFG_REG {
 	union {
@@ -566,7 +466,7 @@ struct R9P0_LAYERIMG_CFG_REG {
 			uint32_t   Y2R_MOD		:  3;
 			uint32_t   Y2Y_MOD		:  1;
 			uint32_t   ZNUM_L		:  2;
-			uint32_t   H2R_MOD		:  1;
+			uint32_t   H2R_MOD0		:  1;
 			uint32_t   SCALE_EN		:  1;
 			uint32_t   Limg_en		:  1;
 		};

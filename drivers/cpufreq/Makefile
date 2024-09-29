@@ -1,6 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
 # CPUfreq core
-GCOV_PROFILE 				:= $(CONFIG_SPRD_CPUDVFS_GCOV)
 obj-$(CONFIG_CPU_FREQ)			+= cpufreq.o freq_table.o
 
 # CPUfreq stats
@@ -13,9 +12,9 @@ obj-$(CONFIG_CPU_FREQ_TIMES)		+= cpufreq_times.o
 obj-$(CONFIG_CPU_FREQ_GOV_PERFORMANCE)	+= cpufreq_performance.o
 obj-$(CONFIG_CPU_FREQ_GOV_POWERSAVE)	+= cpufreq_powersave.o
 obj-$(CONFIG_CPU_FREQ_GOV_USERSPACE)	+= cpufreq_userspace.o
+obj-$(CONFIG_CPU_FREQ_GOV_INTERACTIVE)  += cpufreq_interactive.o
 obj-$(CONFIG_CPU_FREQ_GOV_ONDEMAND)	+= cpufreq_ondemand.o
 obj-$(CONFIG_CPU_FREQ_GOV_CONSERVATIVE)	+= cpufreq_conservative.o
-obj-$(CONFIG_CPU_FREQ_GOV_INTERACTIVE)	+= cpufreq_interactive.o
 obj-$(CONFIG_CPU_FREQ_GOV_COMMON)		+= cpufreq_governor.o
 obj-$(CONFIG_CPU_FREQ_GOV_ATTR_SET)	+= cpufreq_governor_attr_set.o
 
@@ -55,49 +54,47 @@ obj-$(CONFIG_X86_SFI_CPUFREQ)		+= sfi-cpufreq.o
 ##################################################################################
 # ARM SoC drivers
 obj-$(CONFIG_ARM_BIG_LITTLE_CPUFREQ)	+= arm_big_little.o
-# big LITTLE per platform glues. Keep DT_BL_CPUFREQ as the last entry in all big
-# LITTLE drivers, so that it is probed last.
-obj-$(CONFIG_ARM_DT_BL_CPUFREQ)		+= arm_big_little_dt.o
 
+obj-$(CONFIG_ARM_ARMADA_37XX_CPUFREQ)	+= armada-37xx-cpufreq.o
+obj-$(CONFIG_ARM_ARMADA_8K_CPUFREQ)	+= armada-8k-cpufreq.o
 obj-$(CONFIG_ARM_BRCMSTB_AVS_CPUFREQ)	+= brcmstb-avs-cpufreq.o
+obj-$(CONFIG_ACPI_CPPC_CPUFREQ)		+= cppc_cpufreq.o
 obj-$(CONFIG_ARCH_DAVINCI)		+= davinci-cpufreq.o
-obj-$(CONFIG_ARM_EXYNOS5440_CPUFREQ)	+= exynos5440-cpufreq.o
 obj-$(CONFIG_ARM_HIGHBANK_CPUFREQ)	+= highbank-cpufreq.o
 obj-$(CONFIG_ARM_IMX6Q_CPUFREQ)		+= imx6q-cpufreq.o
+obj-$(CONFIG_ARM_IMX_CPUFREQ_DT)	+= imx-cpufreq-dt.o
 obj-$(CONFIG_ARM_KIRKWOOD_CPUFREQ)	+= kirkwood-cpufreq.o
 obj-$(CONFIG_ARM_MEDIATEK_CPUFREQ)	+= mediatek-cpufreq.o
+obj-$(CONFIG_MACH_MVEBU_V7)		+= mvebu-cpufreq.o
 obj-$(CONFIG_ARM_OMAP2PLUS_CPUFREQ)	+= omap-cpufreq.o
 obj-$(CONFIG_ARM_PXA2xx_CPUFREQ)	+= pxa2xx-cpufreq.o
 obj-$(CONFIG_PXA3xx)			+= pxa3xx-cpufreq.o
-obj-$(CONFIG_ARM_S3C24XX_CPUFREQ)	+= s3c24xx-cpufreq.o
-obj-$(CONFIG_ARM_S3C24XX_CPUFREQ_DEBUGFS) += s3c24xx-cpufreq-debugfs.o
+obj-$(CONFIG_ARM_QCOM_CPUFREQ_HW)	+= qcom-cpufreq-hw.o
+obj-$(CONFIG_ARM_QCOM_CPUFREQ_NVMEM)	+= qcom-cpufreq-nvmem.o
+obj-$(CONFIG_ARM_RASPBERRYPI_CPUFREQ) 	+= raspberrypi-cpufreq.o
 obj-$(CONFIG_ARM_S3C2410_CPUFREQ)	+= s3c2410-cpufreq.o
 obj-$(CONFIG_ARM_S3C2412_CPUFREQ)	+= s3c2412-cpufreq.o
 obj-$(CONFIG_ARM_S3C2416_CPUFREQ)	+= s3c2416-cpufreq.o
 obj-$(CONFIG_ARM_S3C2440_CPUFREQ)	+= s3c2440-cpufreq.o
 obj-$(CONFIG_ARM_S3C64XX_CPUFREQ)	+= s3c64xx-cpufreq.o
+obj-$(CONFIG_ARM_S3C24XX_CPUFREQ)	+= s3c24xx-cpufreq.o
+obj-$(CONFIG_ARM_S3C24XX_CPUFREQ_DEBUGFS) += s3c24xx-cpufreq-debugfs.o
 obj-$(CONFIG_ARM_S5PV210_CPUFREQ)	+= s5pv210-cpufreq.o
 obj-$(CONFIG_ARM_SA1100_CPUFREQ)	+= sa1100-cpufreq.o
 obj-$(CONFIG_ARM_SA1110_CPUFREQ)	+= sa1110-cpufreq.o
+obj-$(CONFIG_ARM_SCMI_CPUFREQ)		+= scmi-cpufreq.o
 obj-$(CONFIG_ARM_SCPI_CPUFREQ)		+= scpi-cpufreq.o
 obj-$(CONFIG_ARM_SPEAR_CPUFREQ)		+= spear-cpufreq.o
 obj-$(CONFIG_ARM_STI_CPUFREQ)		+= sti-cpufreq.o
+obj-$(CONFIG_ARM_ALLWINNER_SUN50I_CPUFREQ_NVMEM) += sun50i-cpufreq-nvmem.o
 obj-$(CONFIG_ARM_TANGO_CPUFREQ)		+= tango-cpufreq.o
 obj-$(CONFIG_ARM_TEGRA20_CPUFREQ)	+= tegra20-cpufreq.o
 obj-$(CONFIG_ARM_TEGRA124_CPUFREQ)	+= tegra124-cpufreq.o
 obj-$(CONFIG_ARM_TEGRA186_CPUFREQ)	+= tegra186-cpufreq.o
 obj-$(CONFIG_ARM_TI_CPUFREQ)		+= ti-cpufreq.o
 obj-$(CONFIG_ARM_VEXPRESS_SPC_CPUFREQ)	+= vexpress-spc-cpufreq.o
-obj-$(CONFIG_ACPI_CPPC_CPUFREQ) += cppc_cpufreq.o
-obj-$(CONFIG_MACH_MVEBU_V7)		+= mvebu-cpufreq.o
 
-obj-$(CONFIG_ARM_SPRD_HW_CPUFREQ) += sprd-cpufreqhw.o sprd-cpufreq-common.o
-obj-$(CONFIG_ARM_SPRD_HW_CPUFREQ_NORMAL) += sprd-hwdvfs-normal.o sprd-sysfs-normal.o sprd-hwdvfs-archdata.o
-obj-$(CONFIG_ARM_SPRD_HW_CPUFREQ_SHARKL3) += sprd-hwdvfs-sharkl3.o
-obj-$(CONFIG_ARM_SPRD_SW_CPUFREQ) += sprd-cpufreqsw.o sprd-cpufreq-common.o
-obj-$(CONFIG_ARM_SPRD_DUMMY_CPUFREQ) += sprd-dummy-cpufreq.o
 
-obj-$(CONFIG_ARM_SPRD_SHARKL6PRO_CPUFREQ) += sprd-sharkl6pro-cpufreq.o
 ##################################################################################
 # PowerPC platform drivers
 obj-$(CONFIG_CPU_FREQ_CBE)		+= ppc-cbe-cpufreq.o
@@ -112,11 +109,7 @@ obj-$(CONFIG_POWERNV_CPUFREQ)		+= powernv-cpufreq.o
 
 ##################################################################################
 # Other platform drivers
-obj-$(CONFIG_AVR32_AT32AP_CPUFREQ)	+= at32ap-cpufreq.o
-obj-$(CONFIG_BFIN_CPU_FREQ)		+= blackfin-cpufreq.o
 obj-$(CONFIG_BMIPS_CPUFREQ)		+= bmips-cpufreq.o
-obj-$(CONFIG_CRIS_MACH_ARTPEC3)		+= cris-artpec3-cpufreq.o
-obj-$(CONFIG_ETRAXFS)			+= cris-etraxfs-cpufreq.o
 obj-$(CONFIG_IA64_ACPI_CPUFREQ)		+= ia64-acpi-cpufreq.o
 obj-$(CONFIG_LOONGSON2_CPUFREQ)		+= loongson2_cpufreq.o
 obj-$(CONFIG_LOONGSON1_CPUFREQ)		+= loongson1-cpufreq.o
@@ -124,3 +117,26 @@ obj-$(CONFIG_SH_CPU_FREQ)		+= sh-cpufreq.o
 obj-$(CONFIG_SPARC_US2E_CPUFREQ)	+= sparc-us2e-cpufreq.o
 obj-$(CONFIG_SPARC_US3_CPUFREQ)		+= sparc-us3-cpufreq.o
 obj-$(CONFIG_UNICORE32)			+= unicore2-cpufreq.o
+
+##################################################################################
+# unisoc platform drivers
+obj-$(CONFIG_ARM_SPRD_SW_CPUFREQ) += sprd-swcpufreq.o
+sprd-swcpufreq-objs := sprd-cpufreqsw.o sprd-cpufreq-common.o
+
+obj-$(CONFIG_ARM_SPRD_HW_CPUFREQ) += sprd-union-hwcpufreq.o
+sprd-union-hwcpufreq-objs := sprd-cpufreqhw.o sprd-cpufreq-common.o
+obj-$(CONFIG_ARM_SPRD_HW_CPUFREQ_SHARKL3) += sprd-hwdvfs-sharkl3.o
+
+obj-$(CONFIG_ARM_SPRD_HW_CPUFREQ_ARCH_UMS512) += sprd-hwdvfs-ums512-arch.o
+sprd-hwdvfs-ums512-arch-objs := sprd-hwdvfs-normal.o sprd-hwdvfs-ums512.o
+
+obj-$(CONFIG_ARM_SPRD_HW_CPUFREQ_ARCH_UMS9230) += sprd-hwdvfs-ums9230-arch.o
+sprd-hwdvfs-ums9230-arch-objs := sprd-hwdvfs-normal.o sprd-hwdvfs-ums9230.o
+
+obj-$(CONFIG_ARM_SPRD_HW_CPUFREQ_NORMAL) += sprd-hwdvfs-policy.o
+sprd-hwdvfs-policy-objs := sprd-hwdvfs-cpufreq.o
+
+obj-$(CONFIG_ARM_SPRD_CPUFREQ_PUBLIC) += sprd-cpufreq-public.o
+ifneq ($(CONFIG_DEBUG_FS),)
+sprd-hwdvfs-policy-objs += sprd-hwdvfs-debugfs.o
+endif

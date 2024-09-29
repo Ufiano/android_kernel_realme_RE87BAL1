@@ -25,9 +25,7 @@
 #define LINUX_MMC_MMC_H
 
 #include <linux/types.h>
-#include <linux/mmc/card.h>
-#include <linux/mmc/core.h>
-#include <linux/mmc/host.h>
+
 /* Standard MMC commands (4.1)           type  argument     response */
    /* class 1 */
 #define MMC_GO_IDLE_STATE         0   /* bc                          */
@@ -146,7 +144,7 @@ static inline bool mmc_op_multi(u32 opcode)
 #define R1_WP_ERASE_SKIP	(1 << 15)	/* sx, c */
 #define R1_CARD_ECC_DISABLED	(1 << 14)	/* sx, a */
 #define R1_ERASE_RESET		(1 << 13)	/* sr, c */
-#define R1_STATUS(x)            (x & 0xFFFFE000)
+#define R1_STATUS(x)            (x & 0xFFF9A000)
 #define R1_CURRENT_STATE(x)	((x & 0x00001E00) >> 9)	/* sx, b (4 bits) */
 #define R1_READY_FOR_DATA	(1 << 8)	/* sx, a */
 #define R1_SWITCH_ERROR		(1 << 7)	/* sx, c */
@@ -240,9 +238,6 @@ static inline bool mmc_op_multi(u32 opcode)
  */
 
 #define EXT_CSD_CMDQ_MODE_EN		15	/* R/W */
-#define EXT_CSD_FFU_STATUS			26	/* R */
-#define EXT_CSD_MODE_OPERATION_CODES	29	/* W */
-#define EXT_CSD_MODE_CONFIG		30	/* R/W */
 #define EXT_CSD_FLUSH_CACHE		32      /* W */
 #define EXT_CSD_CACHE_CTRL		33      /* R/W */
 #define EXT_CSD_POWER_OFF_NOTIFICATION	34	/* R/W */
@@ -305,12 +300,8 @@ static inline bool mmc_op_multi(u32 opcode)
 #define EXT_CSD_PRE_EOL_INFO		267	/* RO */
 #define EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_A	268	/* RO */
 #define EXT_CSD_DEVICE_LIFE_TIME_EST_TYP_B	269	/* RO */
-#define EXT_CSD_NUM_OF_FW_SEC_PROG	302	/* RO */
 #define EXT_CSD_CMDQ_DEPTH		307	/* RO */
 #define EXT_CSD_CMDQ_SUPPORT		308	/* RO */
-#define EXT_CSD_FFU_ARG				487	/* RO, 4 bytes */
-#define EXT_CSD_OPERATION_CODE_TIMEOUT	491	/* RO */
-#define EXT_CSD_FFU_FEATURES		492	/* RO */
 #define EXT_CSD_SUPPORTED_MODE		493	/* RO */
 #define EXT_CSD_TAG_UNIT_SIZE		498	/* RO */
 #define EXT_CSD_DATA_TAG_SUPPORT	499	/* RO */
@@ -324,6 +315,7 @@ static inline bool mmc_op_multi(u32 opcode)
  */
 
 #define EXT_CSD_WR_REL_PARAM_EN		(1<<2)
+#define EXT_CSD_WR_REL_PARAM_EN_RPMB_REL_WR	(1<<4)
 
 #define EXT_CSD_BOOT_WP_B_PWR_WP_DIS	(0x40)
 #define EXT_CSD_BOOT_WP_B_PERM_WP_DIS	(0x10)
@@ -446,5 +438,5 @@ static inline bool mmc_op_multi(u32 opcode)
 #define MMC_TRIM_ARGS			0x00008001
 
 #define mmc_driver_type_mask(n)		(1 << (n))
-int mmc_init_card(struct mmc_host *host, u32 ocr, struct mmc_card *oldcard);
+
 #endif /* LINUX_MMC_MMC_H */

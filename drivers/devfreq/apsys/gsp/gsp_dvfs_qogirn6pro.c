@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -22,7 +14,7 @@
 #include <linux/soc/sprd/hwfeature.h>
 
 #include "sprd_dvfs_apsys.h"
-#include "../apsys/sprd_dvfs_gsp.h"
+#include "../sys/sprd_dvfs_gsp.h"
 
 static struct ip_dvfs_map_cfg map_table[] = {
 	{0, VOLT60, GSP_CLK_INDEX_256M, GSP_CLK256M},
@@ -31,23 +23,23 @@ static struct ip_dvfs_map_cfg map_table[] = {
 	{3, VOLT75, GSP_CLK_INDEX_512M, GSP_CLK512M},
 };
 
-static void gsp_hw_dfs_en(bool dfs_en)
+static void gsp_hw_dfs_en(struct gsp_dvfs *gsp, bool dfs_en)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)gsp->apsys->apsys_base;
 
-	mutex_lock(&apsys_glb_reg_lock);
+	mutex_lock(&gsp->apsys->reg_lock);
 	if (dfs_en)
 		reg->dpu_vsp_dfs_en_ctrl |= BIT(2);
 	else
 		reg->dpu_vsp_dfs_en_ctrl &= ~BIT(2);
-	mutex_unlock(&apsys_glb_reg_lock);
+	mutex_unlock(&gsp->apsys->reg_lock);
 }
 
-static void gsp_dvfs_map_cfg(void)
+static void gsp_dvfs_map_cfg(struct gsp_dvfs *gsp)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)gsp->apsys->apsys_base;
 
 	reg->gsp0_index0_map = map_table[0].clk_level |
 		map_table[0].volt_level << 2;
@@ -59,10 +51,10 @@ static void gsp_dvfs_map_cfg(void)
 		map_table[3].volt_level << 2;
 }
 
-static void set_gsp_work_freq(u32 freq)
+static void set_gsp_work_freq(struct gsp_dvfs *gsp, u32 freq)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)gsp->apsys->apsys_base;
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(map_table); i++) {
@@ -73,10 +65,10 @@ static void set_gsp_work_freq(u32 freq)
 	}
 }
 
-static u32 get_gsp_work_freq(void)
+static u32 get_gsp_work_freq(struct gsp_dvfs *gsp)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)gsp->apsys->apsys_base;
 	u32 freq = 0;
 	int i;
 
@@ -91,10 +83,10 @@ static u32 get_gsp_work_freq(void)
 	return freq;
 }
 
-static void set_gsp_idle_freq(u32 freq)
+static void set_gsp_idle_freq(struct gsp_dvfs *gsp, u32 freq)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)gsp->apsys->apsys_base;
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(map_table); i++) {
@@ -105,10 +97,10 @@ static void set_gsp_idle_freq(u32 freq)
 	}
 }
 
-static u32 get_gsp_idle_freq(void)
+static u32 get_gsp_idle_freq(struct gsp_dvfs *gsp)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)gsp->apsys->apsys_base;
 	u32 freq = 0;
 	int i;
 
@@ -123,100 +115,100 @@ static u32 get_gsp_idle_freq(void)
 	return freq;
 }
 
-static void set_gsp_work_index(int index)
+static void set_gsp_work_index(struct gsp_dvfs *gsp, int index)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)gsp->apsys->apsys_base;
 
 	reg->vpu_gsp0_dvfs_index_cfg = index;
 }
 
-static int get_gsp_work_index(void)
+static int get_gsp_work_index(struct gsp_dvfs *gsp)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)gsp->apsys->apsys_base;
 
 	return reg->vpu_gsp0_dvfs_index_cfg;
 }
 
-static void set_gsp_idle_index(int index)
+static void set_gsp_idle_index(struct gsp_dvfs *gsp, int index)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)gsp->apsys->apsys_base;
 
 	reg->vpu_gsp0_dvfs_index_idle_cfg = index;
 }
 
-static int get_gsp_idle_index(void)
+static int get_gsp_idle_index(struct gsp_dvfs *gsp)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)gsp->apsys->apsys_base;
 
 	return reg->vpu_gsp0_dvfs_index_idle_cfg;
 }
 
-static void set_gsp_gfree_wait_delay(u32 para)
+static void set_gsp_gfree_wait_delay(struct gsp_dvfs *gsp, u32 para)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)gsp->apsys->apsys_base;
 	u32 temp;
-	mutex_lock(&apsys_glb_reg_lock);
+	mutex_lock(&gsp->apsys->reg_lock);
 	temp = reg->dpu_vsp_gfree_wait_delay_cfg0;
 	temp &= GENMASK(9, 0);
 	reg->dpu_vsp_gfree_wait_delay_cfg0 = para << 0 | temp;
-	mutex_unlock(&apsys_glb_reg_lock);
+	mutex_unlock(&gsp->apsys->reg_lock);
 }
 
-static void set_gsp_freq_upd_en_byp(bool enable)
+static void set_gsp_freq_upd_en_byp(struct gsp_dvfs *gsp, bool enable)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)gsp->apsys->apsys_base;
 
-	mutex_lock(&apsys_glb_reg_lock);
+	mutex_lock(&gsp->apsys->reg_lock);
 	if (enable)
 		reg->dpu_vsp_freq_update_bypass |= BIT(3);
 	else
 		reg->dpu_vsp_freq_update_bypass &= ~BIT(3);
-	mutex_unlock(&apsys_glb_reg_lock);
+	mutex_unlock(&gsp->apsys->reg_lock);
 }
 
-static void set_gsp_freq_upd_delay_en(bool enable)
+static void set_gsp_freq_upd_delay_en(struct gsp_dvfs *gsp, bool enable)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)gsp->apsys->apsys_base;
 
-	mutex_lock(&apsys_glb_reg_lock);
+	mutex_lock(&gsp->apsys->reg_lock);
 	if (enable)
 		reg->dpu_vsp_freq_upd_type_cfg |= BIT(7);
 	else
 		reg->dpu_vsp_freq_upd_type_cfg &= ~BIT(7);
-	mutex_unlock(&apsys_glb_reg_lock);
+	mutex_unlock(&gsp->apsys->reg_lock);
 }
 
-static void set_gsp_freq_upd_hdsk_en(bool enable)
+static void set_gsp_freq_upd_hdsk_en(struct gsp_dvfs *gsp, bool enable)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)gsp->apsys->apsys_base;
 
-	mutex_lock(&apsys_glb_reg_lock);
+	mutex_lock(&gsp->apsys->reg_lock);
 	if (enable)
 		reg->dpu_vsp_freq_upd_type_cfg |= BIT(6);
 	else
 		reg->dpu_vsp_freq_upd_type_cfg &= ~BIT(6);
-	mutex_unlock(&apsys_glb_reg_lock);
+	mutex_unlock(&gsp->apsys->reg_lock);
 }
 
-static void set_gsp_dvfs_swtrig_en(bool enable)
+static void set_gsp_dvfs_swtrig_en(struct gsp_dvfs *gsp, bool enable)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)gsp->apsys->apsys_base;
 
-	mutex_lock(&apsys_glb_reg_lock);
+	mutex_lock(&gsp->apsys->reg_lock);
 	if (enable)
 		reg->dpu_vsp_sw_trig_ctrl |= BIT(0);
 	else
 		reg->dpu_vsp_sw_trig_ctrl &= ~BIT(0);
-	mutex_unlock(&apsys_glb_reg_lock);
+	mutex_unlock(&gsp->apsys->reg_lock);
 }
 
 static void set_gsp_dvfs_table(struct ip_dvfs_map_cfg *dvfs_table)
@@ -239,12 +231,12 @@ static int get_gsp_dvfs_table(struct ip_dvfs_map_cfg *dvfs_table)
 	return i;
 }
 
-static void get_gsp_dvfs_status(struct ip_dvfs_status *dvfs_status)
+static void get_gsp_dvfs_status(struct gsp_dvfs *gsp, struct ip_dvfs_status *dvfs_status)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)gsp->apsys->apsys_base;
 
-	mutex_lock(&apsys_glb_reg_lock);
+	mutex_lock(&gsp->apsys->reg_lock);
 	/*dvfs_status->gsp1_vote_volt =
 		qogirn6pro_gsp_val_to_volt(reg->dpu_vsp_dvfs_voltage_dbg >> 20 & 0x7);*/
 	dvfs_status->gsp0_vote_volt =
@@ -254,7 +246,7 @@ static void get_gsp_dvfs_status(struct ip_dvfs_status *dvfs_status)
 		qogirn6pro_gsp_val_to_freq(reg->dpu_vsp_vpu_gsp0_dvfs_cgm_cfg_dbg & 0x3);
 	/*dvfs_status->gsp1_cur_freq =
 		qogirn6pro_gsp_val_to_freq(reg->dpu_vsp_vpu_gsp0_dvfs_cgm_cfg_dbg & 0x3);*/
-	mutex_unlock(&apsys_glb_reg_lock);
+	mutex_unlock(&gsp->apsys->reg_lock);
 }
 
 static int gsp_dvfs_parse_dt(struct gsp_dvfs *gsp,
@@ -298,13 +290,13 @@ static int gsp_dvfs_init(struct gsp_dvfs *gsp)
 
 	pr_info("%s()\n", __func__);
 
-	gsp_dvfs_map_cfg();
-	set_gsp_gfree_wait_delay(gsp->dvfs_coffe.gfree_wait_delay);
-	set_gsp_freq_upd_hdsk_en(gsp->dvfs_coffe.freq_upd_hdsk_en);
-	set_gsp_freq_upd_delay_en(gsp->dvfs_coffe.freq_upd_delay_en);
-	set_gsp_freq_upd_en_byp(gsp->dvfs_coffe.freq_upd_en_byp);
-	set_gsp_work_index(gsp->dvfs_coffe.work_index_def);
-	set_gsp_idle_index(gsp->dvfs_coffe.idle_index_def);
+	gsp_dvfs_map_cfg(gsp);
+	set_gsp_gfree_wait_delay(gsp, gsp->dvfs_coffe.gfree_wait_delay);
+	set_gsp_freq_upd_hdsk_en(gsp, gsp->dvfs_coffe.freq_upd_hdsk_en);
+	set_gsp_freq_upd_delay_en(gsp, gsp->dvfs_coffe.freq_upd_delay_en);
+	set_gsp_freq_upd_en_byp(gsp, gsp->dvfs_coffe.freq_upd_en_byp);
+	set_gsp_work_index(gsp, gsp->dvfs_coffe.work_index_def);
+	set_gsp_idle_index(gsp, gsp->dvfs_coffe.idle_index_def);
 
 	sprd_kproperty_get("auto/chipid", chip_type, "-1");
 	if (!strncmp(chip_type, "UMS512-AB", strlen("UMS512-AB")))
@@ -312,12 +304,12 @@ static int gsp_dvfs_init(struct gsp_dvfs *gsp)
 	else
 		gsp->dvfs_coffe.hw_dfs_en = 0;
 
-	gsp_hw_dfs_en(gsp->dvfs_coffe.hw_dfs_en);
+	gsp_hw_dfs_en(gsp, gsp->dvfs_coffe.hw_dfs_en);
 
 	return 0;
 }
 
-static struct gsp_dvfs_ops gsp_dvfs_ops = {
+const struct gsp_dvfs_ops qogirn6pro_gsp_dvfs_ops = {
 	.parse_dt = gsp_dvfs_parse_dt,
 	.dvfs_init = gsp_dvfs_init,
 	.hw_dfs_en = gsp_hw_dfs_en,
@@ -339,15 +331,3 @@ static struct gsp_dvfs_ops gsp_dvfs_ops = {
 	.set_freq_upd_hdsk_en = set_gsp_freq_upd_hdsk_en,
 	.set_dvfs_swtrig_en = set_gsp_dvfs_swtrig_en,
 };
-
-static struct dvfs_ops_entry gsp_dvfs_entry = {
-	.ver = "qogirn6pro",
-	.ops = &gsp_dvfs_ops,
-};
-
-static int __init gsp_dvfs_register(void)
-{
-	return gsp_dvfs_ops_register(&gsp_dvfs_entry);
-}
-
-subsys_initcall(gsp_dvfs_register);

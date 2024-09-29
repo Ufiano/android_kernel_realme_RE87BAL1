@@ -3,17 +3,11 @@
 This binding follows the generic DMA bindings defined in dma.txt.
 
 Required properties:
-- compatible: Should be one of following:
-	"sprd,sc9860-dma",
-	"sprd,sharkl5-dma",
-	"sprd,roc1-dma",
-	"sprd,sharkl3-dma",
-	"sprd,pike2-dma",
-	"sprd,orca-dma",
-	"sprd,sharkle-dma",
-	"sprd,sharkl5pro-dma",
-	"sprd,qogirl6-dma",
-	"sprd,qogirn6pro-dma".
+- compatible: Should be one of the following:
+ "sprd,sc9860-dma",
+ "sprd,sharkl3-dma",
+ "sprd,sharkl5pro-dma",
+ "sprd,qogirl6-dma".
 - reg: Should contain DMA registers location and length.
 - interrupts: Should contain one interrupt shared by all channel.
 - #dma-cells: must be <1>. Used to represent the number of integer
@@ -25,7 +19,7 @@ Required properties:
 Example:
 
 Controller:
-ap_dma: dma-controller@20100000 {
+apdma: dma-controller@20100000 {
 	compatible = "sprd,sc9860-dma";
 	reg = <0x20100000 0x4000>;
 	interrupts = <GIC_SPI 50 IRQ_TYPE_LEVEL_HIGH>;
@@ -41,11 +35,11 @@ DMA clients connected to the Spreadtrum DMA controller must use the format
 described in the dma.txt file, using a two-cell specifier for each channel.
 The two cells in order are:
 1. A phandle pointing to the DMA controller.
-2. The channel id.
+2. The slave id.
 
 spi0: spi@70a00000{
 	...
 	dma-names = "rx_chn", "tx_chn";
-	dmas = <&ap_dma 11 &ap_dma 12>;
+	dmas = <&apdma 11>, <&apdma 12>;
 	...
 };

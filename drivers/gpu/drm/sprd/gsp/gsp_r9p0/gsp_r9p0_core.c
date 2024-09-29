@@ -1,19 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/delay.h>
 #include <linux/device.h>
-#include <linux/io.h>
+#include <linux/interrupt.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
 #include <linux/mfd/syscon.h>
@@ -38,10 +30,7 @@
 #include "gsp_r9p0_reg.h"
 #include "gsp_r9p0_coef_cal.h"
 #include "../gsp_interface.h"
-#include "gsp_r9p0_dvfs.h"
-#include "../gsp_ipc_trusty.h"
 
-static bool tipc_init;
 static int zorder_used[R9P0_IMGL_NUM + R9P0_OSDL_NUM] = {0};
 int gsp_r9p0_layer_num;//gsp_enabled_layer_count->gsp_r9p0_layer_num;
 
@@ -410,15 +399,6 @@ void gsp_r9p0_core_dump(struct gsp_core *c)
 	}
 }
 
-static void gsp_r9p0_soc_qos_init(struct gsp_r9p0_core *core)
-{
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(r9p0_gsp_mtx_qos); i++)
-		gsp_core_reg_update((core->gsp_qos_reg_base + r9p0_gsp_mtx_qos[i].offset),
-			r9p0_gsp_mtx_qos[i].value, r9p0_gsp_mtx_qos[i].mask);
-}
-
 static void gsp_r9p0_core_cfg_reinit(struct gsp_r9p0_cfg *cfg)
 {
 	struct gsp_layer *layer;
@@ -637,8 +617,6 @@ int gsp_r9p0_core_init(struct gsp_core *core)
 			(struct gsp_r9p0_cfg *)kcfg->cfg, kcfg);
 	}
 
-	gsp_dvfs_task_init(c);
-
 	return ret;
 }
 
@@ -771,10 +749,6 @@ int gsp_r9p0_core_enable(struct gsp_core *c)
 
 	gsp_r9p0_int_clear(c);
 	gsp_r9p0_core_irq_enable(c);
-
-	gsp_r9p0_soc_qos_init(core);
-
-	sprd_iommu_restore(c->dev);
 	goto exit;
 
 gsp_clk_unprepare:
@@ -831,10 +805,10 @@ static int gsp_r9p0_core_parse_irq(struct gsp_core *core)
 int gsp_r9p0_core_parse_dt(struct gsp_core *core)
 {
 	int ret = -1;
+	struct device *dev = NULL;
 	struct gsp_r9p0_core *r9p0_core = NULL;
-	struct resource *res;
-	struct platform_device *pdev = to_platform_device(core->parent->dev);
 
+	dev = container_of(&core->node, struct device, of_node);
 	r9p0_core = (struct gsp_r9p0_core *)core;
 
 	r9p0_core->gsp_ctl_reg_base = core->base;
@@ -848,210 +822,30 @@ int gsp_r9p0_core_parse_dt(struct gsp_core *core)
 
 	gsp_r9p0_core_parse_clk(r9p0_core);
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (IS_ERR_OR_NULL(res)) {
-		GSP_ERR("core[%d] parse qos addr to res failed\n", core->id);
-		return PTR_ERR(res);
-	}
+	gsp_r9p0_core_enable(core);
 
-	r9p0_core->gsp_qos_reg_base = devm_ioremap_resource(&pdev->dev, res);
-	if (IS_ERR(r9p0_core->gsp_qos_reg_base)) {
-		GSP_ERR("core[%d] parse qos addr failed\n", core->id);
-		return PTR_ERR(r9p0_core->gsp_qos_reg_base);
-	}
+	sprd_iommu_restore(core->dev);
+	/*
+	 * update dpu
+	 * gsp_core_reg_update(core->base + 4, 4, 4);
+	 */
 
 	return ret;
 }
 
-static void gsp_r9p0_hdr10_set(void __iomem *base, struct gsp_r9p0_cfg *cfg)
-{
-	uint32_t cmd;
-	int i;
-	struct gsp_r9p0_hdr10_cfg *para = &(cfg->misc.hdr10_para);
-
-	if (IS_ERR_OR_NULL(base)) {
-		GSP_ERR("base address error\n");
-		return;
-	}
-
-	cmd = (para->reg_hdr_csc1_ycr & 0xFFFF);
-	cmd |= ((para->reg_hdr_csc1_ucr & 0xFFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR2_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc1_vcr & 0xFFFF);
-	cmd |= ((para->reg_hdr_csc1_ycg & 0xFFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR3_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc1_ucg & 0xFFFF);
-	cmd |= ((para->reg_hdr_csc1_vcg & 0xFFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR4_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc1_ycb & 0xFFFF);
-	cmd |= ((para->reg_hdr_csc1_ucb & 0xFFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR5_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc1_vcb & 0xFFFF);
-	gsp_core_reg_write(R9P0_HDR6_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc1_ucb2 & 0xFFFF);
-	cmd |= ((para->reg_hdr_csc1_vcr2 & 0xFFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR7_CFG(base), cmd);
-
-	cmd = ((para->reg_hdr_csc1_yls & 0x3FF) <<  0);
-	cmd |= ((para->reg_hdr_csc1_uls & 0x3FF) << 10);
-	cmd |= ((para->reg_hdr_csc1_vls & 0x3FF) << 20);
-	gsp_core_reg_write(R9P0_HDR8_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc2_c11 & 0xFFFF);
-	cmd |= ((para->reg_hdr_csc2_c12 & 0xFFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR12_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc2_c13 & 0xFFFF);
-	cmd |= ((para->reg_hdr_csc2_c21 & 0xFFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR13_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc2_c22 & 0xFFFF);
-	cmd |= ((para->reg_hdr_csc2_c23 & 0xFFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR14_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc2_c31 & 0xFFFF);
-	cmd |= ((para->reg_hdr_csc2_c32 & 0xFFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR15_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc2_c33 & 0xFFFF);
-	cmd |= ((para->reg_hdr_csc2_c11_2 & 0xFFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR16_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc2_c12_2 & 0xFFFF);
-	cmd |= ((para->reg_hdr_csc2_c13_2 & 0xFFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR17_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc2_c21_2 & 0xFFFF);
-	cmd |= ((para->reg_hdr_csc2_c22_2 & 0xFFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR18_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc2_c23_2 & 0xFFFF);
-	cmd |= ((para->reg_hdr_csc2_c31_2 & 0xFFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR19_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc2_c32_2 & 0xFFFF);
-	cmd |= ((para->reg_hdr_csc2_c33_2 & 0xFFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR20_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc2_offset_r & 0xFFFF);
-	cmd |= ((para->reg_hdr_csc2_offset_g & 0xFFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR21_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc2_offset_b & 0xFFFF);
-	gsp_core_reg_write(R9P0_HDR22_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc2_gain & 0xFFFF);
-	gsp_core_reg_write(R9P0_HDR23_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc3_a11 & 0xFFF);
-	cmd |= ((para->reg_hdr_csc3_a12 & 0xFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR31_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc3_a13 & 0xFFF);
-	cmd |= ((para->reg_hdr_csc3_a21 & 0xFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR32_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc3_a22 & 0xFFF);
-	cmd |= ((para->reg_hdr_csc3_a23 & 0xFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR33_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc3_a31 & 0xFFF);
-	cmd |= ((para->reg_hdr_csc3_a32 & 0xFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR34_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_csc3_a33 & 0xFFF);
-	gsp_core_reg_write(R9P0_HDR35_CFG(base), cmd);
-
-	cmd = 0x30100;
-	gsp_core_reg_write(R9P0_HDR26_CFG(base), cmd);
-
-	for (i = 0; i < HDR_DEGAMMA_LUT_SIZE; ++i) {
-		gsp_core_reg_write(R9P0_HDR9_CFG(base), i);
-		cmd = para->hdr_degamma_lut[i];
-		gsp_core_reg_write(R9P0_HDR10_CFG(base), cmd);
-	}
-
-	for (i = 0; i < HDR_REGAMMA_LUT_SIZE; ++i) {
-		gsp_core_reg_write(R9P0_HDR36_CFG(base), i);
-		cmd = para->hdr_regamma_lut[i];
-		gsp_core_reg_write(R9P0_HDR11_CFG(base), cmd);
-	}
-
-	if (para->tone_map_en == 1) {
-		for (i = 0; i < HDR_TM_LUT_SIZE; ++i) {
-			gsp_core_reg_write(R9P0_HDR37_CFG(base), i);
-			cmd = para->hdr_tone_mapping_lut[i];
-			gsp_core_reg_write(R9P0_HDR30_CFG(base), cmd);
-		}
-
-		cmd = (para->reg_hdr_csc2_gain & 0xFFFF);
-		gsp_core_reg_write(R9P0_HDR23_CFG(base), cmd);
-	}
-
-	cmd = 0x80100;
-	gsp_core_reg_write(R9P0_HDR26_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_slp & 0x1);
-	cmd |= ((para->reg_hdr_bypass_csc1 & 0x1) << 8);
-	cmd |= ((para->reg_hdr_bypass_degamma & 0x1) << 9);
-	cmd |= ((para->reg_hdr_bypass_csc2 & 0x1) << 10);
-	cmd |= ((para->reg_hdr_maxcll_gain_bypass & 0x1) << 11);
-	cmd |= ((para->reg_hdr_bypass_gamma & 0x1) << 12);
-	cmd |= ((para->reg_hdr_bypass_csc3 & 0x1) << 13);
-	cmd |= ((para->reg_hdr_force_in_range_csc1 & 0x1) << 16);
-	cmd |= ((para->reg_hdr_force_in_range_csc3 & 0x1) << 17);
-	cmd |= ((para->reg_hdr_gamut_map_en & 0x1) << 18);
-	cmd |= ((para->reg_hdr_csc1_cl_en & 0x1) << 19);
-	cmd |= ((para->reg_hdr_avg_en & 0x1) << 20);
-	gsp_core_reg_write(R9P0_HDR0_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_alpha_gain & 0xFF);
-	cmd |= ((para->reg_hdr_sat_thr & 0xFFFF) << 8);
-	gsp_core_reg_write(R9P0_HDR1_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_rg_step1 & 0x1F);
-	cmd |= ((para->reg_hdr_rg_step2 & 0x1F) << 8);
-	cmd |= ((para->reg_hdr_rg_step3 & 0x1F) << 16);
-	cmd |= ((para->reg_hdr_rg_step4 & 0x1F) << 24);
-	gsp_core_reg_write(R9P0_HDR24_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_diff_sat_thr & 0xFFFFFF);
-	gsp_core_reg_write(R9P0_HDR25_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_tm_step1 & 0x1F);
-	cmd |= ((para->reg_hdr_tm_step2 & 0x1F) << 8);
-	cmd |= ((para->reg_hdr_tm_step3 & 0x1F) << 16);
-	cmd |= ((para->reg_hdr_tm_step4 & 0x1F) << 24);
-	gsp_core_reg_write(R9P0_HDR27_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_tm_norm_gain & 0xFFFF);
-	cmd |= ((para->reg_hdr_tm1_beta_gain & 0xFFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR28_CFG(base), cmd);
-
-	cmd = (para->reg_hdr_tm2_beta_gain & 0xFFFF);
-	cmd |= ((para->reg_hdr_tm3_beta_gain & 0xFFFF) << 16);
-	gsp_core_reg_write(R9P0_HDR29_CFG(base), cmd);
-}
 
 static void gsp_r9p0_core_misc_reg_set(struct gsp_core *core,
 			struct gsp_r9p0_cfg *cfg)
 {
 	void __iomem *base = NULL;
-	struct gsp_r9p0_core *c = (struct gsp_r9p0_core *)core;
 	struct R9P0_WORK_AREA_XY_REG  work_area_xy_value;
 	struct R9P0_WORK_AREA_XY_REG work_area_xy_mask;
 	struct R9P0_WORK_AREA_SIZE_REG work_area_size_value;
 	struct R9P0_WORK_AREA_SIZE_REG work_area_size_mask;
 	struct R9P0_GSP_MOD_CFG_REG gsp_mod_cfg_value;
 	struct R9P0_GSP_MOD_CFG_REG gsp_mod_cfg_mask;
-	base = core->base;
 
-	gsp_dvfs_tasklet_schedule(c, cfg->misc.work_freq);
+	base = core->base;
 
 	gsp_mod_cfg_value.value = 0x0;
 	gsp_mod_cfg_value.CORE_NUM = cfg->misc.core_num;
@@ -1083,9 +877,6 @@ static void gsp_r9p0_core_misc_reg_set(struct gsp_core *core,
 	work_area_size_mask.WORK_AREA_W = 0x1FFF;
 	gsp_core_reg_update(R9P0_WORK_AREA_SIZE(base),
 		work_area_size_value.value, work_area_size_mask.value);
-
-	if (cfg->misc.hdr_flag == 1)
-		gsp_r9p0_hdr10_set(base, cfg);
 }
 
 static void gsp_r9p0_core_limg_reg_set(void __iomem *base,
@@ -1334,7 +1125,6 @@ static void gsp_r9p0_core_limg_reg_set(void __iomem *base,
 	limg_cfg_value.Y2Y_MOD = limg_params->y2y_mod;
 	limg_cfg_value.ZNUM_L = limg_params->zorder;
 	zorder_used[limg_cfg_value.ZNUM_L] = 1;
-	limg_cfg_value.H2R_MOD = limg_params->hdr2rgb_mod;
 	limg_cfg_value.SCALE_EN = limg_params->scaling_en;
 	limg_cfg_value.Limg_en = layer->common.enable;
 	limg_cfg_mask.value = 0;
@@ -1351,7 +1141,6 @@ static void gsp_r9p0_core_limg_reg_set(void __iomem *base,
 	limg_cfg_mask.Y2R_MOD = 0x7;
 	limg_cfg_mask.Y2Y_MOD = 0x1;
 	limg_cfg_mask.ZNUM_L = 0x3;
-	limg_cfg_mask.H2R_MOD = 0x1;
 	limg_cfg_mask.SCALE_EN = 0x1;
 	limg_cfg_mask.Limg_en = 0x1;
 	gsp_core_reg_update(R9P0_LIMG_CFG(
@@ -1721,9 +1510,6 @@ int gsp_r9p0_core_trigger(struct gsp_core *c)
 	struct gsp_r9p0_cfg *cfg = NULL;
 	struct gsp_r9p0_core *core = (struct gsp_r9p0_core *)c;
 	struct R9P0_GSP_GLB_CFG_REG gsp_mod1_cfg_value;
-	unsigned char buf[32];
-	struct gsp_message in_buf;
-	struct gsp_message out_buf;
 
 	if (gsp_core_verify(c)) {
 		GSP_ERR("gsp_r9p0 core trigger params error\n");
@@ -1747,16 +1533,6 @@ int gsp_r9p0_core_trigger(struct gsp_core *c)
 	base = c->base;
 	cfg = (struct gsp_r9p0_cfg *)kcfg->cfg;
 
-	if (!tipc_init && cfg->misc.secure_en == 1) {
-		ret = gsp_tipc_init();
-		if (!ret) {
-			tipc_init = true;
-			gsp_tipc_read(buf, sizeof(buf));
-			GSP_DEBUG("tipc init succsess\n");
-		} else
-			GSP_ERR("tipc init failed\n");
-	}
-
 	gsp_r9p0_coef_gen_and_cfg(core, cfg);
 
 	gsp_r9p0_core_misc_reg_set(c, cfg);
@@ -1771,15 +1547,6 @@ int gsp_r9p0_core_trigger(struct gsp_core *c)
 		return GSP_K_CLK_CHK_ERR;
 	}
 
-	if (cfg->misc.secure_en == 1) {
-		in_buf.cmd = TA_SET_SECURE;
-		gsp_tipc_write(&in_buf, sizeof(in_buf));
-		gsp_tipc_read(&out_buf, sizeof(out_buf));
-		if ((out_buf.cmd == TA_SET_SECURE) &&
-			(out_buf.payload[0] == 1))
-			GSP_DEBUG("TA_SET_SECURE success\n");
-	}
-
 	gsp_r9p0_core_run(c);
 
 	return 0;
@@ -1788,34 +1555,8 @@ int gsp_r9p0_core_trigger(struct gsp_core *c)
 int gsp_r9p0_core_release(struct gsp_core *c)
 {
 	struct gsp_r9p0_core *core = NULL;
-	struct gsp_kcfg *kcfg = NULL;
-	struct gsp_r9p0_cfg *cfg = NULL;
-	struct gsp_message in_buf;
-	struct gsp_message out_buf;
 
 	core = (struct gsp_r9p0_core *)c;
-
-	if (gsp_core_verify(c)) {
-		GSP_ERR("gsp_r9p0 core trigger params error\n");
-		return -1;
-	}
-
-	kcfg = c->current_kcfg;
-	if (gsp_kcfg_verify(kcfg)) {
-		GSP_ERR("gsp_r9p0 trigger invalidate kcfg\n");
-		return -1;
-	}
-
-	cfg = (struct gsp_r9p0_cfg *)kcfg->cfg;
-
-	if (cfg->misc.secure_en == 1) {
-		in_buf.cmd = TA_SET_UNSECURE;
-		gsp_tipc_write(&in_buf, sizeof(in_buf));
-		gsp_tipc_read(&out_buf, sizeof(out_buf));
-		if ((out_buf.cmd == TA_SET_UNSECURE)
-			&& (out_buf.payload[0] == 1))
-			GSP_DEBUG("TA_SET_UNSECURE success\n");
-	}
 
 	return 0;
 }

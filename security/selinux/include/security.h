@@ -58,12 +58,13 @@
 #define SE_SBINITIALIZED	0x0100
 #define SE_SBPROC		0x0200
 #define SE_SBGENFS		0x0400
+#define SE_SBGENFS_XATTR	0x0800
 
-#define CONTEXT_STR	"context="
-#define FSCONTEXT_STR	"fscontext="
-#define ROOTCONTEXT_STR	"rootcontext="
-#define DEFCONTEXT_STR	"defcontext="
-#define LABELSUPP_STR "seclabel"
+#define CONTEXT_STR	"context"
+#define FSCONTEXT_STR	"fscontext"
+#define ROOTCONTEXT_STR	"rootcontext"
+#define DEFCONTEXT_STR	"defcontext"
+#define SECLABEL_STR "seclabel"
 
 struct netlbl_lsm_secattr;
 
@@ -105,6 +106,8 @@ struct selinux_state {
 	bool initialized;
 	bool policycap[__POLICYDB_CAPABILITY_MAX];
 	bool android_netlink_route;
+	bool android_netlink_getneigh;
+
 	struct selinux_avc *avc;
 	struct selinux_ss *ss;
 };
@@ -184,6 +187,13 @@ static inline bool selinux_android_nlroute_getlink(void)
 	return state->android_netlink_route;
 }
 
+static inline bool selinux_android_nlroute_getneigh(void)
+{
+	struct selinux_state *state = &selinux_state;
+
+	return state->android_netlink_getneigh;
+}
+
 int security_mls_enabled(struct selinux_state *state);
 int security_load_policy(struct selinux_state *state,
 			 void *data, size_t len);
@@ -261,6 +271,9 @@ int security_sid_to_context(struct selinux_state *state, u32 sid,
 			    char **scontext, u32 *scontext_len);
 
 int security_sid_to_context_force(struct selinux_state *state,
+				  u32 sid, char **scontext, u32 *scontext_len);
+
+int security_sid_to_context_inval(struct selinux_state *state,
 				  u32 sid, char **scontext, u32 *scontext_len);
 
 int security_context_to_sid(struct selinux_state *state,

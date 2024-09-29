@@ -1,12 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * PPP async serial channel driver for Linux.
  *
  * Copyright 1999 Paul Mackerras.
- *
- *  This program is free software; you can redistribute it and/or
- *  modify it under the terms of the GNU General Public License
- *  as published by the Free Software Foundation; either version
- *  2 of the License, or (at your option) any later version.
  *
  * This driver provides the encapsulation and framing for sending
  * and receiving PPP frames over async serial lines.  It relies on
@@ -69,8 +65,8 @@ struct asyncppp {
 
 	struct tasklet_struct tsk;
 
-	atomic_t	refcnt;
-	struct semaphore dead_sem;
+	refcount_t	refcnt;
+	struct completion dead;
 	struct ppp_channel chan;	/* interface to generic ppp layer */
 	unsigned char	obuf[OBUFSIZE];
 };
@@ -140,15 +136,15 @@ static struct asyncppp *ap_get(struct tty_struct *tty)
 	read_lock(&disc_data_lock);
 	ap = tty->disc_data;
 	if (ap != NULL)
-		atomic_inc(&ap->refcnt);
+		refcount_inc(&ap->refcnt);
 	read_unlock(&disc_data_lock);
 	return ap;
 }
 
 static void ap_put(struct asyncppp *ap)
 {
-	if (atomic_dec_and_test(&ap->refcnt))
-		up(&ap->dead_sem);
+	if (refcount_dec_and_test(&ap->refcnt))
+		complete(&ap->dead);
 }
 
 /*
@@ -185,8 +181,8 @@ ppp_asynctty_open(struct tty_struct *tty)
 	skb_queue_head_init(&ap->rqueue);
 	tasklet_init(&ap->tsk, ppp_async_process, (unsigned long) ap);
 
-	atomic_set(&ap->refcnt, 1);
-	sema_init(&ap->dead_sem, 0);
+	refcount_set(&ap->refcnt, 1);
+	init_completion(&ap->dead);
 
 	ap->chan.private = ap;
 	ap->chan.ops = &async_ops;
@@ -234,8 +230,8 @@ ppp_asynctty_close(struct tty_struct *tty)
 	 * our channel ops (i.e. ppp_async_send/ioctl) are in progress
 	 * by the time it returns.
 	 */
-	if (!atomic_dec_and_test(&ap->refcnt))
-		down(&ap->dead_sem);
+	if (!refcount_dec_and_test(&ap->refcnt))
+		wait_for_completion(&ap->dead);
 	tasklet_kill(&ap->tsk);
 
 	ppp_unregister_channel(&ap->chan);
@@ -334,7 +330,7 @@ ppp_asynctty_ioctl(struct tty_struct *tty, struct file *file,
 }
 
 /* No kernel lock - fine */
-static unsigned int
+static __poll_t
 ppp_asynctty_poll(struct tty_struct *tty, struct file *file, poll_table *wait)
 {
 	return 0;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * File:shub_comm.c
  *
@@ -11,15 +12,17 @@
 
 #include <linux/string.h>
 #include <linux/kernel.h>
+#include <linux/platform_device.h>
 #include "shub_common.h"
-#include "shub_protocol.h"
 #include "shub_core.h"
+#include "shub_protocol.h"
 
 static void shub_get_data(struct cmd_data *packet)
 {
 	switch (packet->subtype) {
 	case SHUB_LOG_SUBTYPE:
-		pr_info(" [CM4]> :%s\n", packet->buff);
+		dev_info(&g_sensor->sensor_pdev->dev,
+			 " [CM4]> :%s\n", packet->buff);
 		break;
 
 	case SHUB_DATA_SUBTYPE:
@@ -88,3 +91,6 @@ void shub_dispatch(struct cmd_data *packet)
 	if (packet)
 		shub_get_data(packet);
 }
+
+MODULE_DESCRIPTION("Sensorhub dispatch support");
+MODULE_LICENSE("GPL v2");

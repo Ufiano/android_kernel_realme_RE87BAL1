@@ -47,10 +47,6 @@ static inline const struct attribute_group **rtc_get_dev_attribute_groups(void)
 }
 #endif
 
-#ifdef CONFIG_RTC_NVMEM
-void rtc_nvmem_register(struct rtc_device *rtc);
-void rtc_nvmem_unregister(struct rtc_device *rtc);
-#else
-static inline void rtc_nvmem_register(struct rtc_device *rtc) {}
-static inline void rtc_nvmem_unregister(struct rtc_device *rtc) {}
+#ifdef CONFIG_RTC_HCTOSYS
+extern int rtc_hctosys(void);
 #endif

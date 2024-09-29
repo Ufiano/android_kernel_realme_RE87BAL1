@@ -1,14 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #ifndef _GSP_IPC_TRUSTY_H_
@@ -30,24 +22,28 @@ ssize_t gsp_tipc_write(void *data_ptr, size_t len);
 ssize_t gsp_tipc_read(void *data_ptr, size_t max_len);
 void gsp_tipc_exit(void);
 #else
-static int gsp_tipc_init(void)
+int gsp_tipc_init(void)
 {
 	GSP_DEBUG("GSP does not support tipc init\n");
 	return 0;
 }
 
-static ssize_t gsp_tipc_write(void *data_ptr, size_t len)
+ssize_t gsp_tipc_write(void *data_ptr, size_t len)
 {
 	GSP_DEBUG("GSP does not support tipc write\n");
 	return 0;
 }
 
-static ssize_t gsp_tipc_read(void *data_ptr, size_t max_len)
+ssize_t gsp_tipc_read(void *data_ptr, size_t max_len)
 {
 	GSP_DEBUG("GSP does not support tipc read\n");
 	return 0;
 }
 
+void gsp_tipc_exit(void)
+{
+	GSP_DEBUG("GSP does not support tipc\n");
+}
 #endif
 
 #endif

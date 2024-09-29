@@ -7,6 +7,7 @@
 
 #include <clocksource/arm_arch_timer.h>
 #include <linux/cdev.h>
+#include <linux/fs.h>
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
 #include <linux/kobject.h>
@@ -152,6 +153,7 @@ int sprd_send_ap_time(void)
 
 	return 0;
 }
+EXPORT_SYMBOL(sprd_send_ap_time);
 
 static void sprd_send_time_event_msg(struct kobject *kobj)
 {
@@ -241,8 +243,6 @@ static int sprd_time_sync_probe(struct platform_device *pdev)
 
 	dev_info(dev, "start parse sprd_time_sync\n");
 
-	sprd_time_sync_register_notifier(&sprd_time_sync_notifier);
-
 	sprd_time_sync_class = class_create(THIS_MODULE, "sprd_time_sync");
 	if (IS_ERR(sprd_time_sync_class))
 		return PTR_ERR(sprd_time_sync_class);
@@ -326,4 +326,4 @@ module_platform_driver(sprd_time_sync_driver);
 
 MODULE_AUTHOR("Catdeo Zhang & Ruifeng Zhang");
 MODULE_DESCRIPTION("sprd time sync driver");
-MODULE_LICENSE("GPL V2");
+MODULE_LICENSE("GPL v2");

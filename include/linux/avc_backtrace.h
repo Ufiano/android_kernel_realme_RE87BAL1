@@ -8,6 +8,7 @@
 #define AVC_BACKTRACE_SIGNAL (SIGRTMIN + 3)
 #define AVC_BACKTRACE_COMM_NUM 5
 #define AVC_BACKTRACE_COMM_LEN 32
+#define SI_KERNEL_AVC 888
 
 extern unsigned int avc_backtrace_enable;
 extern unsigned int avc_dump_all;

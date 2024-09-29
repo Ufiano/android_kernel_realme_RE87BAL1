@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0
 
-GCOV_PROFILE =  ${CONFIG_SPRD_PMEM_GCOV}
+GCOV_PROFILE = ${CONFIG_SPRD_PMEM_GCOV}
 obj-$(CONFIG_LIBNVDIMM) += libnvdimm.o
 obj-$(CONFIG_BLK_DEV_PMEM) += nd_pmem.o
 obj-$(CONFIG_ND_BTT) += nd_btt.o
@@ -25,7 +25,13 @@ libnvdimm-y += region_devs.o
 libnvdimm-y += region.o
 libnvdimm-y += namespace_devs.o
 libnvdimm-y += label.o
+libnvdimm-y += badrange.o
 libnvdimm-$(CONFIG_ND_CLAIM) += claim.o
 libnvdimm-$(CONFIG_BTT) += btt_devs.o
 libnvdimm-$(CONFIG_NVDIMM_PFN) += pfn_devs.o
 libnvdimm-$(CONFIG_NVDIMM_DAX) += dax_devs.o
+libnvdimm-$(CONFIG_NVDIMM_KEYS) += security.o
+
+TOOLS := ../../tools
+TEST_SRC := $(TOOLS)/testing/nvdimm/test
+obj-$(CONFIG_NVDIMM_TEST_BUILD) += $(TEST_SRC)/iomap.o

@@ -115,7 +115,7 @@ static int ql_sem_spinlock(struct ql3_adapter *qdev,
 		value = readl(&port_regs->CommonRegs.semaphoreReg);
 		if ((value & (sem_mask >> 16)) == sem_bits)
 			return 0;
-		ssleep(1);
+		mdelay(1000);
 	} while (--seconds);
 	return -1;
 }
@@ -155,7 +155,7 @@ static int ql_wait_for_drvr_lock(struct ql3_adapter *qdev)
 				      "driver lock acquired\n");
 			return 1;
 		}
-		ssleep(1);
+		mdelay(1000);
 	} while (++i < 10);
 
 	netdev_err(qdev->ndev, "Timed out waiting for driver lock...\n");
@@ -1856,8 +1856,8 @@ static void ql_update_small_bufq_prod_index(struct ql3_adapter *qdev)
 			qdev->small_buf_release_cnt -= 8;
 		}
 		wmb();
-		writel(qdev->small_buf_q_producer_index,
-			&port_regs->CommonRegs.rxSmallQProducerIndex);
+		writel_relaxed(qdev->small_buf_q_producer_index,
+			       &port_regs->CommonRegs.rxSmallQProducerIndex);
 	}
 }
 
@@ -3291,7 +3291,7 @@ static int ql_adapter_reset(struct ql3_adapter *qdev)
 		if ((value & ISP_CONTROL_SR) == 0)
 			break;
 
-		ssleep(1);
+		mdelay(1000);
 	} while ((--max_wait_time));
 
 	/*
@@ -3327,7 +3327,7 @@ static int ql_adapter_reset(struct ql3_adapter *qdev)
 						   ispControlStatus);
 			if ((value & ISP_CONTROL_FSR) == 0)
 				break;
-			ssleep(1);
+			mdelay(1000);
 		} while ((--max_wait_time));
 	}
 	if (max_wait_time == 0)
@@ -3748,9 +3748,9 @@ static void ql_get_board_info(struct ql3_adapter *qdev)
 	qdev->pci_slot = (u8) PCI_SLOT(qdev->pdev->devfn);
 }
 
-static void ql3xxx_timer(unsigned long ptr)
+static void ql3xxx_timer(struct timer_list *t)
 {
-	struct ql3_adapter *qdev = (struct ql3_adapter *)ptr;
+	struct ql3_adapter *qdev = from_timer(qdev, t, adapter_timer);
 	queue_delayed_work(qdev->workqueue, &qdev->link_state_work, 0);
 }
 
@@ -3886,14 +3886,18 @@ static int ql3xxx_probe(struct pci_dev *pdev,
 	netif_stop_queue(ndev);
 
 	qdev->workqueue = create_singlethread_workqueue(ndev->name);
+	if (!qdev->workqueue) {
+		unregister_netdev(ndev);
+		err = -ENOMEM;
+		goto err_out_iounmap;
+	}
+
 	INIT_DELAYED_WORK(&qdev->reset_work, ql_reset_work);
 	INIT_DELAYED_WORK(&qdev->tx_timeout_work, ql_tx_timeout_work);
 	INIT_DELAYED_WORK(&qdev->link_state_work, ql_link_state_machine_work);
 
-	init_timer(&qdev->adapter_timer);
-	qdev->adapter_timer.function = ql3xxx_timer;
+	timer_setup(&qdev->adapter_timer, ql3xxx_timer, 0);
 	qdev->adapter_timer.expires = jiffies + HZ * 2;	/* two second delay */
-	qdev->adapter_timer.data = (unsigned long)qdev;
 
 	if (!cards_found) {
 		pr_alert("%s\n", DRV_STRING);

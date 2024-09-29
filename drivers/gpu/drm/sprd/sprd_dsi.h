@@ -1,28 +1,20 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- *Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- *This software is licensed under the terms of the GNU General Public
- *License version 2, as published by the Free Software Foundation, and
- *may be copied, distributed, and modified under those terms.
- *
- *This program is distributed in the hope that it will be useful,
- *but WITHOUT ANY WARRANTY; without even the implied warranty of
- *MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
-#ifndef __SPRD_DSI_H__
-#define __SPRD_DSI_H__
+#ifndef _SPRD_DSI_H_
+#define _SPRD_DSI_H_
 
 #include <linux/of.h>
 #include <linux/device.h>
 #include <video/videomode.h>
 
-#include <drm/drmP.h>
-#include <drm/drm_mipi_dsi.h>
-#include <drm/drm_encoder.h>
-#include <drm/drm_connector.h>
 #include <drm/drm_bridge.h>
+#include <drm/drm_connector.h>
+#include <drm/drm_encoder.h>
+#include <drm/drm_mipi_dsi.h>
+#include <drm/drm_print.h>
 #include <drm/drm_panel.h>
 
 #include "disp_lib.h"
@@ -61,19 +53,18 @@ enum dsi_color_coding {
 
 struct dsi_context {
 	unsigned long base;
-	u8 id;
+	struct videomode vm;
+	bool enabled;
 	u8 channel;
 	u8 lanes;
 	u32 format;
 	u8 work_mode;
 	u8 burst_mode;
-	struct videomode vm;
 
 	int irq0;
 	int irq1;
 	u32 int0_mask;
 	u32 int1_mask;
-	bool is_inited;
 
 	/* byte clock [KHz] */
 	u32 byte_clk;
@@ -99,18 +90,16 @@ struct dsi_context {
 	bool te_ack_en;
 	/* enable non coninuous clock for energy saving */
 	bool nc_clk_en;
-	/* supported dpms mode */
-	int dpms;
-	int last_dpms;
+	/* mipi clk division config parameters*/
+	int dpi_clk_div;
 	/* dpi clk need switch to 384m fot div6/div8 feature */
 	bool clk_dpi_384m;
-
-	/* video work mode cmd transmit in low power */
+	/* enable low power cmd transsmit in video mode */
 	bool video_lp_cmd_en;
-	/* disable return to low power mode inside horizontal porch periods */
+	/* disable hporch enter in low power mode */
 	bool hporch_lp_disable;
-	/* enable div6 function */
-	int dpi_clk_div;
+	/* simulated small resolution display mode */
+	bool surface_mode;
 };
 
 struct dsi_core_ops {
@@ -200,6 +189,11 @@ struct dsi_glb_ops {
 	void (*power)(struct dsi_context *ctx, int enable);
 };
 
+struct sprd_dsi_ops {
+	const struct dsi_core_ops *core;
+	const struct dsi_glb_ops *glb;
+};
+
 struct sprd_dsi {
 	struct device dev;
 	struct mipi_dsi_host host;
@@ -210,26 +204,22 @@ struct sprd_dsi {
 	struct drm_panel *panel;
 	struct drm_display_mode *mode;
 	struct sprd_dphy *phy;
-	struct dsi_core_ops *core;
-	struct dsi_glb_ops *glb;
+	const struct dsi_core_ops *core;
+	const struct dsi_glb_ops *glb;
+	struct mutex lock;
 	struct dsi_context ctx;
-	struct sprd_dsi *dsi_master;
-	struct sprd_dsi *dsi_slave;
+	struct sprd_dpu *dpu;
 };
 
-extern struct list_head dsi_core_head;
-extern struct list_head dsi_glb_head;
-
-int dsi_panel_set_dpms_mode(struct sprd_dsi *dsi);
+void sprd_dsi_encoder_disable_force(struct drm_encoder *encoder);
 void cali_dsi_glb_disable(struct dsi_context *ctx);
-#define dsi_core_ops_register(entry) \
-	disp_ops_register(entry, &dsi_core_head)
-#define dsi_glb_ops_register(entry) \
-	disp_ops_register(entry, &dsi_glb_head)
 
-#define dsi_core_ops_attach(str) \
-	disp_ops_attach(str, &dsi_core_head)
-#define dsi_glb_ops_attach(str) \
-	disp_ops_attach(str, &dsi_glb_head)
-
-#endif /* __SPRD_DSI_H__ */
+extern const struct dsi_core_ops dsi_ctrl_r1p0_ops;
+extern const struct dsi_glb_ops sharkle_dsi_glb_ops;
+extern const struct dsi_glb_ops pike2_dsi_glb_ops;
+extern const struct dsi_glb_ops sharkl3_dsi_glb_ops;
+extern const struct dsi_glb_ops sharkl5_dsi_glb_ops;
+extern const struct dsi_glb_ops sharkl5pro_dsi_glb_ops;
+extern const struct dsi_glb_ops qogirl6_dsi_glb_ops;
+extern const struct dsi_glb_ops qogirn6pro_dsi_glb_ops;
+#endif /* _SPRD_DSI_H_ */

@@ -1,3 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Unisoc ili9881c Truly LCD config DTS file
+ *
+ * Copyright (C) 2021, Unisoc Inc.
+ */
 / {
 	fragment {
 		target-path = "/";

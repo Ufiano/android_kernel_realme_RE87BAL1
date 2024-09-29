@@ -1,15 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
+
 #include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/list.h>
@@ -19,7 +12,7 @@
 
 #include "sprd_dphy.h"
 
-struct dphy_glb_context {
+static struct dphy_glb_context {
 	unsigned int ctrl_reg;
 	unsigned int ctrl_mask;
 	struct regmap *regmap;
@@ -29,33 +22,24 @@ static int dphy_glb_parse_dt(struct dphy_context *ctx,
 				struct device_node *np)
 {
 	unsigned int syscon_args[2];
-	int ret;
 
-	ctx_enable.regmap = syscon_regmap_lookup_by_name(np, "enable");
+	ctx_enable.regmap = syscon_regmap_lookup_by_phandle_args(np,
+			"enable-syscon", 2, syscon_args);
 	if (IS_ERR(ctx_enable.regmap)) {
 		pr_warn("failed to map dphy glb reg: enable\n");
-		return PTR_ERR(ctx_enable.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "enable", 2, syscon_args);
-	if (ret == 2) {
+	} else {
 		ctx_enable.ctrl_reg = syscon_args[0];
 		ctx_enable.ctrl_mask = syscon_args[1];
-	} else
-		pr_warn("failed to parse dphy glb reg: enable\n");
-
-	ctx_power.regmap = syscon_regmap_lookup_by_name(np, "power");
-	if (IS_ERR(ctx_power.regmap)) {
-		pr_warn("failed to map dphy glb reg: power\n");
-		return PTR_ERR(ctx_power.regmap);
 	}
 
-	ret = syscon_get_args_by_name(np, "power", 2, syscon_args);
-	if (ret == 2) {
+	ctx_power.regmap = syscon_regmap_lookup_by_phandle_args(np,
+			"power-syscon", 2, syscon_args);
+	if (IS_ERR(ctx_power.regmap)) {
+		pr_warn("failed to map dphy glb reg: power\n");
+	} else {
 		ctx_power.ctrl_reg = syscon_args[0];
 		ctx_power.ctrl_mask = syscon_args[1];
-	} else
-		pr_warn("failed to parse dphy glb reg: power");
+	}
 
 	return 0;
 }
@@ -98,25 +82,13 @@ static void dphy_power_domain(struct dphy_context *ctx, int enable)
 	}
 }
 
-static struct dphy_glb_ops dphy_glb_ops = {
+const struct dphy_glb_ops sharkl5_dphy_glb_ops = {
 	.parse_dt = dphy_glb_parse_dt,
 	.enable = dphy_glb_enable,
 	.disable = dphy_glb_disable,
 	.power = dphy_power_domain,
 };
 
-static struct ops_entry entry = {
-	.ver = "sharkl5",
-	.ops = &dphy_glb_ops,
-};
-
-static int __init dphy_glb_register(void)
-{
-	return dphy_glb_ops_register(&entry);
-}
-
-subsys_initcall(dphy_glb_register);
-
+MODULE_AUTHOR("kevin tang <kevin.tang@unisoc.com>");
+MODULE_DESCRIPTION("Unisoc SharkL5 DPHY global AHB&APB regs low-level config");
 MODULE_LICENSE("GPL v2");
-MODULE_AUTHOR("kevin.tang@unisoc.com");
-MODULE_DESCRIPTION("sprd sharkl5 dphy global AHB&APB regs low-level config");

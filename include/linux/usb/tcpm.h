@@ -1,15 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * Copyright 2015-2017 Google, Inc
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #ifndef __LINUX_USB_TCPM_H
@@ -31,7 +22,6 @@ enum typec_cc_status {
 enum typec_cc_polarity {
 	TYPEC_POLARITY_CC1,
 	TYPEC_POLARITY_CC2,
-	TYPEC_NO_ATTACH,
 };
 
 /* Time to wait for TCPC to complete transmit */
@@ -122,10 +112,10 @@ struct tcpc_config {
  *		with partner.
  * @set_pd_rx:	Called to enable or disable reception of PD messages
  * @set_roles:	Called to set power and data roles
- * @start_drp_toggling:
- *		Optional; if supported by hardware, called to start DRP
- *		toggling. DRP toggling is stopped automatically if
- *		a connection is established.
+ * @start_toggling:
+ *		Optional; if supported by hardware, called to start dual-role
+ *		toggling or single-role connection detection. Toggling stops
+ *		automatically if a connection is established.
  * @try_role:	Optional; called to set a preferred role
  * @pd_transmit:Called to transmit PD message
  * @mux:	Pointer to multiplexer data
@@ -148,35 +138,18 @@ struct tcpc_dev {
 	int (*set_pd_rx)(struct tcpc_dev *dev, bool on);
 	int (*set_roles)(struct tcpc_dev *dev, bool attached,
 			 enum typec_role role, enum typec_data_role data);
-	int (*start_drp_toggling)(struct tcpc_dev *dev,
-				  enum typec_cc_status cc);
+	int (*start_toggling)(struct tcpc_dev *dev,
+			      enum typec_port_type port_type,
+			      enum typec_cc_status cc);
 	int (*try_role)(struct tcpc_dev *dev, int role);
 	int (*pd_transmit)(struct tcpc_dev *dev, enum tcpm_transmit_type type,
 			   const struct pd_message *msg);
-};
-
-struct adapter_power_cap {
-	uint8_t type[PDO_MAX_OBJECTS];
-	int max_mv[PDO_MAX_OBJECTS];
-	int min_mv[PDO_MAX_OBJECTS];
-	int ma[PDO_MAX_OBJECTS];
-	int pwr_mw_limit[PDO_MAX_OBJECTS];
-	uint8_t nr_source_caps;
 };
 
 struct tcpm_port;
 
 struct tcpm_port *tcpm_register_port(struct device *dev, struct tcpc_dev *tcpc);
 void tcpm_unregister_port(struct tcpm_port *port);
-
-int tcpm_update_source_capabilities(struct tcpm_port *port, const u32 *pdo,
-				    unsigned int nr_pdo);
-int tcpm_update_sink_capabilities(struct tcpm_port *port, const u32 *pdo,
-				  unsigned int nr_pdo,
-				  unsigned int operating_snk_mw);
-
-void tcpm_get_source_capabilities(struct tcpm_port *port,
-				  struct adapter_power_cap *pd_source_cap);
 
 void tcpm_vbus_change(struct tcpm_port *port);
 void tcpm_cc_change(struct tcpm_port *port);
@@ -186,7 +159,5 @@ void tcpm_pd_transmit_complete(struct tcpm_port *port,
 			       enum tcpm_transmit_status status);
 void tcpm_pd_hard_reset(struct tcpm_port *port);
 void tcpm_tcpc_reset(struct tcpm_port *port);
-
-void tcpm_shutdown(struct tcpm_port *port);
 
 #endif /* __LINUX_USB_TCPM_H */

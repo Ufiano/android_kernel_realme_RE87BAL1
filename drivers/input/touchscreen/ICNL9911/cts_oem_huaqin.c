@@ -490,6 +490,8 @@ static int dump_tsdata_row_to_buffer(char *buf, size_t size, const u16 *data,
     return count;
 }
 
+//for GKI
+#if 0
 int dump_tsdata_to_csv_file(const char *filepath, int flags,
     const u16 *data, int frames, int rows, int cols)
 {
@@ -500,7 +502,6 @@ int dump_tsdata_to_csv_file(const char *filepath, int flags,
     cts_info("Dump tsdata to csv file: '%s' "
              "flags: 0x%x data: %p frames: %d row: %d col: %d",
         filepath, flags, data, frames, rows, cols);
-
     file = filp_open(filepath, flags, 0666);
     if (IS_ERR(file)) {
         cts_err("Open file '%s' failed %ld", filepath, PTR_ERR(file));
@@ -514,6 +515,7 @@ int dump_tsdata_to_csv_file(const char *filepath, int flags,
 	
 	        len = dump_tsdata_row_to_buffer(linebuf, sizeof(linebuf),
 	            data, cols, NULL, "\n", ',');
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)
 	        ret = kernel_write(file, linebuf, len, &pos);
 #else
@@ -525,10 +527,10 @@ int dump_tsdata_to_csv_file(const char *filepath, int flags,
 	                filepath, ret);
 	            goto close_file;
 	        }
-	
+
 	        data += cols;
 	    }
-	
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)
 	    ret = kernel_write(file, "\n", 1, &pos);
 #else
@@ -550,6 +552,14 @@ close_file: {
     }
 
     return ret;
+}
+#endif
+
+int dump_tsdata_to_csv_file(const char *filepath, int flags,
+    const u16 *data, int frames, int rows, int cols)
+{
+	cts_err("%s:for GKI ,cancel save  file!", __func__);
+	return 0;
 }
 
 static void dump_tsdata_to_seq_file(struct seq_file *m,
@@ -590,6 +600,8 @@ static int dump_comp_cap_row_to_buffer(char *buf, size_t size, const u8 *cap,
     return count;
 }
 
+//for GKI
+#if 0
 static int dump_comp_cap_to_csv_file(const char *filepath, int flags,
     const u8 *cap, int rows, int cols)
 {
@@ -635,6 +647,13 @@ close_file: {
     }
 
     return ret;
+}
+#endif
+static int dump_comp_cap_to_csv_file(const char *filepath, int flags,
+    const u8 *cap, int rows, int cols)
+{
+	cts_err("%s:for GKI ,cancel save file!", __func__);
+	return 0;
 }
 
 static void dump_comp_cap_to_seq_file(struct seq_file *m,

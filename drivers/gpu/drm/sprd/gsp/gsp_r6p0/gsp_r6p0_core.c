@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/delay.h>
@@ -126,7 +118,7 @@ static void print_des_layer_cfg(struct gsp_r6p0_des_layer *layer)
 
 static void gsp_r6p0_core_cfg_print(struct gsp_r6p0_cfg *cfg)
 {
-	int icnt = 0;
+	int icnt;
 
 	for (icnt = 0; icnt < 2; icnt++)
 		print_image_layer_cfg(&cfg->limg[icnt]);
@@ -138,7 +130,7 @@ static void gsp_r6p0_core_cfg_print(struct gsp_r6p0_cfg *cfg)
 
 void gsp_r6p0_core_dump(struct gsp_core *c)
 {
-	int icnt = 0;
+	int icnt;
 	struct R6P0_GSP_CTL_REG_T reg_struct;
 
 	memset(&reg_struct, 0, sizeof(struct R6P0_GSP_CTL_REG_T));
@@ -387,7 +379,7 @@ static void gsp_r6p0_core_cfg_reinit(struct gsp_r6p0_cfg *cfg)
 {
 	struct gsp_layer *layer;
 	struct gsp_kcfg *kcfg = NULL;
-	int icnt = 0;
+	int icnt;
 
 	if (IS_ERR_OR_NULL(cfg)) {
 		GSP_ERR("cfg init params error\n");
@@ -419,6 +411,7 @@ static void gsp_r6p0_core_cfg_reinit(struct gsp_r6p0_cfg *cfg)
 	for (icnt = 0; icnt < R6P0_OSDL_NUM; icnt++)
 		memset(&cfg->losd[icnt].params, 0,
 			sizeof(struct gsp_r6p0_osd_layer_params));
+
 	memset(&cfg->ld1.params, 0, sizeof(struct gsp_r6p0_des_layer_params));
 }
 
@@ -518,7 +511,7 @@ static void gsp_r6p0_int_clear(struct gsp_core *core)
 
 static void gsp_r6p0_coef_cache_init(struct gsp_r6p0_core *core)
 {
-	uint32_t i = 0;
+	u32 i;
 
 	if (core->cache_coef_init_flag == 0) {
 		i = 0;
@@ -533,11 +526,11 @@ static void gsp_r6p0_coef_cache_init(struct gsp_r6p0_core *core)
 }
 
 static void gsp_r6p0_core_cfg_init(struct gsp_r6p0_cfg *cfg,
-					struct gsp_kcfg *kcfg)
+				struct gsp_kcfg *kcfg)
 {
 	/* to work around ERROR: do not initialise statics to 0 or NULL */
 	static int tag = 1;
-	int icnt = 0;
+	int icnt;
 
 	if (IS_ERR_OR_NULL(cfg)) {
 		GSP_ERR("cfg init params error\n");
@@ -617,8 +610,8 @@ int gsp_r6p0_core_alloc(struct gsp_core **core, struct device_node *node)
 	(*core)->cfg_size = sizeof(struct gsp_r6p0_cfg);
 	(*core)->dev = &pdev->dev;
 	if (dev_name(&pdev->dev))
-		GSP_INFO("core[%d] device name: %s\n", (*core)->id,
-			 dev_name(&pdev->dev));
+		GSP_INFO("core[%d] device name: %s\n",
+			(*core)->id, dev_name(&pdev->dev));
 
 	capa = kzalloc(sizeof(struct gsp_r6p0_capability), GFP_KERNEL);
 	if (IS_ERR_OR_NULL(capa)) {
@@ -662,8 +655,7 @@ static irqreturn_t gsp_r6p0_core_irq_handler(int irq, void *data)
 		return IRQ_NONE;
 	}
 
-	gsp_int_value.value =
-		gsp_core_reg_read(R6P0_GSP_INT(core->base));
+	gsp_int_value.value = gsp_core_reg_read(R6P0_GSP_INT(core->base));
 	if (!gsp_int_value.INT_GSP_RAW &&
 		!gsp_int_value.INT_CORE1_RAW &&
 		!gsp_int_value.INT_GERR_RAW &&
@@ -672,10 +664,8 @@ static irqreturn_t gsp_r6p0_core_irq_handler(int irq, void *data)
 		return IRQ_NONE;
 	}
 
-	if (gsp_int_value.INT_GERR_RAW ||
-		gsp_int_value.INT_CERR1_RAW) {
-		GSP_ERR("gsp error irq, GSP_INT[0x%x]\n",
-			gsp_int_value.value);
+	if (gsp_int_value.INT_GERR_RAW || gsp_int_value.INT_CERR1_RAW) {
+		GSP_ERR("gsp error irq, GSP_INT[0x%x]\n", gsp_int_value.value);
 		core_state = CORE_STATE_IRQ_ERR;
 	}
 
@@ -730,12 +720,12 @@ static int gsp_r6p0_core_parse_clk(struct gsp_r6p0_core *core)
 	int status = 0;
 
 	core->dpu_clk = of_clk_get_by_name(core->common.node,
-			R2P0_DPU_CLOCK_NAME);
+					R6P0_DPU_CLOCK_NAME);
 	core->dpu_clk_parent = of_clk_get_by_name(core->common.node,
-				R2P0_DPU_CLOCK_PARENT);
+					R6P0_DPU_CLOCK_PARENT);
 
 	if (IS_ERR_OR_NULL(core->dpu_clk)
-		|| IS_ERR_OR_NULL(core->dpu_clk_parent)) {
+	|| IS_ERR_OR_NULL(core->dpu_clk_parent)) {
 		GSP_ERR("parse dpu clk failed\n");
 		status = -1;
 	}
@@ -761,7 +751,7 @@ static int gsp_r6p0_core_parse_irq(struct gsp_core *core)
 
 	if (ret)
 		GSP_ERR("r6p0 core[%d] request irq failed! %d\n",
-		core->id, core->irq);
+			core->id, core->irq);
 
 	return ret;
 }
@@ -796,7 +786,7 @@ int gsp_r6p0_core_parse_dt(struct gsp_core *core)
 
 
 static void gsp_r6p0_core_misc_reg_set(struct gsp_core *core,
-			struct gsp_r6p0_cfg *cfg)
+				struct gsp_r6p0_cfg *cfg)
 {
 	void __iomem *base = NULL;
 	struct R6P0_WORK_AREA_XY_REG  work_area_xy_value;
@@ -835,10 +825,8 @@ static void gsp_r6p0_core_misc_reg_set(struct gsp_core *core,
 		work_area_xy_value.value, work_area_xy_mask.value);
 
 	work_area_size_value.value = 0;
-	work_area_size_value.WORK_AREA_H =
-		cfg->misc.workarea_src_rect.rect_h;
-	work_area_size_value.WORK_AREA_W =
-		cfg->misc.workarea_src_rect.rect_w;
+	work_area_size_value.WORK_AREA_H = cfg->misc.workarea_src_rect.rect_h;
+	work_area_size_value.WORK_AREA_W = cfg->misc.workarea_src_rect.rect_w;
 	work_area_size_mask.value = 0;
 	work_area_size_mask.WORK_AREA_H = 0x1FFF;
 	work_area_size_mask.WORK_AREA_W = 0x1FFF;
@@ -892,7 +880,8 @@ static void gsp_r6p0_core_limg_reg_set(void __iomem *base,
 
 	/* img layer address set */
 	limg_y_addr_value.value = 0;
-	limg_y_addr_value.Y_BASE_ADDR = layer->common.src_addr.addr_y>>4;
+	limg_y_addr_value.Y_BASE_ADDR =
+			layer->common.src_addr.addr_y>>4;
 	limg_y_addr_mask.value = 0;
 	limg_y_addr_mask.Y_BASE_ADDR = 0xFFFFFFF;
 
@@ -905,7 +894,8 @@ static void gsp_r6p0_core_limg_reg_set(void __iomem *base,
 		limg_y_addr_value.value, limg_y_addr_mask.value);
 
 	limg_u_addr_value.value = 0;
-	limg_u_addr_value.U_BASE_ADDR = layer->common.src_addr.addr_uv>>4;
+	limg_u_addr_value.U_BASE_ADDR =
+			layer->common.src_addr.addr_uv>>4;
 	limg_u_addr_mask.value = 0;
 	limg_u_addr_mask.U_BASE_ADDR = 0xFFFFFFF;
 	gsp_core_reg_update(R6P0_LIMG_U_ADDR(
@@ -913,7 +903,8 @@ static void gsp_r6p0_core_limg_reg_set(void __iomem *base,
 		limg_u_addr_value.value, limg_u_addr_mask.value);
 
 	limg_v_addr_value.value = 0;
-	limg_v_addr_value.V_BASE_ADDR = layer->common.src_addr.addr_va>>4;
+	limg_v_addr_value.V_BASE_ADDR =
+			layer->common.src_addr.addr_va>>4;
 	limg_v_addr_mask.value = 0;
 	limg_v_addr_mask.V_BASE_ADDR = 0xFFFFFFF;
 	gsp_core_reg_update(R6P0_LIMG_V_ADDR(
@@ -965,14 +956,12 @@ static void gsp_r6p0_core_limg_reg_set(void __iomem *base,
 		limg_des_start_value.value, limg_des_start_mask.value);
 
 	limg_des_size_value.value = 0;
-	limg_des_size_value.VTAP_MOD =
-		limg_params->scale_para.vtap_mod;
+	limg_des_size_value.VTAP_MOD = limg_params->scale_para.vtap_mod;
 	limg_des_size_value.DES_SCL_H =
-		limg_params->scale_para.scale_rect_out.rect_h;
-	limg_des_size_value.HTAP_MOD =
-		limg_params->scale_para.htap_mod;
+			limg_params->scale_para.scale_rect_out.rect_h;
+	limg_des_size_value.HTAP_MOD = limg_params->scale_para.htap_mod;
 	limg_des_size_value.DES_SCL_W =
-		limg_params->scale_para.scale_rect_out.rect_w;
+			limg_params->scale_para.scale_rect_out.rect_w;
 	limg_des_size_mask.value = 0;
 	limg_des_size_mask.VTAP_MOD = 0x3;
 	limg_des_size_mask.DES_SCL_H = 0x1FFF;
@@ -1049,7 +1038,8 @@ static void gsp_r6p0_core_limg_reg_set(void __iomem *base,
 			y2y_y_para_value.value, y2y_y_para_mask.value);
 
 		y2y_u_para_value.value = 0;
-		y2y_u_para_value.U_OFFSET = limg_params->yuv_adjust.u_offset;
+		y2y_u_para_value.U_OFFSET =
+			limg_params->yuv_adjust.u_offset;
 		y2y_u_para_value.U_SATURATION =
 			limg_params->yuv_adjust.u_saturation;
 		y2y_u_para_mask.value = 0;
@@ -1060,7 +1050,8 @@ static void gsp_r6p0_core_limg_reg_set(void __iomem *base,
 			y2y_u_para_value.value, y2y_u_para_mask.value);
 
 		y2y_v_para_value.value = 0;
-		y2y_v_para_value.V_OFFSET = limg_params->yuv_adjust.v_offset;
+		y2y_v_para_value.V_OFFSET =
+			limg_params->yuv_adjust.v_offset;
 		y2y_v_para_value.V_SATURATION =
 			limg_params->yuv_adjust.v_saturation;
 		y2y_v_para_mask.value = 0;
@@ -1150,13 +1141,14 @@ static void gsp_r6p0_core_losd_reg_set(void __iomem *base,
 
 	/* losd address set */
 	losd_r_addr_value.value = 0;
-	losd_r_addr_value.R_BASE_ADDR = layer->common.src_addr.addr_y>>4;
+	losd_r_addr_value.R_BASE_ADDR =
+			layer->common.src_addr.addr_y>>4;
 	losd_r_addr_mask.value = 0;
 	losd_r_addr_mask.R_BASE_ADDR = 0xFFFFFFF;
 
 	if (losd_params->fbcd_mod)
-		losd_r_addr_value.R_BASE_ADDR
-			+= losd_params->header_size_r >> 4;
+		losd_r_addr_value.R_BASE_ADDR +=
+			losd_params->header_size_r >> 4;
 	gsp_core_reg_update(R6P0_LOSD_R_ADDR(
 		(base + layer_index * R6P0_LOSD_OFFSET)),
 		losd_r_addr_value.value, losd_r_addr_mask.value);
@@ -1279,7 +1271,7 @@ static void gsp_r6p0_core_losd_reg_set(void __iomem *base,
 }
 
 static void gsp_r6p0_core_ld1_reg_set(void __iomem *base,
-			   struct gsp_r6p0_des_layer *layer)
+				struct gsp_r6p0_des_layer *layer)
 {
 	struct R6P0_DES_DATA_CFG_REG des_cfg_value;
 	struct R6P0_DES_DATA_CFG_REG des_cfg_mask;
@@ -1309,11 +1301,11 @@ static void gsp_r6p0_core_ld1_reg_set(void __iomem *base,
 	des_y_addr_mask.value = 0;
 	des_y_addr_mask.DES_Y_BASE_ADDR1 = 0xFFFFFFF;
 	gsp_core_reg_update(R6P0_DES_Y_ADDR(base),
-		des_y_addr_value.value, des_y_addr_mask.value);
+			des_y_addr_value.value, des_y_addr_mask.value);
 
 	des_u_addr_value.value = 0;
 	des_u_addr_value.DES_U_BASE_ADDR1 =
-		layer->common.src_addr.addr_uv >> 4;
+			layer->common.src_addr.addr_uv >> 4;
 	des_u_addr_mask.value = 0;
 	des_u_addr_mask.DES_U_BASE_ADDR1 = 0xFFFFFFF;
 	if (ld1_params->fbc_mod)
@@ -1321,14 +1313,15 @@ static void gsp_r6p0_core_ld1_reg_set(void __iomem *base,
 			ld1_params->header_size_r >> 4;
 
 	gsp_core_reg_update(R6P0_DES_U_ADDR(base),
-		des_u_addr_value.value, des_u_addr_mask.value);
+			des_u_addr_value.value, des_u_addr_mask.value);
 
 	des_v_addr_value.value = 0;
-	des_v_addr_value.DES_V_BASE_ADDR1 = layer->common.src_addr.addr_va;
+	des_v_addr_value.DES_V_BASE_ADDR1 =
+			layer->common.src_addr.addr_va;
 	des_v_addr_mask.value = 0;
 	des_v_addr_mask.DES_V_BASE_ADDR1 = 0xFFFFFFFF;
 	gsp_core_reg_update(R6P0_DES_V_ADDR(base),
-		des_v_addr_value.value, des_v_addr_mask.value);
+			des_v_addr_value.value, des_v_addr_mask.value);
 
 	/* layerd pitch set - work plane configure */
 	des_pitch_value.value = 0;
@@ -1338,7 +1331,7 @@ static void gsp_r6p0_core_ld1_reg_set(void __iomem *base,
 	des_pitch_mask.DES_PITCH = 0x1FFF;
 	des_pitch_mask.DES_HEIGHT = 0x1FFF;
 	gsp_core_reg_update(R6P0_DES_PITCH(base),
-		des_pitch_value.value, des_pitch_mask.value);
+			des_pitch_value.value, des_pitch_mask.value);
 
 	if (ld1_params->bk_para.bk_enable) {
 		struct R6P0_BACK_RGB_REG back_rgb_value;
@@ -1370,8 +1363,7 @@ static void gsp_r6p0_core_ld1_reg_set(void __iomem *base,
 	des_cfg_value.ROT_MOD = ld1_params->rot_angle;
 	des_cfg_value.R2Y_MOD = ld1_params->r2y_mod;
 	des_cfg_value.DES_IMG_FORMAT = ld1_params->img_format;
-	des_cfg_value.RSWAP_MOD =
-			ld1_params->endian.rgb_swap_mode;
+	des_cfg_value.RSWAP_MOD = ld1_params->endian.rgb_swap_mode;
 	des_cfg_value.FBCE_MOD = ld1_params->fbc_mod;
 	des_cfg_value.DITHER_EN = ld1_params->dither_en;
 	des_cfg_value.BK_EN = ld1_params->bk_para.bk_enable;
@@ -1389,18 +1381,17 @@ static void gsp_r6p0_core_ld1_reg_set(void __iomem *base,
 	des_cfg_mask.BK_EN = 0x1;
 	des_cfg_mask.BK_BLD = 0x1;
 	gsp_core_reg_update(R6P0_DES_DATA_CFG(base),
-		des_cfg_value.value, des_cfg_mask.value);
+			des_cfg_value.value, des_cfg_mask.value);
 }
 
 static void gsp_r6p0_coef_gen_and_cfg(struct gsp_r6p0_core *core,
-						struct gsp_r6p0_cfg *cmd)
+				struct gsp_r6p0_cfg *cmd)
 {
-	int i = 0;
-	int jcnt = 0;
-	uint32_t src_w = 0, src_h = 0;
-	uint32_t dst_w = 0, dst_h = 0;
-	uint32_t ver_tap, hor_tap;
-	uint32_t *ret_coef = NULL;
+	int i, jcnt;
+	u32 src_w = 0, src_h = 0;
+	u32 dst_w = 0, dst_h = 0;
+	u32 ver_tap, hor_tap;
+	u32 *ret_coef = NULL;
 
 	for (jcnt = 0; jcnt < R6P0_IMGL_NUM; jcnt++)
 		if (cmd->limg[jcnt].params.scaling_en) {
@@ -1459,7 +1450,7 @@ static int gsp_r6p0_core_run_precheck(struct gsp_core *c)
 int gsp_r6p0_core_trigger(struct gsp_core *c)
 {
 	int ret = -1;
-	int icnt = 0;
+	int icnt;
 	void __iomem *base = NULL;
 	struct gsp_kcfg *kcfg = NULL;
 	struct gsp_r6p0_cfg *cfg = NULL;
@@ -1478,8 +1469,7 @@ int gsp_r6p0_core_trigger(struct gsp_core *c)
 	}
 
 	/* hardware status check */
-	gsp_mod1_cfg_value.value =
-		gsp_core_reg_read(R6P0_GSP_GLB_CFG(c->base));
+	gsp_mod1_cfg_value.value = gsp_core_reg_read(R6P0_GSP_GLB_CFG(c->base));
 	if (gsp_mod1_cfg_value.GSP_BUSY0) {
 		GSP_ERR("core is still busy, can't trigger\n");
 		return GSP_K_HW_BUSY_ERR;
@@ -1515,16 +1505,14 @@ int gsp_r6p0_core_release(struct gsp_core *c)
 	return 0;
 }
 
-int gsp_r6p0_core_copy_cfg(struct gsp_kcfg *kcfg,
-			void *arg, int index)
+int gsp_r6p0_core_copy_cfg(struct gsp_kcfg *kcfg, void *arg, int index)
 {
 	struct gsp_r6p0_cfg_user *cfg_user_arr = NULL;
 	struct gsp_r6p0_cfg_user *cfg_user;
 	struct gsp_r6p0_cfg *cfg = NULL;
-	int icnt = 0;
+	int icnt;
 
-	if (IS_ERR_OR_NULL(arg)
-		|| 0 > index) {
+	if (IS_ERR_OR_NULL(arg) || 0 > index) {
 		GSP_ERR("core copy params error\n");
 		return -1;
 	}
@@ -1544,12 +1532,12 @@ int gsp_r6p0_core_copy_cfg(struct gsp_kcfg *kcfg,
 
 	/* first copy common gsp layer params from user */
 	for (icnt = 0; icnt < R6P0_IMGL_NUM; icnt++)
-		gsp_layer_common_copy_from_user(
-			&cfg->limg[icnt], &cfg_user->limg[icnt]);
+		gsp_layer_common_copy_from_user(&cfg->limg[icnt],
+					&cfg_user->limg[icnt]);
 
 	for (icnt = 0; icnt < R6P0_OSDL_NUM; icnt++)
-		gsp_layer_common_copy_from_user(
-			&cfg->losd[icnt], &cfg_user->losd[icnt]);
+		gsp_layer_common_copy_from_user(&cfg->losd[icnt],
+					&cfg_user->losd[icnt]);
 
 	gsp_layer_common_copy_from_user(&cfg->ld1, &cfg_user->ld1);
 
@@ -1567,11 +1555,11 @@ int gsp_r6p0_core_copy_cfg(struct gsp_kcfg *kcfg,
 	}
 
 	memcpy(&cfg->ld1.params, &cfg_user->ld1.params,
-		   sizeof(struct gsp_r6p0_des_layer_params));
+		sizeof(struct gsp_r6p0_des_layer_params));
 	gsp_layer_set_filled(&cfg->ld1.common);
 
 	memcpy(&cfg->misc, &cfg_user->misc,
-		   sizeof(struct gsp_r6p0_misc_cfg));
+		sizeof(struct gsp_r6p0_misc_cfg));
 
 	gsp_r6p0_core_cfg_print(cfg);
 

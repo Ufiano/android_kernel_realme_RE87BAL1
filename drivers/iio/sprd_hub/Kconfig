@@ -13,6 +13,8 @@ config SPRD_SENSOR_HUB
 	depends on SPRD_SYSTIMER
 	help
 	  Support Sensor hub Feature
+	  Provide power saving solution for integrating and
+	  processing sensor data.
 
 	  Say Y here to build support for sensor hub.
 	  To compile this driver as a module, choose M here

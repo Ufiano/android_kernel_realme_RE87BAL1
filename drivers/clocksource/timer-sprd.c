@@ -5,6 +5,8 @@
 
 #include <linux/init.h>
 #include <linux/interrupt.h>
+#include <linux/module.h>
+#include <linux/platform_device.h>
 
 #include "timer-of.h"
 
@@ -141,7 +143,7 @@ static struct timer_of to = {
 	},
 };
 
-static int __init sprd_timer_init(struct device_node *np)
+static int sprd_timer_init(struct device_node *np)
 {
 	int ret;
 
@@ -190,7 +192,7 @@ static struct clocksource suspend_clocksource = {
 	.flags	= CLOCK_SOURCE_IS_CONTINUOUS | CLOCK_SOURCE_SUSPEND_NONSTOP,
 };
 
-static int __init sprd_suspend_timer_init(struct device_node *np)
+static int sprd_suspend_timer_init(struct device_node *np)
 {
 	int ret;
 
@@ -204,27 +206,40 @@ static int __init sprd_suspend_timer_init(struct device_node *np)
 	return 0;
 }
 
+#ifdef MODULE
+static int sprd_timer_probe(struct platform_device *pdev)
+{
+	struct device_node *np = pdev->dev.of_node;
+
+	if (of_property_read_bool(np, "interrupts"))
+		return sprd_timer_init(np);
+
+	return sprd_suspend_timer_init(np);
+}
+
+static const struct of_device_id sprd_timer_match_table[] = {
+	{ .compatible = "sprd,sc9860-suspend-timer" },
+	{ .compatible = "sprd,sc9860-timer" },
+	{ }
+};
+MODULE_DEVICE_TABLE(of, sprd_timer_match_table);
+
+static struct platform_driver sprd_timer_driver = {
+	.probe		= sprd_timer_probe,
+	.driver		= {
+		.name	= "sprd-timer",
+		.of_match_table = sprd_timer_match_table,
+	},
+};
+module_platform_driver(sprd_timer_driver);
+
+#else
 TIMER_OF_DECLARE(sc9860_timer, "sprd,sc9860-timer", sprd_timer_init);
 TIMER_OF_DECLARE(sc9860_persistent_timer, "sprd,sc9860-suspend-timer",
-		 sprd_suspend_timer_init);
-TIMER_OF_DECLARE(sharkl5_timer, "sprd,sharkl5-timer", sprd_timer_init);
-TIMER_OF_DECLARE(sharkl5_persistent_timer, "sprd,sharkl5-suspend-timer",
-		 sprd_suspend_timer_init);
-TIMER_OF_DECLARE(roc1_timer, "sprd,roc1-timer", sprd_timer_init);
-TIMER_OF_DECLARE(roc1_persistent_timer, "sprd,roc1-suspend-timer",
 		 sprd_suspend_timer_init);
 TIMER_OF_DECLARE(sharkl3_timer, "sprd,sharkl3-timer", sprd_timer_init);
 TIMER_OF_DECLARE(sharkl3_persistent_timer, "sprd,sharkl3-suspend-timer",
 		 sprd_suspend_timer_init);
-TIMER_OF_DECLARE(orca_timer, "sprd,orca-timer", sprd_timer_init);
-TIMER_OF_DECLARE(orca_persistent_timer, "sprd,orca-suspend-timer",
-		 sprd_suspend_timer_init);
-TIMER_OF_DECLARE(sharkle_timer, "sprd,sharkle-timer", sprd_timer_init);
-TIMER_OF_DECLARE(sharkle_persistent_timer, "sprd,sharkle-suspend-timer",
-		 sprd_suspend_timer_init);
-TIMER_OF_DECLARE(pike2_timer, "sprd,pike2-timer", sprd_timer_init);
-TIMER_OF_DECLARE(pike2_persistent_timer, "sprd,pike2-suspend-timer",
-		 sprd_suspend_timer_init);
-TIMER_OF_DECLARE(sharkl5Pro_timer, "sprd,sharkl5Pro-timer", sprd_timer_init);
-TIMER_OF_DECLARE(sharkl5Pro_persistent_timer, "sprd,sharkl5Pro-suspend-timer",
-		 sprd_suspend_timer_init);
+#endif
+
+MODULE_LICENSE("GPL v2");

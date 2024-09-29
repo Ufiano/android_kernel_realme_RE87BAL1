@@ -1,18 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (C) 2016 ARM Limited, All Rights Reserved.
  * Author: Marc Zyngier <marc.zyngier@arm.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <linux/bitops.h>
@@ -21,8 +10,10 @@
 #include <linux/irqchip/chained_irq.h>
 #include <linux/irqchip/irq-partition-percpu.h>
 #include <linux/irqdomain.h>
+#include <linux/seq_buf.h>
 #include <linux/seq_file.h>
 #include <linux/slab.h>
+#include <linux/soc/sprd/sprd_sysdump.h>
 
 struct partition_desc {
 	int				nr_parts;
@@ -109,6 +100,14 @@ static void partition_irq_print_chip(struct irq_data *d, struct seq_file *p)
 	struct irq_chip *chip = irq_desc_get_chip(part->chained_desc);
 	struct irq_data *data = irq_desc_get_irq_data(part->chained_desc);
 
+#ifdef CONFIG_SPRD_SYSDUMP
+	if (!p) {
+		if (sprd_irqstat_seq_buf)
+			seq_buf_printf(sprd_irqstat_seq_buf, " %5s-%lu",
+					chip->name, data->hwirq);
+		return;
+	}
+#endif
 	seq_printf(p, " %5s-%lu", chip->name, data->hwirq);
 }
 
@@ -229,7 +228,7 @@ struct partition_desc *partition_create_desc(struct fwnode_handle *fwnode,
 		goto out;
 	desc->domain = d;
 
-	desc->bitmap = kzalloc(sizeof(long) * BITS_TO_LONGS(nr_parts),
+	desc->bitmap = kcalloc(BITS_TO_LONGS(nr_parts), sizeof(long),
 			       GFP_KERNEL);
 	if (WARN_ON(!desc->bitmap))
 		goto out;

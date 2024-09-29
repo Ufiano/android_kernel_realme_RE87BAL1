@@ -1,4 +1,3 @@
-
 #ifndef __BQ2597X_HEADER__
 #define __BQ2597X_HEADER__
 

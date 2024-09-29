@@ -41,29 +41,29 @@ subsystem tag和修改文件的检查规则：
 [info]
 ANDROID,UPGRADE,SECURITY,FROMLIST,UPSTREAM,BACKPORT,FROMGIT,REVERT,PRIVATE,WORKAROUND,DIRTY,TEST
 
-arm:configs:
-arm:dts:
-arm:topology:
 arm64:configs:
 arm64:dts:
-arm64:kernel:
 arm64:topology:
 arm/arm64:configs:
 arm/arm64:dts:
+arm/arm64:kernel:
 arm/arm64:topology:
+arm:configs:
+arm:dts:
+arm:topology:
+asoc:sprd:
 asoc:sprd:codec:
 asoc:sprd:dai:
 asoc:sprd:include:
 asoc:sprd:platform:
-asoc:sprd:
 asoc:usb:
 
-binder:
+base:
+block:zram:
 
-char:hw_random:sprd:
-coresight:
-clocksource:sprd:
 clk:sprd:
+clocksource:sprd:
+coresight:
 cpufreq:
 cpufreq:sprd:
 cpuhotplug:sprd:
@@ -74,6 +74,7 @@ devfreq:sprd:
 dmaengine:sprd:
 dma-buf:
 Documentation:*
+drm:
 drm:sprd:
 drm:sprd:cabc:
 drm:sprd:dphy:
@@ -84,6 +85,8 @@ drm:sprd:gsp:
 drm:sprd:sysfs:
 dt-bindings:*
 
+extcon:
+
 firmware:psci:
 firmware:sprd:
 fs:
@@ -92,7 +95,6 @@ fs:proc:
 fs:sdcardfs:
 
 gpio:sprd:
-gpu:sprd:
 
 hwspinlock:sprd:
 hwtracing:stm:
@@ -105,37 +107,50 @@ include:dt-bindings:
 input:keyboard:
 input:sprd:
 input:touchscreen:
+iommu:
+iommu:sprd:
 irqchip:
+
+kernel:sysctl:
+kernel:gcov:
 
 leds:sc27xx:
 leds:trigger:
 lib:e_show_mem:
 
+mailbox:sprd:
+Makefile:
+media:platform:sprd-jpg:
+media:platform:sprd-vsp:
+media:platform:sprd-vpu:
 mfd:sprd:
 misc:audio:
-misc:lkdtm:
 misc:sprd_apdu:
 misc:sprd_camera:
-misc:sprd_jpg:
-misc:sprd_map:
-misc:sprd_vsp:
-misc:sprd_vpu:
+misc:sprd_gnss:
 misc:sprd_uid:
-misc:sprd_wcn_n6pro:
 misc:sprdwcn:
 mm:
+mmc:core:
+mmc:host:
+mmc:sprd:
+mm:emem:
 mm:memblock:
 mm:vmscan:
-mmc:core:
-mmc:sprd:
 
 net:
 net:ims_bridge:
-nvmem:sprd:
+net:sprd:sipa_v3:
+net:sprd:sipa_sys:
+net:sprd:sipa_delegate:
 nvmem:sc27xx:
+nvmem:sprd:
+
+of:
 
 pci:dwc:
 pci:dwc:sprd:
+pgo:
 pinctrl:sprd:
 power:
 power:reset:
@@ -144,19 +159,22 @@ power:supply:bq2560x:
 power:supply:charger-manager:
 power:supply:fan54015:
 power:supply:sc2703:
-power:supply:sc2720:
-power:supply:sc2721:
-power:supply:sc2730:
-power:supply:sc2731:
 power:supply:sc27xx:
 power:suspends:
 printk:
 pwm:sprd:
 
-regulator:sprd:
+regulator:
+regulator:sc2721:
+regulator:sc2730:
+regulator:ump7520:
+regulator:ump7521:
+regulator:ump7522:
+regulator:umps520:
 rtc:sc27xx:
 
 sched:*
+scripts:
 scripts:dtc:
 scripts:sprd:
 scsi:ufs:sprd:
@@ -175,28 +193,25 @@ soc:sprd:irq:
 soc:sprd:last_regs:
 soc:sprd:memdisk:
 soc:sprd:modem:
-soc:sprd:pub:
 soc:sprd:ptm:
+soc:sprd:pub:
+soc:sprd:sfp:
 soc:sprd:sysdump:
 spi:sprd:
 sprd-diffconfig:*
-sprd-reserved-memory:
 staging:android:ion:
-staging:sprd:debug_log:
-staging:sprd:mailbox:
 staging:sprd:modem:
-staging:sprd:sfp:
 staging:sprd:sipa:
 
 tee:
-test:kunit:
-time:
 thermal:core:
 thermal:sprd:
+time:
 trace:
 trusty:
-tcpm:sc27xx_pd:
 
+unisoc:*
+usb:core:
 usb:dwc3:
 usb:gadget:
 usb:misc:
@@ -207,6 +222,7 @@ usb:typec:
 video:backlight:
 
 watchdog:sprd:
+wireless:sprd:
 
 x86:configs:
 x86:dts:

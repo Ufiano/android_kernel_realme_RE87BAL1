@@ -1,21 +1,13 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/dma-buf.h>
 #include <linux/pm_runtime.h>
-#include <linux/sprd_ion.h>
 
-#include "ion.h"
+#include <drm/drm_prime.h>
+
 #include "sprd_drm.h"
 #include "sprd_gem.h"
 
@@ -54,10 +46,10 @@ void sprd_gem_free_object(struct drm_gem_object *obj)
 
 	DRM_DEBUG("gem = %p\n", obj);
 
-	if (sprd_gem->vaddr && !sprd_gem->fb_reserved) {
-		dma_free_writecombine(obj->dev->dev, obj->size,
+	if (sprd_gem->vaddr)
+		dma_free_wc(obj->dev->dev, obj->size,
 			sprd_gem->vaddr, sprd_gem->dma_addr);
-	} else if (sprd_gem->sgtb)
+	else if (sprd_gem->sgtb)
 		drm_prime_gem_destroy(obj, sprd_gem->sgtb);
 
 	drm_gem_object_release(obj);
@@ -65,14 +57,11 @@ void sprd_gem_free_object(struct drm_gem_object *obj)
 	kfree(sprd_gem);
 }
 
-int sprd_gem_cma_dumb_create(struct drm_file *file_priv, struct drm_device *drm,
+int sprd_gem_dumb_create(struct drm_file *file_priv, struct drm_device *drm,
 			    struct drm_mode_create_dumb *args)
 {
 	struct sprd_gem_obj *sprd_gem;
-	struct dma_buf *dmabuf;
 	int ret;
-	unsigned long phyaddr;
-	size_t size;
 
 	args->pitch = DIV_ROUND_UP(args->width * args->bpp, 8);
 	args->size = round_up(args->pitch * args->height, PAGE_SIZE);
@@ -81,34 +70,13 @@ int sprd_gem_cma_dumb_create(struct drm_file *file_priv, struct drm_device *drm,
 	if (IS_ERR(sprd_gem))
 		return PTR_ERR(sprd_gem);
 
-	sprd_gem->vaddr = dma_alloc_writecombine(drm->dev, args->size,
-			&sprd_gem->dma_addr, GFP_KERNEL | __GFP_NOWARN | GFP_DMA);
-
+	sprd_gem->vaddr = dma_alloc_wc(drm->dev, args->size,
+			&sprd_gem->dma_addr, GFP_KERNEL | __GFP_NOWARN);
 	if (!sprd_gem->vaddr) {
-		DRM_ERROR("failed to allocate buffer with size %llu,use ion\n",
-				args->size);
-
-		dmabuf = ion_new_alloc(args->size, ION_HEAP_ID_MASK_FB, 0);
-
-		if (IS_ERR_OR_NULL(dmabuf)) {
-			DRM_ERROR("ion_new_alloc dumb buffer fail\n");
-			ret = -ENOMEM;
-			goto error;
-		}
-
-		size = (size_t)args->size;
-		sprd_ion_get_phys_addr_by_db(dmabuf, &phyaddr, &size);
-		sprd_gem->base.dma_buf = dmabuf;
-		sprd_gem->dma_addr = phyaddr;
-		sprd_gem->vaddr = sprd_ion_map_kernel(dmabuf, 0);
-		sprd_gem->fb_reserved = true;
-
-		if (!sprd_gem->vaddr) {
-			DRM_ERROR("failed to allocate buffer with size %llu\n",
-					args->size);
-			ret = -ENOMEM;
-			goto error;
-		}
+		DRM_ERROR("failed to allocate buffer with size %llu\n",
+			  args->size);
+		ret = -ENOMEM;
+		goto error;
 	}
 
 	ret = drm_gem_handle_create(file_priv, &sprd_gem->base, &args->handle);
@@ -124,17 +92,17 @@ error:
 	return ret;
 }
 
-static int sprd_gem_cma_object_mmap(struct drm_gem_object *obj,
+static int sprd_gem_object_mmap(struct drm_gem_object *obj,
 				   struct vm_area_struct *vma)
 
 {
-	int ret;
 	struct sprd_gem_obj *sprd_gem = to_sprd_gem_obj(obj);
+	int ret;
 
 	vma->vm_flags &= ~VM_PFNMAP;
 	vma->vm_pgoff = 0;
 
-	ret = dma_mmap_writecombine(obj->dev->dev, vma,
+	ret = dma_mmap_wc(obj->dev->dev, vma,
 				    sprd_gem->vaddr, sprd_gem->dma_addr,
 				    vma->vm_end - vma->vm_start);
 	if (ret)
@@ -143,7 +111,7 @@ static int sprd_gem_cma_object_mmap(struct drm_gem_object *obj,
 	return ret;
 }
 
-int sprd_gem_cma_mmap(struct file *filp, struct vm_area_struct *vma)
+int sprd_gem_mmap(struct file *filp, struct vm_area_struct *vma)
 {
 	struct drm_gem_object *obj;
 	int ret;
@@ -154,10 +122,10 @@ int sprd_gem_cma_mmap(struct file *filp, struct vm_area_struct *vma)
 
 	obj = vma->vm_private_data;
 
-	return sprd_gem_cma_object_mmap(obj, vma);
+	return sprd_gem_object_mmap(obj, vma);
 }
 
-int sprd_gem_cma_prime_mmap(struct drm_gem_object *obj,
+int sprd_gem_prime_mmap(struct drm_gem_object *obj,
 			    struct vm_area_struct *vma)
 {
 	int ret;
@@ -166,10 +134,10 @@ int sprd_gem_cma_prime_mmap(struct drm_gem_object *obj,
 	if (ret)
 		return ret;
 
-	return sprd_gem_cma_object_mmap(obj, vma);
+	return sprd_gem_object_mmap(obj, vma);
 }
 
-struct sg_table *sprd_gem_cma_prime_get_sg_table(struct drm_gem_object *obj)
+struct sg_table *sprd_gem_prime_get_sg_table(struct drm_gem_object *obj)
 {
 	struct sprd_gem_obj *sprd_gem = to_sprd_gem_obj(obj);
 	struct sg_table *sgtb;
@@ -194,7 +162,6 @@ struct drm_gem_object *sprd_gem_prime_import_sg_table(struct drm_device *drm,
 		struct dma_buf_attachment *attach, struct sg_table *sgtb)
 {
 	struct sprd_gem_obj *sprd_gem;
-	bool reserved;
 
 	sprd_gem = sprd_gem_obj_create(drm, attach->dmabuf->size);
 	if (IS_ERR(sprd_gem))
@@ -206,11 +173,6 @@ struct drm_gem_object *sprd_gem_prime_import_sg_table(struct drm_device *drm,
 		sprd_gem->dma_addr = sg_dma_address(sgtb->sgl);
 
 	sprd_gem->sgtb = sgtb;
-
-	if (sprd_ion_is_reserved(-1, attach->dmabuf, &reserved))
-		DRM_ERROR("sprd_ion_is_reserved fail\n");
-	else
-		sprd_gem->need_iommu = !reserved;
 
 	return &sprd_gem->base;
 }

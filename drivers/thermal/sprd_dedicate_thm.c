@@ -141,6 +141,7 @@ static int sprd_thm_cal_read(struct device_node *np, const char *cell_id,
 
 	kfree(buf);
 	nvmem_cell_put(cell);
+
 	return 0;
 }
 
@@ -173,6 +174,7 @@ static int sprd_thm_efuse_cal(struct sprd_thermal_data *thm)
 
 	dev_info(thm->dev, "sen id = %d, cal =%d,offset =%d\n", thm->id,
 		 thm->cal_slope, thm->cal_offset);
+
 	return 0;
 }
 
@@ -251,6 +253,7 @@ static int sprd_thm_monitor_start(struct sprd_thermal_data *thm, bool en)
 
 	sprd_thm_update_bits(thm->thm_base + SPRD_THM_CTL, SPRD_THM_SET_RDY,
 			     SPRD_THM_SET_RDY);
+
 	return 0;
 }
 
@@ -323,12 +326,14 @@ static int sprd_thm_hw_init(struct sprd_thermal_data *thm)
 static int sprd_hw_thm_suspend(struct sprd_thermal_data *thm)
 {
 	sprd_thm_enable(thm, false);
+
 	return 0;
 }
 
 static int sprd_hw_thm_resume(struct sprd_thermal_data *thm)
 {
 	sprd_thm_enable(thm, true);
+
 	return 0;
 }
 
@@ -431,6 +436,7 @@ static int sprd_thm_remove(struct platform_device *pdev)
 
 	thermal_zone_device_unregister(thm->thmzone_dev);
 	cancel_delayed_work_sync(&thm->thm_resume_work);
+
 	return 0;
 }
 
@@ -442,6 +448,7 @@ static int sprd_thm_suspend(struct device *dev)
 	thm->ready_flag = 0;
 	sprd_hw_thm_suspend(thm);
 	clk_disable_unprepare(thm->clk);
+
 	return 0;
 }
 
@@ -453,6 +460,7 @@ static int sprd_thm_resume(struct device *dev)
 	sprd_hw_thm_resume(thm);
 	queue_delayed_work(system_power_efficient_wq,
 			   &thm->thm_resume_work, msecs_to_jiffies(500));
+
 	return 0;
 }
 

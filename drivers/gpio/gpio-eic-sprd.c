@@ -10,11 +10,8 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
-#include <linux/of_gpio.h>
 #include <linux/platform_device.h>
 #include <linux/spinlock.h>
-#include <linux/sprd-debuglog.h>
-#include "gpiolib.h"
 
 /* EIC registers definition */
 #define SPRD_EIC_DBNC_DATA		0x0
@@ -104,37 +101,26 @@ struct sprd_eic {
 
 struct sprd_eic_variant_data {
 	enum sprd_eic_type type;
-	u32 num_eics;
 };
 
-#define SPRD_EIC_VAR_DATA(soc_name, num)				\
+#define SPRD_EIC_VAR_DATA(soc_name)				\
 static const struct sprd_eic_variant_data soc_name##_eic_dbnc_data = {	\
 	.type = SPRD_EIC_DEBOUNCE,					\
-	.num_eics = (num),						\
 };									\
 									\
 static const struct sprd_eic_variant_data soc_name##_eic_latch_data = {	\
 	.type = SPRD_EIC_LATCH,						\
-	.num_eics = (num),						\
 };									\
 									\
 static const struct sprd_eic_variant_data soc_name##_eic_async_data = {	\
 	.type = SPRD_EIC_ASYNC,						\
-	.num_eics = (num),						\
 };									\
 									\
 static const struct sprd_eic_variant_data soc_name##_eic_sync_data = {	\
 	.type = SPRD_EIC_SYNC,						\
-	.num_eics = (num),						\
 }
 
-SPRD_EIC_VAR_DATA(sc9860, SPRD_EIC_PER_BANK_NR);
-SPRD_EIC_VAR_DATA(sharkl5, SPRD_EIC_PER_BANK_NR * 4);
-SPRD_EIC_VAR_DATA(roc1, SPRD_EIC_PER_BANK_NR * 6);
-SPRD_EIC_VAR_DATA(sharkl3, SPRD_EIC_PER_BANK_NR * 2);
-SPRD_EIC_VAR_DATA(sharkle, SPRD_EIC_PER_BANK_NR * 3);
-SPRD_EIC_VAR_DATA(pike2, SPRD_EIC_PER_BANK_NR * 2);
-SPRD_EIC_VAR_DATA(qogirl6, SPRD_EIC_PER_BANK_NR * 6);
+SPRD_EIC_VAR_DATA(sc9860);
 
 static const char *sprd_eic_label_name[SPRD_EIC_MAX] = {
 	"eic-debounce", "eic-latch", "eic-async",
@@ -516,8 +502,7 @@ static int sprd_eic_match_chip_by_type(struct gpio_chip *chip, void *data)
 static void sprd_eic_handle_one_type(struct gpio_chip *chip)
 {
 	struct sprd_eic *sprd_eic = gpiochip_get_data(chip);
-	struct gpio_desc *desc;
-	u32 bank, n, girq, offset;
+	u32 bank, n, girq;
 
 	for (bank = 0; bank * SPRD_EIC_PER_BANK_NR < chip->ngpio; bank++) {
 		void __iomem *base = sprd_eic_offset_base(sprd_eic, bank);
@@ -546,7 +531,7 @@ static void sprd_eic_handle_one_type(struct gpio_chip *chip)
 		}
 
 		for_each_set_bit(n, &reg, SPRD_EIC_PER_BANK_NR) {
-			offset = bank * SPRD_EIC_PER_BANK_NR + n;
+			u32 offset = bank * SPRD_EIC_PER_BANK_NR + n;
 
 			girq = irq_find_mapping(chip->irq.domain, offset);
 			printk("%s (AON_EIC_EXT2.DBNC.5)---girq: %d---\n",__func__,girq);
@@ -554,10 +539,6 @@ static void sprd_eic_handle_one_type(struct gpio_chip *chip)
 
 			generic_handle_irq(girq);
 			sprd_eic_toggle_trigger(chip, girq, offset);
-
-			desc = gpiochip_get_desc(chip, offset);
-			if (!IS_ERR_OR_NULL(desc))
-				desc->flags &= ~BIT(FLAG_IS_WAKEUP);
 		}
 	}
 }
@@ -586,88 +567,14 @@ static void sprd_eic_irq_handler(struct irq_desc *desc)
 	chained_irq_exit(ic, desc);
 }
 
-static int sprd_eic_get_info(void *out, void *data)
-{
-	struct wakeup_info *src = (struct wakeup_info *)out;
-	struct sprd_eic *sprd_eic;
-	struct gpio_chip *chip;
-	struct gpio_desc *desc;
-	enum sprd_eic_type type;
-	u32 bank, n, offset;
-	unsigned long reg;
-	void __iomem *base;
-
-	if (!out) {
-		pr_err("%s: parameters is null\n", __func__);
-		return -EINVAL;
-	}
-
-	for (type = SPRD_EIC_DEBOUNCE; type < SPRD_EIC_MAX; type++) {
-		chip = gpiochip_find(&type, sprd_eic_match_chip_by_type);
-		if (!chip)
-			continue;
-
-		sprd_eic = gpiochip_get_data(chip);
-		if (!sprd_eic)
-			continue;
-
-		for (bank = 0; bank * SPRD_EIC_PER_BANK_NR < chip->ngpio; bank++) {
-			base = sprd_eic_offset_base(sprd_eic, bank);
-
-			switch (sprd_eic->type) {
-			case SPRD_EIC_DEBOUNCE:
-				reg = readl_relaxed(base + SPRD_EIC_DBNC_MIS) &
-					SPRD_EIC_DATA_MASK;
-				break;
-			case SPRD_EIC_LATCH:
-				reg = readl_relaxed(base + SPRD_EIC_LATCH_INTMSK) &
-					SPRD_EIC_DATA_MASK;
-				break;
-			case SPRD_EIC_ASYNC:
-				reg = readl_relaxed(base + SPRD_EIC_ASYNC_INTMSK) &
-					SPRD_EIC_DATA_MASK;
-				break;
-			case SPRD_EIC_SYNC:
-				reg = readl_relaxed(base + SPRD_EIC_SYNC_INTMSK) &
-					SPRD_EIC_DATA_MASK;
-				break;
-			default:
-				dev_err(chip->parent, "Unsupported EIC type.\n");
-				return -EINVAL;
-			}
-
-			for_each_set_bit(n, &reg, SPRD_EIC_PER_BANK_NR) {
-				offset = bank * SPRD_EIC_PER_BANK_NR + n;
-
-				desc = gpiochip_get_desc(chip, offset);
-
-				if (IS_ERR_OR_NULL(desc) ||
-				    IS_ERR_OR_NULL(desc->label))
-					snprintf(src->name, WAKEUP_NAME_LEN,
-						 "eic%u", offset);
-				else {
-					snprintf(src->name, WAKEUP_NAME_LEN,
-						 "%s(%u)", desc->label, offset);
-					desc->flags |= BIT(FLAG_IS_WAKEUP);
-				}
-				src->type = WAKEUP_EIC_DBNC + sprd_eic->type;
-				src->gpio = offset;
-				return 0;
-			}
-		}
-	}
-	return -EINVAL;
-}
-
 static int sprd_eic_probe(struct platform_device *pdev)
 {
 	const struct sprd_eic_variant_data *pdata;
 	struct gpio_irq_chip *irq;
 	struct sprd_eic *sprd_eic;
 	struct resource *res;
-	struct irq_data *data;
-	u32 hwirq;
 	int ret, i;
+	u16 num_banks = 0;
 
 	pdata = of_device_get_match_data(&pdev->dev);
 	if (!pdata) {
@@ -683,29 +590,28 @@ static int sprd_eic_probe(struct platform_device *pdev)
 	sprd_eic->type = pdata->type;
 
 	sprd_eic->irq = platform_get_irq(pdev, 0);
-	if (sprd_eic->irq < 0) {
-		dev_err(&pdev->dev, "Failed to get EIC interrupt.\n");
+	if (sprd_eic->irq < 0)
 		return sprd_eic->irq;
-	}
 
 	for (i = 0; i < SPRD_EIC_MAX_BANK; i++) {
 		/*
-		 * We can have maximum 8 banks EICs, and each EIC has
+		 * We can have maximum 3 banks EICs, and each EIC has
 		 * its own base address. But some platform maybe only
 		 * have one bank EIC, thus base[1] and base[2] can be
 		 * optional.
 		 */
 		res = platform_get_resource(pdev, IORESOURCE_MEM, i);
 		if (!res)
-			continue;
+			break;
 
 		sprd_eic->base[i] = devm_ioremap_resource(&pdev->dev, res);
+		num_banks++;
 		if (IS_ERR(sprd_eic->base[i]))
 			return PTR_ERR(sprd_eic->base[i]);
 	}
 
 	sprd_eic->chip.label = sprd_eic_label_name[sprd_eic->type];
-	sprd_eic->chip.ngpio = pdata->num_eics;
+	sprd_eic->chip.ngpio = num_banks * SPRD_EIC_PER_BANK_NR;
 	sprd_eic->chip.base = -1;
 	sprd_eic->chip.parent = &pdev->dev;
 	sprd_eic->chip.of_node = pdev->dev.of_node;
@@ -751,19 +657,6 @@ static int sprd_eic_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, sprd_eic);
-
-	data = irq_get_irq_data(sprd_eic->irq);
-	if (!data) {
-		dev_err(&pdev->dev, "Fail to get eic irqd\n");
-		return -ENODEV;
-	}
-	hwirq = irqd_to_hwirq(data);
-	ret = wakeup_info_register((int)hwirq, INVALID_SUB_NUM,
-				   sprd_eic_get_info, (void *)sprd_eic);
-	if (ret)
-		dev_err(&pdev->dev, "Register debuglog error(%u)\n",
-			hwirq);
-
 	return 0;
 }
 
@@ -783,102 +676,6 @@ static const struct of_device_id sprd_eic_of_match[] = {
 	{
 		.compatible = "sprd,sc9860-eic-sync",
 		.data = &sc9860_eic_sync_data,
-	},
-	{
-		.compatible = "sprd,sharkl5-eic-debounce",
-		.data = &sharkl5_eic_dbnc_data,
-	},
-	{
-		.compatible = "sprd,sharkl5-eic-latch",
-		.data = &sharkl5_eic_latch_data,
-	},
-	{
-		.compatible = "sprd,sharkl5-eic-async",
-		.data = &sharkl5_eic_async_data,
-	},
-	{
-		.compatible = "sprd,sharkl5-eic-sync",
-		.data = &sharkl5_eic_sync_data,
-	},
-	{
-		.compatible = "sprd,roc1-eic-debounce",
-		.data = &roc1_eic_dbnc_data,
-	},
-	{
-		.compatible = "sprd,roc1-eic-latch",
-		.data = &roc1_eic_latch_data,
-	},
-	{
-		.compatible = "sprd,roc1-eic-async",
-		.data = &roc1_eic_async_data,
-	},
-	{
-		.compatible = "sprd,roc1-eic-sync",
-		.data = &roc1_eic_sync_data,
-	},
-	{
-		.compatible = "sprd,sharkl3-eic-debounce",
-		.data = &sharkl3_eic_dbnc_data,
-	},
-	{
-		.compatible = "sprd,sharkl3-eic-latch",
-		.data = &sharkl3_eic_latch_data,
-	},
-	{
-		.compatible = "sprd,sharkl3-eic-async",
-		.data = &sharkl3_eic_async_data,
-	},
-	{
-		.compatible = "sprd,sharkl3-eic-sync",
-		.data = &sharkl3_eic_sync_data,
-	},
-	{
-		.compatible = "sprd,sharkle-eic-debounce",
-		.data = &sharkle_eic_dbnc_data,
-	},
-	{
-		.compatible = "sprd,sharkle-eic-latch",
-		.data = &sharkle_eic_latch_data,
-	},
-	{
-		.compatible = "sprd,sharkle-eic-async",
-		.data = &sharkle_eic_async_data,
-	},
-	{
-		.compatible = "sprd,sharkle-eic-sync",
-		.data = &sharkle_eic_sync_data,
-	},
-	{
-		.compatible = "sprd,pike2-eic-debounce",
-		.data = &pike2_eic_dbnc_data,
-	},
-	{
-		.compatible = "sprd,pike2-eic-latch",
-		.data = &pike2_eic_latch_data,
-	},
-	{
-		.compatible = "sprd,pike2-eic-async",
-		.data = &pike2_eic_async_data,
-	},
-	{
-		.compatible = "sprd,pike2-eic-sync",
-		.data = &pike2_eic_sync_data,
-	},
-	{
-		.compatible = "sprd,qogirl6-eic-debounce",
-		.data = &qogirl6_eic_dbnc_data,
-	},
-	{
-		.compatible = "sprd,qogirl6-eic-latch",
-		.data = &qogirl6_eic_latch_data,
-	},
-	{
-		.compatible = "sprd,qogirl6-eic-async",
-		.data = &qogirl6_eic_async_data,
-	},
-	{
-		.compatible = "sprd,qogirl6-eic-sync",
-		.data = &qogirl6_eic_sync_data,
 	},
 	{
 		/* end of list */

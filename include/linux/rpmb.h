@@ -99,7 +99,7 @@ struct rpmb_dev {
 	struct mutex lock; /* device serialization lock */
 	struct device dev;
 	int    id;
-#ifdef CONFIG_RPMB_INTF_DEV
+#if IS_ENABLED(CONFIG_RPMB_INTF_DEV)
 	struct cdev cdev;
 	unsigned long status;
 #endif /* CONFIG_RPMB_INTF_DEV */
@@ -108,7 +108,7 @@ struct rpmb_dev {
 
 #define to_rpmb_dev(x) container_of((x), struct rpmb_dev, dev)
 
-#if IS_ENABLED(CONFIG_RPMB)
+#if IS_ENABLED(CONFIG_RPMB_INTF_DEV)
 struct rpmb_dev *rpmb_dev_get(struct rpmb_dev *rdev);
 void rpmb_dev_put(struct rpmb_dev *rdev);
 struct rpmb_dev *rpmb_dev_find_by_device(struct device *parent);
@@ -162,6 +162,6 @@ static inline int rpmb_cmd_req(struct rpmb_dev *rdev, struct rpmb_data *data)
 	return 0;
 }
 
-#endif /* CONFIG_RPMB */
+#endif /* CONFIG_RPMB_INTF_DEV */
 
 #endif /* __RPMB_H__ */

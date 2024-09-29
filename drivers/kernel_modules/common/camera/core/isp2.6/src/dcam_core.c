@@ -354,6 +354,9 @@ static void dcamcore_reserved_statis_bufferq_init(struct dcam_sw_context *pctx, 
 		path = &pctx->path[path_id];
 		if (path_id == DCAM_PATH_VCH2 && path->src_sel)
 			continue;
+
+		if ((path_id == DCAM_PATH_GTM_HIST) && pctx->dev->hw->ip_isp->rgb_gtm_support)
+			continue;
 		j  = 0;
 
 		while (j < DCAM_RESERVE_BUF_Q_LEN) {

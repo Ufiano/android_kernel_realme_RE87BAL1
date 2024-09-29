@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <asm/div64.h>
@@ -24,39 +16,10 @@
 #define H						1
 #define CLK						0
 #define DATA					1
-
 #define INFINITY				0xffffffff
-
 #define MIN_OUTPUT_FREQ			(100)
 
-#ifndef ROUND_UP
-#define ROUND_UP(a, b) (((a) + (b) - 1) / (b))
-#endif
-
-#ifndef MAX
-#define MAX(a, b) ((a) > (b) ? (a) : (b))
-#define MIN(a, b) ((a) > (b) ? (b) : (a))
-#endif
-
-#ifndef abs
-/*
- * abs() should not be used for 64-bit types
- * (s64, u64, long long) - use abs64() for those.
- */
-#define abs(x) ({ \
-	long ret; \
-	if (sizeof((x)) == sizeof(long)) { \
-		long __x = (x); \
-		ret = (__x < 0) ? -__x : __x; \
-	} else { \
-		int __x = (x); \
-		ret = (__x < 0) ? -__x : __x; \
-	} \
-	ret; \
-})
-#endif
-
-#define AVERAGE(a, b) (MIN(a, b) + abs((b) - (a)) / 2)
+#define AVERAGE(a, b) (min(a, b) + abs((b) - (a)) / 2)
 
 enum TIMING {
 	NONE,
@@ -365,17 +328,6 @@ FAIL:
 	return -1;
 }
 
-static void mipi_drive_capability_config(struct regmap *regmap,
-					struct dphy_context *ctx)
-{
-	if (ctx->capability) {
-		regs._25.bits.ldoop4_sel =  ctx->capability;
-		regmap_write(regmap, 0x25, regs._25.val);
-		pr_info("Set the mipi drive capability to the highest\n");
-	} else
-		pr_info("Use the default mipi drive capability\n");
-}
-
 static int dphy_pll_config(struct dphy_context *ctx)
 {
 	int ret;
@@ -390,8 +342,6 @@ static int dphy_pll_config(struct dphy_context *ctx)
 	ret = dphy_set_pll_reg(regmap, &pll);
 	if (ret)
 		goto FAIL;
-
-	mipi_drive_capability_config(regmap, ctx);
 
 	return 0;
 
@@ -514,7 +464,7 @@ static int dphy_timing_config(struct dphy_context *ctx)
 	*/
 	range[L] = 50 * scale;
 	range[H] = INFINITY;
-	val[CLK] = ROUND_UP(range[L] * (factor << 1), t_byteck) - 2;
+	val[CLK] = DIV_ROUND_UP(range[L] * (factor << 1), t_byteck) - 2;
 	val[DATA] = val[CLK];
 	dphy_set_timing_regs(ctx,regmap, REQUEST_TIME, val);
 
@@ -522,22 +472,22 @@ static int dphy_timing_config(struct dphy_context *ctx)
 	range[L] = 38 * scale;
 	range[H] = 95 * scale;
 	tmp = AVERAGE(range[L], range[H]);
-	val[CLK] = ROUND_UP(AVERAGE(range[L], range[H]),
+	val[CLK] = DIV_ROUND_UP(AVERAGE(range[L], range[H]),
 			t_half_byteck) - 1;
 	range[L] = 40 * scale + 4 * t_ui;
 	range[H] = 85 * scale + 6 * t_ui;
 	tmp |= AVERAGE(range[L], range[H]) << 16;
-	val[DATA] = ROUND_UP(AVERAGE(range[L], range[H]),
+	val[DATA] = DIV_ROUND_UP(AVERAGE(range[L], range[H]),
 			t_half_byteck) - 1;
 	dphy_set_timing_regs(ctx,regmap, PREPARE_TIME, val);
 
 	/* ZERO_TIME: HS-ZERO */
 	range[L] = 300 * scale;
 	range[H] = INFINITY;
-	val[CLK] = ROUND_UP(range[L] * factor + (tmp & 0xffff)
+	val[CLK] = DIV_ROUND_UP(range[L] * factor + (tmp & 0xffff)
 			- 525 * t_byteck / 100, t_byteck) - 2;
 	range[L] = 145 * scale + 10 * t_ui;
-	val[DATA] = ROUND_UP(range[L] * factor
+	val[DATA] = DIV_ROUND_UP(range[L] * factor
 			+ ((tmp >> 16) & 0xffff) - 525 * t_byteck / 100,
 			t_byteck) - 2;
 	dphy_set_timing_regs(ctx,regmap, ZERO_TIME, val);
@@ -545,22 +495,22 @@ static int dphy_timing_config(struct dphy_context *ctx)
 	/* TRAIL_TIME: HS-TRAIL */
 	range[L] = 60 * scale;
 	range[H] = INFINITY;
-	val[CLK] = ROUND_UP(range[L] * factor - constant, t_half_byteck);
-	range[L] = MAX(8 * t_ui, 60 * scale + 4 * t_ui);
-	val[DATA] = ROUND_UP(range[L] * 3 / 2 - constant, t_half_byteck) - 2;
+	val[CLK] = DIV_ROUND_UP(range[L] * factor - constant, t_half_byteck);
+	range[L] = max(8 * t_ui, 60 * scale + 4 * t_ui);
+	val[DATA] = DIV_ROUND_UP(range[L] * 3 / 2 - constant, t_half_byteck) - 2;
 	dphy_set_timing_regs(ctx,regmap, TRAIL_TIME, val);
 
 	/* EXIT_TIME: */
 	range[L] = 100 * scale;
 	range[H] = INFINITY;
-	val[CLK] = ROUND_UP(range[L] * factor, t_byteck) - 2;
+	val[CLK] = DIV_ROUND_UP(range[L] * factor, t_byteck) - 2;
 	val[DATA] = val[CLK];
 	dphy_set_timing_regs(ctx,regmap, EXIT_TIME, val);
 
 	/* CLKPOST_TIME: */
 	range[L] = 60 * scale + 52 * t_ui;
 	range[H] = INFINITY;
-	val[CLK] = ROUND_UP(range[L] * factor, t_byteck) - 2;
+	val[CLK] = DIV_ROUND_UP(range[L] * factor, t_byteck) - 2;
 	val[DATA] = val[CLK];
 	dphy_set_timing_regs(ctx,regmap, CLKPOST_TIME, val);
 
@@ -697,22 +647,10 @@ static void dphy_force_pll(struct dphy_context *ctx, int force)
 	regmap_write(regmap, 0x0e, data);
 }
 
-static struct dphy_pll_ops megacores_sharkl5_ops = {
+const struct dphy_pll_ops sharkl5_dphy_pll_ops = {
 	.pll_config = dphy_pll_config,
 	.timing_config = dphy_timing_config,
 	.hop_config = dphy_hop_config,
 	.ssc_en = dphy_ssc_en,
 	.force_pll = dphy_force_pll,
 };
-
-static struct ops_entry entry = {
-	.ver = "sprd,megacores-sharkl5",
-	.ops = &megacores_sharkl5_ops,
-};
-
-static int __init sprd_dphy_pll_register(void)
-{
-	return dphy_pll_ops_register(&entry);
-}
-
-subsys_initcall(sprd_dphy_pll_register);

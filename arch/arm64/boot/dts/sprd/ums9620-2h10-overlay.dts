@@ -91,10 +91,22 @@
 				compatible = "simple-battery";
 				charge-full-design-microamp-hours = <2950000>;
 				charge-term-current-microamp = <60000>;
-				constant_charge_voltage_max_microvolt = <4340000>;
+				constant-charge-voltage-max-microvolt = <4340000>;
 				factory-internal-resistance-micro-ohms = <252000>;
 				voltage-min-design-microvolt = <3450000>;
+
 				fast-charge-threshold-microvolt = <4100000>;
+				fullbatt-voltage = <4300000>;
+				fullbatt-current = <120000>;
+				fullbatt-track-end-vol = <4295000>;
+				fullbatt-track-end-cur = <130000>;
+				first-calib-voltage = <3580000>;
+				first-calib-capacity = <50>;
+
+				ir-cv-offset-microvolt = <100000>;
+				ir-rc-micro-ohms = <20000>;
+				ir-us-upper-limit-microvolt = <4500000>;
+
 				ocv-capacity-celsius = <20>;
 				ocv-capacity-table-0 = <4313000 100>, <4254000 95>, <4201000 90>,
 							<4151000 85>, <4102000 80>, <4060000 75>,
@@ -117,6 +129,20 @@
 				charge-unknown-current-microamp = <500000 500000>;
 				charge-fchg-current-microamp = <3000000 2000000>;
 				charge-flash-current-microamp = <5000000 2700000>;
+
+				dcp-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 700000 4340000>,
+					<1450 1420 2000000 4340000>, <1600 1570 700000 4100000>;
+				sdp-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 500000 4340000>,
+					<1450 1420 500000 4340000>, <1600 1570 500000 4100000>;
+				cdp-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 700000 4340000>,
+					<1450 1420 1500000 4340000>, <1600 1570 700000 4100000>;
+				unknown-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 500000 4340000>,
+					<1450 1420 500000 4340000>, <1600 1570 500000 4100000>;
+				fchg-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 700000 4340000>,
+					<1450 1420 3250000 4340000>, <1600 1570 700000 4100000>;
+				flash-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 1000000 4340000>,
+					<1450 1420 5000000 4340000>, <1600 1570 1000000 4100000>;
+				force-jeita-status = <2>;
 			};
 
 			charger-manager {
@@ -128,8 +154,6 @@
 
 				cm-fullbatt-vchkdrop-ms = <30000>;
 				cm-fullbatt-vchkdrop-volt = <60000>;
-				cm-fullbatt-voltage = <4300000>;
-				cm-fullbatt-current = <120000>;
 				cm-fullbatt-capacity = <100>;
 				/*Charge pump target charge current*/
 				cm-cp-taper-current = <1000000>;
@@ -176,27 +200,10 @@
 				cm-fast-charge-voltage-drop = <700000>;
 				cm-flash-charge-voltage-drop = <1000000>;
 
-				cm-dcp-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 700000 4340000>,
-					<1450 1420 2000000 4340000>, <1600 1570 700000 4100000>;
-				cm-sdp-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 500000 4340000>,
-					<1450 1420 500000 4340000>, <1600 1570 500000 4100000>;
-				cm-cdp-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 700000 4340000>,
-					<1450 1420 1500000 4340000>, <1600 1570 700000 4100000>;
-				cm-unknown-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 500000 4340000>,
-					<1450 1420 500000 4340000>, <1600 1570 500000 4100000>;
-				cm-fchg-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 700000 4340000>,
-					<1450 1420 3250000 4340000>, <1600 1570 700000 4100000>;
-				cm-flash-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 1000000 4340000>,
-					<1450 1420 5000000 4340000>, <1600 1570 1000000 4100000>;
-
 				cm-cap-remap-table = <1 2 3>, <2 3 2>, <98 99 2>, <99 100 3>;
 
 				monitored-battery = <&bat>;
 				cm-capacity-track;
-
-				cm-ir-cv-offset-microvolt = <100000>;
-				cm-ir-rc = <20>;
-				cm-ir-us-upper-limit-microvolt = <4500000>;
 
 				regulator@0 {
 					cm-regulator-name = "vddgen0";
@@ -329,6 +336,13 @@
 					114889 57
 					124872 43 >;
 			};
+
+			sprd_uid {
+				compatible = "sprd-uid";
+				nvmem-cells = <&uid_start>, <&uid_end>;
+				nvmem-cell-names = "uid_start", "uid_end";
+			};
+
 		};
 	};
 };
@@ -358,6 +372,8 @@
 };
 
 &reserved_memory {
+	#address-cells = <2>;
+	#size-cells = <2>;
 	logo_reserved: logobuffer@b0000000 {
 		reg = <0x0 0xb0000000 0x0 0x009e4000>;
 	};
@@ -366,30 +382,24 @@
 		reg = <0x0 0xc31a0000 0x0 0x0c800000>;
 	};
 
-	ai_reserved: ai@f8848000 {
-		reg = <0x0 0xf8848000 0x0 0x02000000>;
+	ai_reserved: ai@fb210000 {
+		reg = <0x0 0xfb210000 0x0 0x02000000>;
 	};
 
-	fd_reserved: faceid-mem@fa848000 {
-		reg = <0x0 0xfa848000 0x0 0x00500000>;
+	fd_reserved: faceid-mem@fd210000 {
+		reg = <0x0 0xfd210000 0x0 0x00500000>;
 	};
 
-	vdsp_reserved: vdsp-mem@fad48000 {
-		reg = <0x0 0xfad48000 0x0 0x02800000>;
-	};
-
-	wb_reserved: writeback@fd5a8000 {
-		reg = <0x0 0xfd5a8000 0x0 0x00a1e000>;
-	};
-
-	fb_reserved: framebuffer-mem@fdfc6000 {
-		reg = <0x0 0xfdfc6000 0x0 0x01fba000>;
+	vdsp_reserved: vdsp-mem@fd710000 {
+		reg = <0x0 0xfd710000 0x0 0x02800000>;
 	};
 };
 
 &i2c6 {
 	status = "okay";
 	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	ucp1301_spk: ucp1301@58 {
 		compatible = "sprd,ucp1301-spk";
@@ -484,18 +494,13 @@
 };
 
 &ion {
+	#address-cells = <1>;
+	#size-cells = <0>;
 	heap@1 {
 		reg = <1>;
 		label = "carveout_mm";
 		type = <2>;
 		memory-region = <&widevine_reserved>;
-	};
-
-	heap@3 {
-		reg = <3>;
-		label = "carveout_fb";
-		type = <2>;
-		memory-region = <&fb_reserved>;
 	};
 
 	heap@4 {
@@ -524,7 +529,7 @@
 	sprd,hw-channels = <2 0x20cc>, <9 0x2074>, <11 0x2054>, <13 0xa180>,
 			<15 0xa054>, <17 0xa1a0>, <19 0xa044>, <21 0xa0e8>,
 			<23 0x244c>, <25 0xa074>, <27 0x2044>, <30 0x2020>,
-			<34 0x21b8>, <35 0x21ac>;
+			<32 0x217c>, <33 0x2188>, <34 0x21b8>, <35 0x21ac>;
 };
 
 &sdio0 {
@@ -533,16 +538,15 @@
 
 &pmic_fgu {
 	monitored-battery = <&bat>;
-	sprd,calib-resistance-real = <4850>;
-	sprd,calib-resistance-spec = <20000>;
-	first-calib-voltage = <3580000>;
-	first-calib-capacity = <50>;
+	sprd,calib-resistance-micro-ohms = <4850>;
+	sprd,comp-resistance-mohm= <20>;
+
+	fgu-capacity-track;
+	phys = <&ssphy>;
 };
 
 &pmic_fchg {
 	sprd,input-voltage-microvolt = <5000000>;
-	sprd,pd-fixed-max-microwatt = <18000000>;
-	sprd,support-sfcp;
 	sprd,support-pd-pps;
 	phys = <&ssphy>;
 };
@@ -556,7 +560,7 @@
 		power-role = "dual";
 		try-power-role = "sink";
 		source-pdos = <PDO_FIXED(5000, 400, PDO_FIXED_USB_COMM)>;
-		sink-pdos = <PDO_FIXED(5000, 3000, PDO_FIXED_USB_COMM)
+		sink-pdos = <PDO_FIXED(5000, 2000, PDO_FIXED_USB_COMM)
 				PDO_PPS_APDO(3300, 11000, 3000)>;
 		op-sink-microwatt = <10000000>;
 	};
@@ -571,12 +575,13 @@
 
 &dpu {
 	sprd,logo-memory = <&logo_reserved>;
-	sprd,wb-memory = <&wb_reserved>;
 	sprd,backlight = <&pwm_backlight>;
 };
 
 &spi1 {
 	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	focaltech@0 {
 		compatible = "focaltech,fts";
@@ -640,6 +645,8 @@
 &i2c0 {
 	status = "okay";
 	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	sensor_main: sensor-main@20 {
 		compatible = "sprd,sensor-main";
@@ -683,6 +690,8 @@
 &i2c1 {
 	status = "okay";
 	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	sensor_main2: sensor-main2@20 {
 		compatible = "sprd,sensor-main2";
@@ -706,6 +715,8 @@
 &i2c4 {
 	status = "okay";
 	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	sensor_main3: sensor-main3@20 {
 		compatible = "sprd,sensor-main3";
@@ -730,6 +741,8 @@
 &i2c5 {
 	status = "okay";
 	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	sensor_sub2: sensor-sensor_sub2@2a {
 		compatible = "sprd,sensor-sub2";
@@ -771,6 +784,8 @@
 &i2c6 {
 	status = "okay";
 	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	flash_ic: flash-ic@63 {
 		compatible = "sprd,flash-ocp8137";
@@ -790,19 +805,23 @@
 	};
 };
 
-
 &lcd_g40396_truly_mipi_fhd {
+	sprd,phy-bit-clock = <1500000>;
+	sprd,dpi-clk-div = <0>;
+	sprd,video-lp-cmd-enable = <0>;
+	sprd,hporch-lp-disable = <0>;
+
 	display-timings {
-		g40396_truly_timing1: timing1 {
+		g40396_truly_timing0: timing0 {
 			clock-frequency = <192000000>;
-			hactive = <720>;
-			vactive = <1600>;
-			hback-porch = <75>;
-			hfront-porch = <75>;
-			vback-porch = <32>;
-			vfront-porch = <8>;
-			hsync-len = <75>;
-			vsync-len = <8>;
+			hactive = <1080>;
+			vactive = <2400>;
+			hback-porch = <52>;
+			hfront-porch = <53>;
+			vback-porch = <36>;
+			vfront-porch = <220>;
+			hsync-len = <16>;
+			vsync-len = <4>;
 		};
 	};
 };
@@ -834,9 +853,7 @@
 		"Ext Spk", "PDM_DMIC2",
 		"DMIC Pin", "DMic Jack",
 		"DMIC1 Pin", "DMic1 Jack",
-		"Ext Ear", "EAR Pin",
-		"UCP1301 RCV ON", "EAR Pin",
-		"Ext Ear", "UCP1301 RCV";
+		"Ext Ear", "EAR Pin";
 
 	/* 35: ucp1301 normal ap01 */
 	sprd-audio-card,dai-link@53 {

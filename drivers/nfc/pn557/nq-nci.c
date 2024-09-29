@@ -125,12 +125,12 @@ unsigned int	refout_num = 4;
 unsigned int	refout_state_off = 0;
 unsigned int	refout_state_on = 1;
 
-static const char* nfc_feature = "nfc_feature";
-static const char* feature_src = "/system/etc/permissions/android.hardware.nfc.xml";
+// static const char* nfc_feature = "nfc_feature";
+// static const char* feature_src = "/system/etc/permissions/android.hardware.nfc.xml";
 bool contains_nfc = false;
 struct proc_dir_entry *nfcManifest = NULL;
 
-void proc_nfc_feature(){
+void proc_nfc_feature(void){
         mm_segment_t fs;
 
 	if(nfcManifest)
@@ -141,10 +141,10 @@ void proc_nfc_feature(){
         fs = get_fs();
         set_fs(KERNEL_DS);
 
-        if (contains_nfc) {
-		printk("%s : symlink nfc_feature to %s\n" , __func__ , feature_src);
-		proc_symlink(nfc_feature, nfcManifest, feature_src);
-        }
+        // if (contains_nfc) {
+		// printk("%s : symlink nfc_feature to %s\n" , __func__ , feature_src);
+		// proc_symlink(nfc_feature, nfcManifest, feature_src);
+        // }
         set_fs(fs);
         return ;
 }
@@ -1563,7 +1563,6 @@ static int nfc_parse_dt(struct device *dev, struct nqx_platform_data *pdata)
 	}
 
 	pdata->clkreq_gpio = of_get_named_gpio(np, "nxp,clkreq-gpio", 0);
-	//#ifdef sprd
 	pdata->clk_26m = devm_clk_get(dev, "pn557_clk");
 	if (IS_ERR(pdata->clk_26m)) {
 	    pr_err("can't get nfc clock dts config: clk_26m\n");
@@ -1580,7 +1579,6 @@ static int nfc_parse_dt(struct device *dev, struct nqx_platform_data *pdata)
 	    pr_err("can't get nfc clock dts config: enable\n");
 	    return -1;
 	}
-	//#endif
 
 	// return success as above properties are optional
 	return 0;
@@ -1836,7 +1834,6 @@ static int nqx_probe(struct i2c_client *client,
 	}
 	nqx_disable_irq(nqx_dev);
 
-	//#ifdef sprd vendor
 	nqx_dev->clk_enabled = false;
 	clk_set_rate(nqx_dev->pdata->clk_26m, NFC_CLK_FREQ);
 	r = request_threaded_irq(irqn_clk,NULL,nqx_dev_clk_irq_handler,
@@ -2077,5 +2074,6 @@ static void __exit nqx_dev_exit(void)
 }
 module_exit(nqx_dev_exit);
 
+MODULE_SOFTDEP("pre: hardware_info");
 MODULE_DESCRIPTION("NFC nqx");
 MODULE_LICENSE("GPL v2");

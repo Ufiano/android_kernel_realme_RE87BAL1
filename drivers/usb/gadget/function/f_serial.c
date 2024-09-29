@@ -1,13 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * f_serial.c - generic USB serial function driver
  *
  * Copyright (C) 2003 Al Borchers (alborchers@steinerpoint.com)
  * Copyright (C) 2008 by David Brownell
  * Copyright (C) 2008 by Nokia Corporation
- *
- * This software is distributed under the terms of the GNU General
- * Public License ("GPL") as published by the Free Software Foundation,
- * either version 2 of that License or (at your option) any later version.
  */
 
 #include <linux/slab.h>
@@ -191,9 +188,9 @@ static void gser_setup_complete(struct usb_ep *ep, struct usb_request *req)
 }
 
 /*
- * To compatible with our company's usb-to-serial driver, we need to handle the
- * request defining the bRequestType = 0x21 and bRequest = 0x22 to make the
- * usb-to-serial driver work well.
+ * To compatible with our company's usb-to-serial driver, we need to handle
+ * the request defining the bRequestType = 0x21 and bRequest = 0x22 to make
+ * the usb-to-serial driver work well.
  */
 static int gser_setup(struct usb_function *f,
 		      const struct usb_ctrlrequest *ctrl)
@@ -228,11 +225,10 @@ static int gser_setup(struct usb_function *f,
 
 	if (value == -EOPNOTSUPP) {
 		dev_warn(&cdev->gadget->dev,
-			 "unknown class-specific control req "
-			 "%02x.%02x v%04x i%04x l%u\n",
-			 ctrl->bRequestType, ctrl->bRequest,
-			 le16_to_cpu(ctrl->wValue), le16_to_cpu(ctrl->wIndex),
-			 le16_to_cpu(ctrl->wLength));
+			"unknown class-specific control req %02x.%02x v%04x i%04x l%u\n",
+			ctrl->bRequestType, ctrl->bRequest,
+			le16_to_cpu(ctrl->wValue), le16_to_cpu(ctrl->wIndex),
+			le16_to_cpu(ctrl->wLength));
 	}
 
 	return value;
@@ -333,7 +329,7 @@ static struct configfs_attribute *acm_attrs[] = {
 	NULL,
 };
 
-static struct config_item_type serial_func_type = {
+static const struct config_item_type serial_func_type = {
 	.ct_item_ops	= &serial_item_ops,
 	.ct_attrs	= acm_attrs,
 	.ct_owner	= THIS_MODULE,

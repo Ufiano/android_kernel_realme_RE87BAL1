@@ -1,16 +1,3 @@
-/*
- * Copyright (C) 2015 Google, Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- */
 #ifndef __LINUX_TRUSTY_TRUSTY_IPC_H
 #define __LINUX_TRUSTY_TRUSTY_IPC_H
 
@@ -48,7 +35,8 @@ int tipc_chan_connect(struct tipc_chan *chan, const char *port);
 
 int tipc_chan_queue_msg(struct tipc_chan *chan, struct tipc_msg_buf *mb);
 
-int tipc_chan_queue_msg_list(struct tipc_chan *chan, struct list_head *msg_buf_list);
+int tipc_chan_queue_msg_list(struct tipc_chan *chan,
+			     struct list_head *msg_buf_list);
 
 int tipc_chan_shutdown(struct tipc_chan *chan);
 
@@ -76,7 +64,8 @@ static inline size_t mb_avail_data(struct tipc_msg_buf *mb)
 static inline void *mb_put_data(struct tipc_msg_buf *mb, size_t len)
 {
 	void *pos = (u8 *)mb->buf_va + mb->wpos;
-	BUG_ON(mb->wpos + len > mb->buf_sz);
+
+	WARN_ON(mb->wpos + len > mb->buf_sz);
 	mb->wpos += len;
 	return pos;
 }
@@ -84,7 +73,8 @@ static inline void *mb_put_data(struct tipc_msg_buf *mb, size_t len)
 static inline void *mb_get_data(struct tipc_msg_buf *mb, size_t len)
 {
 	void *pos = (u8 *)mb->buf_va + mb->rpos;
-	BUG_ON(mb->rpos + len > mb->wpos);
+
+	WARN_ON(mb->rpos + len > mb->wpos);
 	mb->rpos += len;
 	return pos;
 }

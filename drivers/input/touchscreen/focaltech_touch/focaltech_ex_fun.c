@@ -890,6 +890,8 @@ static ssize_t fts_tprwreg_store(
     return count;
 }
 
+//for GKI
+#if 0
 /* fts_upgrade_bin interface */
 static ssize_t fts_fwupgradebin_show(
     struct device *dev, struct device_attribute *attr, char *buf)
@@ -949,6 +951,7 @@ static ssize_t fts_fwforceupg_store(
 
     return count;
 }
+#endif
 
 /* fts_driver_info interface */
 static ssize_t fts_driverinfo_show(
@@ -1131,8 +1134,8 @@ static DEVICE_ATTR(fts_fw_version, S_IRUGO | S_IWUSR, fts_tpfwver_show, fts_tpfw
 */
 static DEVICE_ATTR(fts_rw_reg, S_IRUGO | S_IWUSR, fts_tprwreg_show, fts_tprwreg_store);
 /*  upgrade from fw bin file   example:echo "*.bin" > fts_upgrade_bin */
-static DEVICE_ATTR(fts_upgrade_bin, S_IRUGO | S_IWUSR, fts_fwupgradebin_show, fts_fwupgradebin_store);
-static DEVICE_ATTR(fts_force_upgrade, S_IRUGO | S_IWUSR, fts_fwforceupg_show, fts_fwforceupg_store);
+//static DEVICE_ATTR(fts_upgrade_bin, S_IRUGO | S_IWUSR, fts_fwupgradebin_show, fts_fwupgradebin_store);
+//static DEVICE_ATTR(fts_force_upgrade, S_IRUGO | S_IWUSR, fts_fwforceupg_show, fts_fwforceupg_store);
 static DEVICE_ATTR(fts_driver_info, S_IRUGO | S_IWUSR, fts_driverinfo_show, fts_driverinfo_store);
 static DEVICE_ATTR(fts_dump_reg, S_IRUGO | S_IWUSR, fts_dumpreg_show, fts_dumpreg_store);
 static DEVICE_ATTR(fts_hw_reset, S_IRUGO | S_IWUSR, fts_hw_reset_show, fts_hw_reset_store);
@@ -1146,8 +1149,8 @@ static struct attribute *fts_attributes[] = {
     &dev_attr_fts_fw_version.attr,
     &dev_attr_fts_rw_reg.attr,
     &dev_attr_fts_dump_reg.attr,
-    &dev_attr_fts_upgrade_bin.attr,
-    &dev_attr_fts_force_upgrade.attr,
+//    &dev_attr_fts_upgrade_bin.attr,
+//    &dev_attr_fts_force_upgrade.attr,
     &dev_attr_fts_driver_info.attr,
     &dev_attr_fts_hw_reset.attr,
     &dev_attr_fts_irq.attr,

@@ -30,6 +30,8 @@
 #include <net/sock.h>
 #include "jiiov_platform.h"
 #include "../include/nico_fp_common.h"
+
+
 #include "linux/hardware_info.h"
 
 
@@ -76,12 +78,12 @@ typedef struct platform_driver anc_driver_t;
 #endif
 #define JVLOGD_LEVEL    KERN_DEBUG
 #define JVLOG_TAG "JV_"
-#define JVLOGE(_s,_ret) printk(KERN_ERR "%s%s: error! %s is failed, ret = %d\n",\
+#define JVLOGE(_s,_ret) pr_err(KERN_ERR "%s%s: error! %s is failed, ret = %d\n",\
 		JVLOG_TAG, __func__, (_s), (_ret));
-#define JVLOGF(_s) printk(JVLOGD_LEVEL "%s%s: debug! %s!\n",\
+#define JVLOGF(_s) pr_err(JVLOGD_LEVEL "%s%s: debug! %s!\n",\
 		JVLOG_TAG, __func__, _s);
 #define JVLOGD(_s) JVLOGF(_s)
-#define JVLOGW(_s,_ret) printk(KERN_WARNING "%s%s: warning! %s's ret = %d\n",\
+#define JVLOGW(_s,_ret) pr_err(KERN_WARNING "%s%s: warning! %s's ret = %d\n",\
 		JVLOG_TAG, __func__, (_s), (_ret));
 
 static const char * const pctl_names[] = {
@@ -115,7 +117,7 @@ struct anc_data {
     struct regulator *vreg[ARRAY_SIZE(vreg_conf)];
 #endif
 #ifdef CONFIG_PM_WAKELOCKS
-    struct wakeup_source fp_wakelock;
+    struct wakeup_source *fp_wakelock;
 #else
     struct wake_lock fp_wakelock;
 #endif
@@ -141,6 +143,7 @@ struct anc_data {
 static struct anc_data *g_anc_data;
 
 extern finger_screen fingerprint_get_screen_status;
+extern fp_vendor_t get_fpsensor_type(void);
 
 #ifndef ANC_USE_POWER_GPIO
 static int vreg_setup(struct anc_data *data, const char *name, bool enable)
@@ -222,19 +225,19 @@ static void anc_fp_get_screen_status(int status)
     anc_data = g_anc_data;
 
     if (anc_data == NULL) {
-        printk(" anc_data is null return \n");
+        pr_err(" anc_data is null return \n");
         return ;
     }
     
     if(status) {
         anc_data->fb_black = 1;
         netlink_msg = ANC_NETLINK_EVENT_SCR_OFF;
-        pr_info("[anc] NET SCREEN OFF!\n");
+        pr_err("[anc] NET SCREEN OFF!\n");
         netlink_send_message_to_user(&netlink_msg, sizeof(netlink_msg));
     } else {
         anc_data->fb_black = 0;
         netlink_msg = ANC_NETLINK_EVENT_SCR_ON;
-        pr_info("[anc] NET SCREEN ON!\n");
+        pr_err("[anc] NET SCREEN ON!\n");
         netlink_send_message_to_user(&netlink_msg, sizeof(netlink_msg));
     }
 }
@@ -248,7 +251,7 @@ static int anc_fb_state_chg_callback(struct notifier_block *nb,
     char netlink_msg = (char)ANC_NETLINK_EVENT_INVALID;
     struct fb_event* evdata = data;
 
-    pr_info("[anc] %s\n", __func__);
+    pr_err("[anc] %s\n", __func__);
     anc_data = container_of(nb, struct anc_data, notifier);
     if (val != FB_EVENT_BLANK /* FB_EARLY_EVENT_BLANK */) {
         pr_err("[anc] val is not vailed");
@@ -259,13 +262,13 @@ static int anc_fb_state_chg_callback(struct notifier_block *nb,
         case FB_BLANK_POWERDOWN:
             anc_data->fb_black = 1;
             netlink_msg = ANC_NETLINK_EVENT_SCR_OFF;
-            pr_info("[anc] NET SCREEN OFF!\n");
+            pr_err("[anc] NET SCREEN OFF!\n");
             netlink_send_message_to_user(&netlink_msg, sizeof(netlink_msg));
             break;
         case FB_BLANK_UNBLANK:
             anc_data->fb_black = 0;
             netlink_msg = ANC_NETLINK_EVENT_SCR_ON;
-            pr_info("[anc] NET SCREEN ON!\n");
+            pr_err("[anc] NET SCREEN ON!\n");
             netlink_send_message_to_user(&netlink_msg, sizeof(netlink_msg));
             break;
         default:
@@ -288,7 +291,7 @@ static ssize_t forward_netlink_event_set(struct device *p_dev,
 {
     char netlink_msg = (char)ANC_NETLINK_EVENT_INVALID;
 
-    pr_info("forward netlink event: %s\n", p_buffer);
+    pr_err("forward netlink event: %s\n", p_buffer);
     if (!strncmp(p_buffer, "test", strlen("test"))) {
         netlink_msg = (char)ANC_NETLINK_EVENT_TEST;
     } else if (!strncmp(p_buffer, "irq", strlen("irq"))) {
@@ -383,7 +386,7 @@ static ssize_t hw_reset_set(struct device *dev, struct device_attribute *attr, c
     struct anc_data *data = dev_get_drvdata(dev);
 
     if (!strncmp(buf, "reset", strlen("reset"))) {
-        pr_info("hw_reset\n");
+        pr_err("hw_reset\n");
         rc = anc_reset(data);
     } else {
         rc = -EINVAL;
@@ -395,7 +398,7 @@ static DEVICE_ATTR(hw_reset, S_IWUSR, NULL, hw_reset_set);
 
 static void anc_power_onoff(struct anc_data *data, int power_onoff)
 {
-    pr_info("%s: power_onoff = %d \n", __func__, power_onoff);
+    pr_err("%s: power_onoff = %d \n", __func__, power_onoff);
 #ifdef ANC_USE_POWER_GPIO
     gpio_set_value(data->pwr_gpio, power_onoff);
 #else
@@ -405,7 +408,7 @@ static void anc_power_onoff(struct anc_data *data, int power_onoff)
 
 static void device_power_up(struct anc_data *data)
 {
-    pr_info("device power up\n");
+    pr_err("device power up\n");
     anc_power_onoff(data, 1);
 }
 
@@ -419,10 +422,10 @@ static ssize_t device_power_set(struct device *dev, struct device_attribute *att
 
     mutex_lock(&data->lock);
     if (!strncmp(buf, "on", strlen("on"))) {
-        pr_info("device power on\n");
+        pr_err("device power on\n");
         anc_power_onoff(data, 1);
     } else if (!strncmp(buf, "off", strlen("off"))) {
-        pr_info("device power off\n");
+        pr_err("device power off\n");
         anc_power_onoff(data, 0);
     } else {
         rc = -EINVAL;
@@ -451,7 +454,7 @@ static DEVICE_ATTR(sensor_id, S_IRUSR, sensor_id_show, NULL);
 #ifdef ANC_USE_IRQ
 static void anc_enable_irq(struct anc_data *data)
 {
-    pr_info("enable irq\n");
+    pr_err("enable irq\n");
     if (atomic_read(&data->irq_enabled)) {
         pr_warn("IRQ has been enabled\n");
     } else {
@@ -462,7 +465,7 @@ static void anc_enable_irq(struct anc_data *data)
 
 static void anc_disable_irq(struct anc_data *data)
 {
-    pr_info("disable irq\n");
+    pr_err("disable irq\n");
     if (atomic_read(&data->irq_enabled)) {
         disable_irq(data->irq);
         atomic_set(&data->irq_enabled, 0);
@@ -474,7 +477,7 @@ static void anc_disable_irq(struct anc_data *data)
 static void anc_wake_lock(struct anc_data *data)
 {
 #ifdef CONFIG_PM_WAKELOCKS
-    __pm_stay_awake(&data->fp_wakelock);
+    __pm_stay_awake(data->fp_wakelock);
 #else
     wake_lock(&data->fp_wakelock);
 #endif
@@ -483,8 +486,8 @@ static void anc_wake_lock(struct anc_data *data)
 static void anc_wake_unlock(struct anc_data *data)
 {
 #ifdef CONFIG_PM_WAKELOCKS
-    __pm_relax(&data->fp_wakelock);
-    __pm_wakeup_event(&data->fp_wakelock, msecs_to_jiffies(ANC_WAKELOCK_HOLD_TIME));
+    __pm_relax(data->fp_wakelock);
+    __pm_wakeup_event(data->fp_wakelock, msecs_to_jiffies(ANC_WAKELOCK_HOLD_TIME));
 #else
     wake_unlock(&data->fp_wakelock);
     wake_lock_timeout(&data->fp_wakelock, msecs_to_jiffies(ANC_WAKELOCK_HOLD_TIME));
@@ -552,9 +555,9 @@ static irqreturn_t anc_irq_handler(int irq, void *handle)
 {
     struct anc_data *data = handle;
 
-    pr_info("irq handler triger rising\n");
+    pr_err("irq handler triger rising\n");
 #ifdef CONFIG_PM_WAKELOCKS
-    __pm_wakeup_event(&data->fp_wakelock, msecs_to_jiffies(ANC_WAKELOCK_HOLD_TIME));
+    __pm_wakeup_event(data->fp_wakelock, msecs_to_jiffies(ANC_WAKELOCK_HOLD_TIME));
 #else
     wake_lock_timeout(&data->fp_wakelock, msecs_to_jiffies(ANC_WAKELOCK_HOLD_TIME));
 #endif
@@ -707,43 +710,43 @@ static long anc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         return -ENOTTY;
     }
 
-    pr_info("%s: cmd = %d\n", __func__, _IOC_NR(cmd));
+    pr_err("%s: cmd = %d\n", __func__, _IOC_NR(cmd));
 
     switch (cmd) {
     case ANC_IOC_RESET:
-        pr_info("%s: reset\n", __func__);
+        pr_err("%s: reset\n", __func__);
         rc = anc_reset(dev_data);
         break;
     case ANC_IOC_ENABLE_POWER:
-        pr_info("%s: enable power\n", __func__);
+        pr_err("%s: enable power\n", __func__);
         anc_power_onoff(dev_data, 1);
         break;
     case ANC_IOC_DISABLE_POWER:
-        pr_info("%s: disable power\n", __func__);
+        pr_err("%s: disable power\n", __func__);
         anc_power_onoff(dev_data, 0);
         break;
     case ANC_IOC_CLEAR_FLAG:
 #ifdef ANC_USE_NETLINK
         lasttouchmode = 0;
-        pr_info("%s: clear tp flag\n", __func__);
+        pr_err("%s: clear tp flag\n", __func__);
 #endif
         break;
 #ifdef ANC_USE_IRQ
     case ANC_IOC_ENABLE_IRQ:
-        pr_info("%s: enable irq\n", __func__);
+        pr_err("%s: enable irq\n", __func__);
         anc_enable_irq(dev_data);
         break;
     case ANC_IOC_DISABLE_IRQ:
-        pr_info("%s: disable irq\n", __func__);
+        pr_err("%s: disable irq\n", __func__);
         anc_disable_irq(dev_data);
         break;
     case ANC_IOC_INIT_IRQ:
-        pr_info("%s: init irq\n", __func__);
+        pr_err("%s: init irq\n", __func__);
         rc = anc_irq_init(dev_data);
         break;
     case ANC_IOC_DEINIT_IRQ:
         anc_irq_deinit(dev_data);
-        pr_info("%s: deinit irq\n", __func__);
+        pr_err("%s: deinit irq\n", __func__);
         break;
 #endif
 #ifdef ANC_USE_SPI
@@ -753,15 +756,15 @@ static long anc_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
         break;
 #endif
     case ANC_IOC_WAKE_LOCK:
-        pr_info("%s: wake lock\n", __func__);
+        pr_err("%s: wake lock\n", __func__);
         anc_wake_lock(dev_data);
         break;
     case ANC_IOC_WAKE_UNLOCK:
-        pr_info("%s: wake unlock\n", __func__);
+        pr_err("%s: wake unlock\n", __func__);
         anc_wake_unlock(dev_data);
         break;
     case ANC_IOC_CANCLE_EPOLL_WAIT:
-        pr_info("%s: cancle epoll wait \n", __func__);
+        pr_err("%s: cancle epoll wait \n", __func__);
         wake_up_interruptible(&epoll_waitqueue);
         break;
     default:
@@ -782,7 +785,7 @@ static unsigned int anc_poll(struct file *filp, struct poll_table_struct *wait)
     int mask = 0;
     poll_wait(filp, &epoll_waitqueue, wait);
     mask |= POLLIN | POLLPRI;
-    pr_info("%s: mask = %d\n", __func__, mask);
+    pr_err("%s: mask = %d\n", __func__, mask);
     return mask;
 }
 #endif
@@ -807,7 +810,7 @@ static ssize_t anc_read(struct file *filp, char __user *buf, size_t count, loff_
     ssize_t status = 0;
     // struct anc_data *dev_data = filp->private_data;
 
-    pr_info("%s: count = %zu\n", __func__, count);
+    pr_err("%s: count = %zu\n", __func__, count);
 
     if (count > SPI_BUFFER_SIZE) {
         return (-EMSGSIZE);
@@ -841,7 +844,7 @@ static ssize_t anc_write(struct file *filp, const char __user *buf, size_t count
     ssize_t status = 0;
     // struct anc_data *dev_data = filp->private_data;
 
-    pr_info("%s: count = %zu\n", __func__, count);
+    pr_err("%s: count = %zu\n", __func__, count);
 
     if (count > SPI_BUFFER_SIZE) {
         return (-EMSGSIZE);
@@ -900,10 +903,10 @@ static uint32_t anc_read_sensor_id(struct anc_data *data)
         }
 
         sensor_chip_id = (uint32_t)((spi_buffer[3] & 0x00FF) | ((spi_buffer[2] << 8) & 0xFF00));
-        pr_info("%s: sensor chip_id = %#x\n", __func__, sensor_chip_id);
+        pr_err("%s: sensor chip_id = %#x\n", __func__, sensor_chip_id);
 
         if (sensor_chip_id == 0x6311) {
-            pr_info("%s: Read Sensor Id Success\n", __func__);
+            pr_err("%s: Read Sensor Id Success\n", __func__);
             return 0;
         } else {
             pr_err("%s: Read Sensor Id Fail\n", __func__);
@@ -922,8 +925,27 @@ static int anc_probe(anc_device_t *pdev)
     struct anc_data *dev_data;
     struct device *device_ptr;
 
-    dev_info(dev, "Anc Probe\n");
-    JVLOGD("alex anc_probe ");
+    fp_vendor_t fp_vendor = FP_UNKNOWN;
+
+    fp_vendor = get_fpsensor_type();
+    pr_err(" fp_vendor = %d \n", fp_vendor);
+	pr_err("anc_probe start!\n");
+
+	if(fp_vendor == FP_JIIOV_0101)
+	{
+		pr_err("this is fingerprint is jiiov 0101\n");	
+	}
+    else if(fp_vendor == FP_SILEAD_6159)
+    {
+		pr_err("this is fingerprint is silead 6159\n");
+		return -ENODEV;
+    }
+	else
+	{
+		pr_err("this is fingerprint unknown\n");
+		return -EPROBE_DEFER;
+	}
+	pr_err("fp_vendor == FP_JIIOV_0101\n");
 
     /* Allocate device data */
     dev_data = devm_kzalloc(dev, sizeof(*dev_data), GFP_KERNEL);
@@ -932,6 +954,10 @@ static int anc_probe(anc_device_t *pdev)
         rc = -ENOMEM;
         goto device_data_err;
     }
+
+#ifdef ANC_USE_NETLINK
+    anc_netlink_init();
+#endif
 
 #ifdef ANC_USE_SPI
     /* Allocate SPI transfer DMA buffer */
@@ -1019,7 +1045,8 @@ static int anc_probe(anc_device_t *pdev)
 #endif
 
 #ifdef CONFIG_PM_WAKELOCKS
-    wakeup_source_init(&dev_data->fp_wakelock, "anc_fp_wakelock");
+	dev_data->fp_wakelock = wakeup_source_create("anc_fp_wakelock");
+	wakeup_source_add(dev_data->fp_wakelock);
 #else
     wake_lock_init(&dev_data->fp_wakelock, WAKE_LOCK_SUSPEND, "anc_fp_wakelock");
 #endif
@@ -1040,6 +1067,7 @@ static int anc_probe(anc_device_t *pdev)
         dev_err(dev, "%s: Could not create sysfs\n", __func__);
         goto exit;
     }
+
 
     get_hardware_info_data(HWID_FINGERPRINT,"jiiov_0101");
 
@@ -1082,7 +1110,8 @@ static int anc_remove(anc_device_t *pdev)
     cancel_work_sync(&data->work_queue);
 #endif
 #ifdef CONFIG_PM_WAKELOCKS
-    wakeup_source_trash(&data->fp_wakelock);
+	wakeup_source_remove(data->fp_wakelock);
+	wakeup_source_destroy(data->fp_wakelock);
 #else
     wake_lock_destroy(&data->fp_wakelock);
 #endif
@@ -1119,38 +1148,27 @@ static anc_driver_t anc_driver = {
 static int __init ancfp_init(void)
 {
     int rc = 0;
-    fp_vendor_t fp_vendor = FP_UNKNOWN;
-
-    fp_vendor = get_fpsensor_type();
-    printk(" fp_vendor = %d \n", fp_vendor);
-    if(fp_vendor != FP_JIIOV_0101)
-    {
-        printk("this is fingerprint is not jiiov 0101 \n");
-        return 0;
-    }
-    JVLOGD("ancfp_init");
+    pr_err("ancfp_init start\n");
 #ifdef ANC_USE_SPI
     int rc = spi_register_driver(&anc_driver);
 #else
     rc = platform_driver_register(&anc_driver);
 #endif
     if (!rc) {
-        pr_info("%s OK\n", __func__);
+        pr_err("%s OK\n", __func__);
     } else {
         pr_err("%s %d\n", __func__, rc);
     }
     JVLOGD("ancfp_init");
 
-#ifdef ANC_USE_NETLINK
-    anc_netlink_init();
-#endif
 
+	pr_err("ancfp_init finish\n");
     return rc;
 }
 
 static void __exit ancfp_exit(void)
 {
-    pr_info("%s\n", __func__);
+    pr_err("%s\n", __func__);
 #ifdef ANC_USE_NETLINK
     anc_netlink_exit();
 #endif

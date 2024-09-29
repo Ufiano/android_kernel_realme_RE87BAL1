@@ -1,4 +1,4 @@
-/*copyright (C) 2018 Spreadtrum Communications Inc.
+/* Copyright (C) 2020 Spreadtrum Communications Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -42,6 +42,7 @@
 #define DBREAD(base)		master->ops->read(master, (base), 0x20)
 #define SPRD_BM_W_MODE		0x1
 #define SPRD_BM_R_MODE		0x2
+#define BUSMONITER_IRQ_MAX  32
 
 struct bm_match {
 	u32 id;
@@ -81,7 +82,6 @@ struct sprd_busmonitor {
 	struct bm_match match;
 	struct clk *clk;
 	u32 num;
-	int *irq;
 	int count;
 	bool retention;
 	bool panic;
@@ -301,6 +301,12 @@ static irqreturn_t sprd_busmon_irq(int irq_num, void *dev)
 		if (val & INT_MSK_STATUS)
 			break;
 	}
+
+	if (i >= bm->num) {
+		master->ops->unlock(master);
+		return IRQ_NONE;
+	}
+
 	bm->match.name = desc[i].name;
 
 	if (bm->desc[i].type)
@@ -540,7 +546,7 @@ static int sprd_busmon_probe(struct djtag_device *ddev)
 {
 	struct device_node *np = ddev->dev.of_node;
 	struct sprd_busmonitor *bm;
-	int ret, irq_count, i;
+	int ret, irq, i;
 
 	bm = devm_kzalloc(&ddev->dev, sizeof(*bm), GFP_KERNEL);
 	if (!bm)
@@ -570,19 +576,14 @@ static int sprd_busmon_probe(struct djtag_device *ddev)
 		return ret;
 
 	dev_set_drvdata(bm->dev, bm);
-	irq_count = of_irq_count(ddev->dev.of_node);
-	bm->irq = devm_kzalloc(&ddev->dev, sizeof(*bm->irq) * irq_count,
-				GFP_KERNEL);
-	if (!bm->irq)
-		return -ENOMEM;
 
-	for (i = 0; i < irq_count; i++) {
-		bm->irq[i] = of_irq_get(ddev->dev.of_node, i);
-		if (bm->irq[i] < 0)
-			return bm->irq[i];
-		ret = devm_request_threaded_irq(&ddev->dev, bm->irq[i],
+	for (i = 0; i < BUSMONITER_IRQ_MAX; i++) {
+		irq = of_irq_get(ddev->dev.of_node, i);
+		if (irq == -ENOENT || irq < 0)
+			break;
+		ret = devm_request_threaded_irq(&ddev->dev, irq,
 						sprd_busmon_irq,
-						NULL, IRQF_TRIGGER_NONE,
+						NULL, IRQF_TRIGGER_NONE | IRQF_SHARED,
 						np->name, bm);
 		if (ret) {
 			dev_err(&ddev->dev, "%s m[%d] request irq fail\n",
@@ -628,7 +629,6 @@ static const struct of_device_id sprd_bm_of_match[] = {
 	{ .compatible = "sprd,roc1-busmonitor", },
 	{ .compatible = "sprd,orca-busmonitor", },
 	{ .compatible = "sprd,sharkl5pro-busmonitor", },
-	{ .compatible = "sprd,qogirn6pro-busmonitor", },
 	{ /* sentinel */ },
 };
 

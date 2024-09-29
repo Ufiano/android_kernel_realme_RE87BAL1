@@ -1,21 +1,13 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
+
 #ifndef _GSP_R9P0_CORE_H
 #define _GSP_R9P0_CORE_H
 
 #include <linux/device.h>
 #include <linux/list.h>
-#include <linux/interrupt.h>
 #include <drm/gsp_cfg.h>
 #include "gsp_core.h"
 #include "gsp_debug.h"
@@ -28,7 +20,7 @@
 struct gsp_r9p0_core {
 	struct gsp_core common;
 	struct list_head coef_list;
-	struct COEF_ENTRY_T coef_cache[R9P0_GSP_COEF_CACHE_MAX];
+	struct coef_entry coef_cache[R9P0_GSP_COEF_CACHE_MAX];
 
 	ulong gsp_coef_force_calc;
 	uint32_t cache_coef_init_flag;
@@ -37,8 +29,6 @@ struct gsp_r9p0_core {
 	struct clk *gsp_eb;
 	/* module ctl reg base, virtual	0x31100000 */
 	void __iomem *gsp_ctl_reg_base;
-	void __iomem *gsp_qos_reg_base;
-	struct tasklet_struct dvfs_task;
 };
 
 #define MEM_OPS_ADDR_ALIGN_MASK (0x7UL)

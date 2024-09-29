@@ -1,5 +1,5 @@
-/*
- * Copyright (C) 2016 Spreadtrum Communications Inc.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (C) 2016 Spreadtrum Communications Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-#define pr_fmt(fmt) "imsbr: " fmt
+#define pr_fmt(fmt) "sprd-imsbr: " fmt
 
 #include <net/genetlink.h>
 #include <linux/module.h>
@@ -25,7 +25,6 @@
 #include <net/route.h>
 #include <net/netfilter/nf_conntrack.h>
 #include <net/netfilter/nf_conntrack_tuple.h>
-#include <net/netfilter/nf_conntrack_l3proto.h>
 #include <net/netfilter/nf_conntrack_l4proto.h>
 #include <net/netfilter/nf_conntrack_core.h>
 #include <linux/netfilter/nf_conntrack_common.h>
@@ -155,7 +154,8 @@ imsbr_do_lp_state(struct sk_buff *skb, struct genl_info *info)
 	if (lp_st == IMSBR_LOWPOWER_START)
 		imsbr_sync_esq_seq();
 
-	imsbr_esp_update_lp_st(lp_st);
+	/* for gki scan, we need abort this in the future */
+	//imsbr_esp_update_lp_st(lp_st);
 
 	imsbr_notify_lowpower_state(cmd, lp_st);
 	return 0;
@@ -165,19 +165,17 @@ static struct neighbour *
 imsbr_dst_get_neighbour(struct dst_entry *dst, void *daddr, int is_v4)
 {
 	struct neighbour *neigh;
-	struct in6_addr *nexthop6;
+	const struct in6_addr *nexthop6;
 	u32 nexthop4;
 	__be32 *be32ptr = (__be32 *)daddr;
 
 	if (is_v4) {
-		nexthop4 = (__force u32)rt_nexthop(
-			(struct rtable *)dst,
-			*be32ptr);
+		nexthop4 = (__force u32)rt_nexthop((struct rtable *)dst,
+						   *be32ptr);
 		neigh = __ipv4_neigh_lookup_noref(dst->dev, nexthop4);
 	} else {
-		nexthop6 = rt6_nexthop(
-			(struct rt6_info *)dst,
-			(struct in6_addr *)daddr);
+		nexthop6 = rt6_nexthop((struct rt6_info *)dst,
+				       (struct in6_addr *)daddr);
 		neigh = __ipv6_neigh_lookup_noref(dst->dev, nexthop6);
 	}
 	if (neigh)
@@ -186,8 +184,8 @@ imsbr_dst_get_neighbour(struct dst_entry *dst, void *daddr, int is_v4)
 	return neigh;
 }
 
-static bool imsbr_get_mac_by_ipaddr(
-	union imsbr_inet_addr *addr, u8 *mac_addr, int is_v4)
+static bool imsbr_get_mac_by_ipaddr(union imsbr_inet_addr *addr,
+				    u8 *mac_addr, int is_v4)
 {
 	struct neighbour *neigh;
 	struct rtable *rt;
@@ -198,7 +196,7 @@ static bool imsbr_get_mac_by_ipaddr(
 	if (is_v4) {
 		pr_info("start with IP: %pI4\n", &addr->ip);
 		rt = ip_route_output(&init_net, addr->ip, 0, 0, 0);
-		if (unlikely(IS_ERR(rt))) {
+		if (IS_ERR(rt)) {
 			pr_err("ip_route_output %lu\n",
 			       (unsigned long)(void *)rt);
 			goto ret_fail;
@@ -513,56 +511,56 @@ static struct genl_ops imsbr_genl_ops[] = {
 	{
 		.cmd = IMSBR_C_CALL_STATE,
 		.flags = GENL_ADMIN_PERM,
-		.policy = imsbr_genl_policy,
 		.doit = imsbr_do_call_state,
+		.validate = GENL_DONT_VALIDATE_STRICT,
 	},
 	{
 		.cmd = IMSBR_C_ADD_TUPLE,
 		.flags = GENL_ADMIN_PERM,
-		.policy = imsbr_genl_policy,
 		.doit = imsbr_add_aptuple,
+		.validate = GENL_DONT_VALIDATE_STRICT,
 	},
 	{
 		.cmd = IMSBR_C_DEL_TUPLE,
 		.flags = GENL_ADMIN_PERM,
-		.policy = imsbr_genl_policy,
 		.doit = imsbr_del_aptuple,
+		.validate = GENL_DONT_VALIDATE_STRICT,
 	},
 	{
 		.cmd = IMSBR_C_RESET_TUPLE,
 		.flags = GENL_ADMIN_PERM,
-		.policy = imsbr_genl_policy,
 		.doit = imsbr_reset_aptuple,
+		.validate = GENL_DONT_VALIDATE_STRICT,
 	},
 	{
 		.cmd = IMSBR_C_SEND_LOCALMAC,
 		.flags = GENL_ADMIN_PERM,
-		.policy = imsbr_genl_policy,
 		.doit = imsbr_notify_local_mac,
+		.validate = GENL_DONT_VALIDATE_STRICT,
 	},
 	{
 		.cmd = IMSBR_C_SEND_REMOTEMAC,
 		.flags = GENL_ADMIN_PERM,
-		.policy = imsbr_genl_policy,
 		.doit = imsbr_notify_remote_mac,
+		.validate = GENL_DONT_VALIDATE_STRICT,
 	},
 	{
 		.cmd = IMSBR_C_LOWPOWER_ST,
 		.flags = GENL_ADMIN_PERM,
-		.policy = imsbr_genl_policy,
 		.doit = imsbr_do_lp_state,
+		.validate = GENL_DONT_VALIDATE_STRICT,
 	},
 	{
 		.cmd = IMSBR_C_ADD_SPI,
 		.flags = GENL_ADMIN_PERM,
-		.policy = imsbr_genl_policy,
 		.doit = imsbr_add_spi,
+		.validate = GENL_DONT_VALIDATE_STRICT,
 	},
 	{
 		.cmd = IMSBR_C_DEL_SPI,
 		.flags = GENL_ADMIN_PERM,
-		.policy = imsbr_genl_policy,
 		.doit = imsbr_del_spi,
+		.validate = GENL_DONT_VALIDATE_STRICT,
 	},
 };
 
@@ -573,6 +571,7 @@ static struct genl_family imsbr_genl_family = {
 	.maxattr	= IMSBR_A_MAX,
 	.ops		= imsbr_genl_ops,
 	.n_ops		= ARRAY_SIZE(imsbr_genl_ops),
+	.policy		= imsbr_genl_policy,
 };
 
 int __init imsbr_netlink_init(void)

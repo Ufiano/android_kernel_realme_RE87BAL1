@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0
+ * Copyright (C) 2020 Spreadtrum Communications Inc.
+ */
+
 #ifndef _SPRD_GPU_DEVICE_H_
 #define _SPRD_GPU_DEVICE_H_
 

@@ -27,11 +27,16 @@
 
 #include "spool.h"
 
+struct spool_device;
+
 struct spool_device {
 	struct spool_init_data	*init;
 	int			major;
 	int			minor;
 	struct cdev		cdev;
+	struct platform_device	*plt_dev;
+
+	struct device		*sys_dev;	/* Device object in sysfs */
 };
 
 struct spool_sblock {
@@ -41,11 +46,11 @@ struct spool_sblock {
 	struct sblock	hold;
 };
 
-static struct class		*spool_class;
+static struct class	*spool_class;
 
 static int spool_open(struct inode *inode, struct file *filp)
 {
-	static struct spool_device *spool;
+	struct spool_device *spool;
 	struct spool_sblock *sblock;
 	int ret;
 
@@ -79,7 +84,7 @@ static int spool_release(struct inode *inode, struct file *filp)
 }
 
 static ssize_t spool_read(struct file *filp,
-		char __user *buf, size_t count, loff_t *ppos)
+			  char __user *buf, size_t count, loff_t *ppos)
 {
 	struct spool_sblock *sblock = filp->private_data;
 	int timeout = -1;
@@ -98,12 +103,12 @@ static ssize_t spool_read(struct file *filp,
 			sblock->is_hold = 0;
 		}
 		blk = sblock->hold;
-	} else{
+	} else {
 		*ppos = 0;
 		ret = sblock_receive(sblock->dst,
 				sblock->channel, &blk, timeout);
 		if (ret < 0) {
-			pr_err("spool_read: failed to receive block!\n");
+			pr_debug("failed to receive block!\n");
 			return ret;
 		}
 		if (blk.length <= count)
@@ -116,7 +121,7 @@ static ssize_t spool_read(struct file *filp,
 	}
 
 	if (unalign_copy_to_user(buf, blk.addr + *ppos, rdsize)) {
-		pr_err("spool_read: failed to copy to user!\n");
+		pr_err("failed to copy to user!\n");
 		sblock->is_hold = 0;
 		*ppos = 0;
 		ret = -EFAULT;
@@ -134,7 +139,7 @@ static ssize_t spool_read(struct file *filp,
 }
 
 static ssize_t spool_write(struct file *filp,
-		const char __user *buf, size_t count, loff_t *ppos)
+			   const char __user *buf, size_t count, loff_t *ppos)
 {
 	struct spool_sblock *sblock = filp->private_data;
 	int timeout = -1;
@@ -150,13 +155,13 @@ static ssize_t spool_write(struct file *filp,
 	do {
 		ret = sblock_get(sblock->dst, sblock->channel, &blk, timeout);
 		if (ret < 0) {
-			pr_info("spool_write: failed to get block!\n");
+			pr_info("failed to get block!\n");
 			return ret;
 		}
 
 		wrsize = (blk.length > len ? len : blk.length);
 		if (unalign_copy_from_user(blk.addr, buf + pos, wrsize)) {
-			pr_info("spool_write: failed to copy from user!\n");
+			pr_info("failed to copy from user!\n");
 			ret = -EFAULT;
 		} else {
 			blk.length = wrsize;
@@ -165,7 +170,7 @@ static ssize_t spool_write(struct file *filp,
 		}
 
 		if (sblock_send(sblock->dst, sblock->channel, &blk))
-			pr_debug("spool_write: failed to send block!");
+			pr_debug("failed to send block!");
 	} while (len > 0 && ret == 0);
 
 	return count - len;
@@ -194,9 +199,10 @@ static const struct file_operations spool_fops = {
 	.llseek		= default_llseek,
 };
 
-static int spool_parse_dt(struct spool_init_data **init, struct device *dev)
+static int spool_parse_dt(struct spool_init_data **init, struct device *dev,
+			  struct device_node *np)
 {
-	struct device_node *np = dev->of_node;
+	struct device_node *parent_np;
 	struct spool_init_data *pdata = NULL;
 	int ret;
 	u32 data;
@@ -205,18 +211,33 @@ static int spool_parse_dt(struct spool_init_data **init, struct device *dev)
 	if (!pdata)
 		return -ENOMEM;
 
-	ret = of_property_read_string(np, "sprd,name",
-				      (const char **)&pdata->name);
+	/* Get the label id for the node of spipe */
+	ret = of_property_read_string(np, "label", &pdata->name);
 	if (ret)
 		goto error;
-	ret = of_property_read_u32(np, "sprd,dst", (u32 *)&data);
-	if (ret)
-		goto error;
-	pdata->dst = (u8)data;
-	ret = of_property_read_u32(np, "sprd,channel", (u32 *)&data);
+
+	/* Get sipc dst id, spipe dst is share sipc dst on dtsi
+	 * Get the parent of the spipe, it is the node of sipc, get reg
+	 */
+	parent_np = of_get_parent(np);
+	if (parent_np) {
+		ret = of_property_read_u32(parent_np, "reg", (u32 *)&data);
+		if (ret)
+			goto error;
+		pdata->dst = (u8)data;
+	}
+	of_node_put(parent_np);
+
+	/* Get the channel id for the node of spipe */
+	ret = of_property_read_u32(np, "reg", (u32 *)&data);
 	if (ret)
 		goto error;
 	pdata->channel = (u8)data;
+
+	ret = of_property_read_u32(np, "sprd,preconfigured", (u32 *)&data);
+	if (!ret)
+		pdata->pre_cfg = (int)data;
+
 	ret = of_property_read_u32(np, "sprd,tx-blksize",
 				   (u32 *)&pdata->txblocksize);
 	if (ret)
@@ -238,92 +259,193 @@ static int spool_parse_dt(struct spool_init_data **init, struct device *dev)
 		pdata->nodev = (u8)data;
 
 	*init = pdata;
+	dev_dbg(dev, "label  =%s\n", pdata->name);
+	dev_dbg(dev, "dst    =%d\n", pdata->dst);
+	dev_dbg(dev, "channel=%d\n", pdata->channel);
+
 	return ret;
 error:
 	devm_kfree(dev, pdata);
 	*init = NULL;
 	return ret;
 }
-static int spool_probe(struct platform_device *pdev)
+
+static ssize_t base_addr_show(struct device *dev,
+			       struct device_attribute *attr,
+			       char *buf)
 {
-	struct spool_init_data *init = pdev->dev.platform_data;
-	struct spool_device *spool;
-	dev_t devid;
+	struct spool_device *spool = (struct spool_device *)
+		dev_get_drvdata(dev);
+	struct spool_init_data *init = spool->init;
+	uint32_t addr;
+	int ret;
+
+	ret = sblock_get_smem_cp_addr(init->dst, init->channel,
+				      &addr);
+	if (ret < 0)
+		return ret;
+
+	return snprintf(buf, PAGE_SIZE, "%u %u 0x%08X %d %u %u %u %u\n",
+			(unsigned int)init->dst,
+			(unsigned int)init->channel,
+			addr,
+			init->pre_cfg,
+			(unsigned int)init->txblocknum,
+			(unsigned int)init->txblocksize,
+			(unsigned int)init->rxblocknum,
+			(unsigned int)init->rxblocksize);
+}
+
+static DEVICE_ATTR(base_addr, 0440,
+		    base_addr_show, NULL);
+
+static int create_spool(struct platform_device *pdev,
+			struct spool_init_data *init,
+			struct spool_device **out)
+{
 	int rval;
+	struct spool_device *spool;
+	dev_t dev_no;
+	char sp_name[16];
 	struct device *dev = &pdev->dev;
 
-	if (!init && pdev->dev.of_node) {
-		rval = spool_parse_dt(&init, &pdev->dev);
-		if (rval) {
-			dev_err(dev, "Failed to parse spool device tree, ret=%d\n",
-			       rval);
-			return rval;
-		}
-	}
-
-	rval = sblock_create(init->dst, init->channel, init->txblocknum,
-		init->txblocksize, init->rxblocknum, init->rxblocksize);
-	if (rval != 0) {
-		dev_info(dev, "Failed to create sblock: %d\n", rval);
+	snprintf(sp_name, sizeof(sp_name), "spool-%u-%u",
+		 (unsigned int)init->dst,
+		 (unsigned int)init->channel);
+	rval = alloc_chrdev_region(&dev_no, 0, 1, sp_name);
+	if (rval)
 		return rval;
+
+	if (init->pre_cfg)
+		rval = sblock_pcfg_create(init->dst,
+					  init->channel,
+					  init->txblocknum,
+					  init->txblocksize,
+					  init->rxblocknum,
+					  init->rxblocksize);
+	else
+		rval = sblock_create(init->dst,
+				     init->channel,
+				     init->txblocknum,
+				     init->txblocksize,
+				     init->rxblocknum,
+				     init->rxblocksize);
+	if (rval) {
+		dev_info(dev, "Failed to create sblock: %d\n", rval);
+		goto free_devno;
 	}
 
 	spool = devm_kzalloc(&pdev->dev,
 			     sizeof(struct spool_device),
 			     GFP_KERNEL);
-	if (spool == NULL) {
-		sblock_destroy(init->dst, init->channel);
-		return -ENOMEM;
+	if (!spool) {
+		rval = -ENOMEM;
+		goto free_sblock;
 	}
 
-	rval = alloc_chrdev_region(&devid, 0, 1, init->name);
-	if (rval != 0) {
-		sblock_destroy(init->dst, init->channel);
-		devm_kfree(&pdev->dev, spool);
-		dev_info(dev, "Failed to alloc spool chrdev\n");
-		return rval;
-	}
+	spool->init = init;
+	spool->major = MAJOR(dev_no);
+	spool->minor = MINOR(dev_no);
+	spool->plt_dev = pdev;
 
 	if (!init->nodev) {
 		cdev_init(&spool->cdev, &spool_fops);
-		rval = cdev_add(&spool->cdev, devid, 1);
-		if (rval != 0) {
-			sblock_destroy(init->dst, init->channel);
-			devm_kfree(&pdev->dev, spool);
-			unregister_chrdev_region(devid, 1);
+
+		rval = cdev_add(&spool->cdev, dev_no, 1);
+		if (rval) {
 			dev_info(dev, "Failed to add spool cdev\n");
-			return rval;
+			goto free_spool;
 		}
 	}
 
-	spool->major = MAJOR(devid);
-	spool->minor = MINOR(devid);
-
-	device_create(spool_class, NULL,
-		      MKDEV(spool->major, spool->minor),
-		      NULL, "%s", init->name);
-
-	spool->init = init;
+	spool->sys_dev = device_create(spool_class, NULL,
+				       dev_no,
+				       spool, "%s", init->name);
+	device_create_file(&pdev->dev, &dev_attr_base_addr);
 
 	platform_set_drvdata(pdev, spool);
+
+	*out = spool;
+
+	return 0;
+
+free_spool:
+	devm_kfree(&pdev->dev, spool);
+
+free_sblock:
+	sblock_destroy(init->dst, init->channel);
+
+free_devno:
+	unregister_chrdev_region(dev_no, 1);
+	return rval;
+}
+
+static int destroy_spool(struct spool_device *spool)
+{
+	dev_t dev_no = MKDEV(spool->major, spool->minor);
+	struct spool_init_data *init = spool->init;
+
+	if (spool->sys_dev) {
+		device_destroy(spool_class, dev_no);
+		spool->sys_dev = NULL;
+	}
+	if (!init->nodev)
+		cdev_del(&spool->cdev);
+	sblock_destroy(init->dst, init->channel);
+	unregister_chrdev_region(dev_no, 1);
+	devm_kfree(&spool->plt_dev->dev, init);
+	devm_kfree(&spool->plt_dev->dev, spool);
+
+	return 0;
+}
+
+static int spool_probe(struct platform_device *pdev)
+{
+	struct device_node *np = pdev->dev.of_node;
+	int rval;
+	struct spool_init_data *init;
+	struct spool_device *spool;
+	struct device *dev = &pdev->dev;
+
+	if (!np)
+		return -ENODEV;
+
+	rval = spool_parse_dt(&init, &pdev->dev, np);
+	if (rval) {
+		dev_err(dev, "Failed to parse spool device tree, ret=%d\n",
+		       rval);
+		return rval;
+	}
+
+	dev_info(dev, "name=%s, dst=%u, channel=%u, pre_cfg=%u\n",
+		init->name,
+		init->dst,
+		init->channel,
+		init->pre_cfg);
+
+	dev_info(dev, "tx_num=%u, tx_size=%u, rx_num=%u, rx_size=%u\n",
+		init->txblocknum,
+		init->txblocksize,
+		init->rxblocknum,
+		init->rxblocksize);
+
+	rval = create_spool(pdev, init, &spool);
+	if (rval) {
+		dev_err(dev, "Failed to create spool device %u:%u, ret=%d\n",
+		       (unsigned int)init->dst,
+		       (unsigned int)init->channel, rval);
+		devm_kfree(&pdev->dev, init);
+	}
 
 	return 0;
 }
 
 static int spool_remove(struct platform_device *pdev)
 {
-	struct spool_device *spool = platform_get_drvdata(pdev);
+	struct spool_device *priv = (struct spool_device *)
+		platform_get_drvdata(pdev);
 
-	device_destroy(spool_class, MKDEV(spool->major, spool->minor));
-
-	if (!spool->init->nodev)
-		cdev_del(&spool->cdev);
-
-	unregister_chrdev_region(
-	MKDEV(spool->major, spool->minor), 1);
-
-	sblock_destroy(spool->init->dst, spool->init->channel);
-	devm_kfree(&pdev->dev, spool);
+	destroy_spool(priv);
 
 	platform_set_drvdata(pdev, NULL);
 
@@ -331,7 +453,7 @@ static int spool_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id spool_match_table[] = {
-	{.compatible = "sprd,spool", },
+	{ .compatible = "sprd,spool", },
 	{ },
 };
 static struct platform_driver spool_driver = {

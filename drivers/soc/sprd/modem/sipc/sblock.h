@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
+ * Copyright (C) 2019 Spreadtrum Communications Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -29,27 +29,27 @@
 #define SBLOCK_BLK_STATE_PENDING	1
 
 struct sblock_blks {
-	u32		addr; /*phy address*/
-	u32		length;
+	u32	addr;	/*phy address*/
+	u32	length;
 };
 
 /* ring block header */
 struct sblock_ring_header {
 	/* get|send-block info */
-	u32		txblk_addr;
-	u32		txblk_count;
-	u32		txblk_size;
-	u32		txblk_blks;
-	u32		txblk_rdptr;
-	u32		txblk_wrptr;
+	u32	txblk_addr;	/* tx blocks start addr */
+	u32	txblk_count;	/* tx blocks num */
+	u32	txblk_size;	/* one tx  block size */
+	u32	txblk_blks;	/* tx_ring or tx_pool start addr */
+	u32	txblk_rdptr;	/* tx_ring or tx_pool read point */
+	u32	txblk_wrptr;	/* tx_ring or tx_pool write point */
 
 	/* release|recv-block info */
-	u32		rxblk_addr;
-	u32		rxblk_count;
-	u32		rxblk_size;
-	u32		rxblk_blks;
-	u32		rxblk_rdptr;
-	u32		rxblk_wrptr;
+	u32	rxblk_addr;
+	u32	rxblk_count;
+	u32	rxblk_size;
+	u32	rxblk_blks;
+	u32	rxblk_rdptr;
+	u32	rxblk_wrptr;
 };
 
 struct sblock_header {
@@ -57,10 +57,46 @@ struct sblock_header {
 	struct sblock_ring_header pool;
 };
 
+struct sblock_ring_header_op {
+	/*
+	 * this points  point to share memory
+	 * for update rdptr and wtptr on share memory
+	 */
+	volatile u32	*tx_rd_p;
+	volatile u32	*tx_wt_p;
+	volatile u32	*rx_rd_p;
+	volatile u32	*rx_wt_p;
+
+	/*
+	 * this member copy from share memory,
+	 * because this contents will not change on  share memory
+	 */
+	u32	tx_addr;	/* txblk_addr */
+	u32	tx_count;	/* txblk_count */
+	u32	tx_size;	/* txblk_size */
+	u32	tx_blks;	/* txblk_blks */
+	u32	rx_addr;
+	u32	rx_count;
+	u32	rx_size;
+	u32	rx_blks;
+};
+
+struct sblock_header_op {
+	struct sblock_ring_header_op ringhd_op;
+	struct sblock_ring_header_op poolhd_op;
+};
+
 struct sblock_ring {
 	struct sblock_header	*header;
-	void			*txblk_virt; /* virt of header->txblk_addr */
-	void			*rxblk_virt; /* virt of header->rxblk_addr */
+	struct sblock_header_op header_op;
+
+	struct sprd_pms	*tx_pms;
+	struct sprd_pms	*rx_pms;
+	char	tx_pms_name[20];
+	char	rx_pms_name[20];
+
+	void	*txblk_virt; /* virt of header->txblk_addr */
+	void	*rxblk_virt; /* virt of header->rxblk_addr */
 
 	/* virt of header->ring->txblk_blks */
 	struct sblock_blks	*r_txblks;
@@ -71,38 +107,52 @@ struct sblock_ring {
 	/* virt of header->pool->rxblk_blks */
 	struct sblock_blks	*p_rxblks;
 
-	int			*txrecord; /* record the state of every txblk */
-	int			*rxrecord; /* record the state of every rxblk */
-	int                     yell;	   /* need to notify cp */
-	spinlock_t		r_txlock;  /* send */
-	spinlock_t		r_rxlock;  /* recv */
-	spinlock_t		p_txlock;  /* get */
-	spinlock_t		p_rxlock;  /* release */
+	unsigned int	poll_mask;
+	/* protect the poll_mask menber */
+	spinlock_t	poll_lock;
+
+	int	*txrecord; /* record the state of every txblk */
+	int	*rxrecord; /* record the state of every rxblk */
+	int	yell;	   /* need to notify cp */
+	spinlock_t	r_txlock;  /* send */
+	spinlock_t	r_rxlock;  /* recv */
+	spinlock_t	p_txlock;  /* get */
+	spinlock_t	p_rxlock;  /* release */
 
 	wait_queue_head_t	getwait;
 	wait_queue_head_t	recvwait;
 };
 
 struct sblock_mgr {
-	u8		dst;
-	u8		channel;
-	u32		state;
+	u8	dst;
+	u8	channel;
+	int	pre_cfg; /*support in host mode only */
+	u32	state;
 
-	void		*smem_virt;
-	u32		smem_addr;
-	u32		smem_size;
-	u32		mapped_smem_addr;
+	void	*smem_virt;
+	u32	smem_addr;
+	u32	smem_addr_debug;
+	u32	smem_size;
+	u32	dst_smem_addr;
 
-	u32		txblksz;
-	u32		rxblksz;
-	u32		txblknum;
-	u32		rxblknum;
+	/*
+	 * this address stored in share memory,
+	 * be used to calculte the block virt address.
+	 * in host mode, it is client physial address(dst_smem_addr),
+	 * in client mode, it is own physial address(smem_addr).
+	 */
+	u32 stored_smem_addr;
+
+	u32	txblksz;
+	u32	rxblksz;
+	u32	txblknum;
+	u32	rxblknum;
 
 	struct sblock_ring	*ring;
 	struct task_struct	*thread;
 
-	void			(*handler)(int event, void *data);
-	void			*data;
+	void	(*handler)(int event, void *data);
+	void	*data;
 };
 
 #ifdef CONFIG_64BIT
@@ -121,4 +171,10 @@ static inline u32 sblock_get_ringpos(u32 x, u32 y)
 	return is_power_of_2(y) ? (x & (y - 1)) : (x % y);
 }
 
+bool sblock_has_data(struct sblock_mgr *sblock, bool tx);
+
+struct sblock_mgr *sblock_register_notifier_ex(u8 dst, u8 channel,
+					       void (*handler)(int event,
+							       void *data),
+					       void *data);
 #endif

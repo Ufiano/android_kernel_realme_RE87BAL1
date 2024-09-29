@@ -2,13 +2,13 @@
 /plugin/;
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/arm-gic.h>
 #include <dt-bindings/clock/sprd,ums9230-clk.h>
 #include <dt-bindings/mfd/sprd,sc2730-regs.h>
 #include <dt-bindings/mfd/sprd,sc2730-mask.h>
 #include <dt-bindings/usb/pd.h>
 #include "lcd/lcd_g40396_truly_mipi_fhd.dtsi"
 #include "lcd/lcd_dummy_mipi.dtsi"
-//#include "ums9230-wcn.dtsi"
 
 / {
 
@@ -20,13 +20,44 @@
 	fragment {
 		target-path = "/";
 		__overlay__ {
+			#address-cells = <2>;
+			#size-cells = <2>;
+
 			pwm_backlight: sprd_backlight {
 				compatible = "sprd,sharkl6-backlight";
 				pwms = <&pwms 2 40000>;
 				pwm-names = "backlight";
-				sprd,max-brightness-level = <3696>;
-				default-brightness-level = <1048>;
-				sprd,brightness-scale = <4095>;
+				sprd,max-brightness-level = <924>;
+				default-brightness-level = <262>;
+				sprd,brightness-scale = <1023>;
+				brightness-levels = <
+							  0   3   4   5   6   7
+					  8   9  10  11  12  13  14  16  17  18
+					 19  20  21  22  23  24  25  26  27  28
+					 29  31  33  35  37  39  41  43  45  47
+					 48  50  52  54  56  58  60  62  64  67
+					 69  72  74  76  78  80  82  84  86  88
+					 90  92  94  96  98 100 102 104 107 109
+					112 114 116 118 120 122 124 126 128 130
+					132 134 136 138 140 142 144 147 149 151
+					154 156 158 160 162 164 166 168 170 172
+					175 178 181 184 187 190 193 196 199 203
+					205 208 211 214 217 220 223 226 229 234
+					237 240 243 247 250 253 256 259 263 266
+					269 270 274 277 280 283 287 290 294 297
+					300 303 307 310 314 318 325 329 334 339
+					340 343 347 350 354 358 365 369 374 380
+					382 385 389 392 396 400 407 411 416 422
+					426 430 434 438 442 446 452 457 460 464
+					470 474 480 486 492 498 504 508 512 516
+					522 527 532 536 540 545 550 555 561 568
+					574 579 584 589 594 600 605 610 615 620
+					625 630 635 641 647 652 657 662 667 673
+					688 694 700 706 712 716 720 725 730 735
+					740 746 752 758 764 770 776 782 790 798
+					803 810 817 825 832 840 845 850 855 861
+					866 872 878 884 890 896 903 911 918 924
+				>;
 			};
 
 			fingerprint@0 {
@@ -66,10 +97,21 @@
 				compatible = "simple-battery";
 				charge-full-design-microamp-hours = <2950000>;
 				charge-term-current-microamp = <60000>;
-				constant_charge_voltage_max_microvolt = <4340000>;
-				factory-internal-resistance-micro-ohms = <180000>;
+				constant-charge-voltage-max-microvolt = <4340000>;
+				factory-internal-resistance-micro-ohms = <252000>;
 				voltage-min-design-microvolt = <3450000>;
 				fast-charge-threshold-microvolt = <4100000>;
+				fullbatt-voltage = <4300000>;
+				fullbatt-current = <120000>;
+				fullbatt-track-end-vol = <4295000>;
+				fullbatt-track-end-cur = <130000>;
+				first-calib-voltage = <3580000>;
+				first-calib-capacity = <50>;
+
+				ir-cv-offset-microvolt = <100000>;
+				ir-rc-micro-ohms = <20000>;
+				ir-us-upper-limit-microvolt = <4500000>;
+
 				ocv-capacity-celsius = <20>;
 				ocv-capacity-table-0 = <4313000 100>, <4254000 95>, <4201000 90>,
 							<4151000 85>, <4102000 80>, <4060000 75>,
@@ -78,19 +120,34 @@
 							<3810000 40>, <3795000 35>, <3781000 30>,
 							<3765000 25>, <3746000 20>, <3722000 15>,
 							<3694000 10>, <3682000 5>, <3400000 0>;
-				voltage-temp-table = <1095000 800>, <986000 850>, <878000 900>,
-							  <775000 950>, <678000 1000>, <590000 1050>,
-							  <510000 1100>, <440000 1150>, <378000 1200>,
-							  <324000 1250>, <278000 1300>, <238000 1350>,
-							  <204000 1400>, <175000 1450>, <150000 1500>,
-							  <129000 1550>, <111000 1600>, <96000 1650>;
-				capacity-temp-table = <45 100>, <25 100>, <10 98>, <0 93>, <(-10) 85>, <(-20) 64>;
-				resistance-temp-table = <45 77>, <25 100>, <10 546>, <0 769>, <(-10) 892>, <(-20) 923>;
+				voltage-temp-table = <1084000 800>, <975000 850>, <868000 900>,
+							  <765000 950>, <668000 1000>, <580000 1050>,
+							  <501000 1100>, <430000 1150>, <369000 1200>,
+							  <315000 1250>, <270000 1300>, <231000 1350>,
+							  <197000 1400>, <169000 1450>, <145000 1500>,
+							  <125000 1550>, <108000 1600>, <93000 1650>;
+				capacity-temp-table = <45 100>, <25 100>, <10 100>, <0 95>, <(-10) 90>;
+				resistance-temp-table = <45 53>, <25 100>, <10 395>, <0 567>, <(-10) 793>;
 				charge-sdp-current-microamp = <500000 500000>;
-				charge-dcp-current-microamp = <2000000 3000000>;
+				charge-dcp-current-microamp = <2000000 2500000>;
 				charge-cdp-current-microamp = <1500000 1500000>;
 				charge-unknown-current-microamp = <500000 500000>;
-				charge-fchg-current-microamp = <3600000 2400000>;
+				charge-fchg-current-microamp = <3250000 3000000>;
+				charge-flash-current-microamp = <5000000 2700000>;
+
+				dcp-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 700000 4340000>,
+					<1450 1420 2000000 4340000>, <1600 1570 700000 4100000>;
+				sdp-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 500000 4340000>,
+					<1450 1420 500000 4340000>, <1600 1570 500000 4100000>;
+				cdp-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 700000 4340000>,
+					<1450 1420 1500000 4340000>, <1600 1570 700000 4100000>;
+				unknown-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 500000 4340000>,
+					<1450 1420 500000 4340000>, <1600 1570 500000 4100000>;
+				fchg-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 700000 4340000>,
+					<1450 1420 3250000 4340000>, <1600 1570 700000 4100000>;
+				flash-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 1000000 4340000>,
+					<1450 1420 5000000 4340000>, <1600 1570 1000000 4100000>;
+				force-jeita-status = <2>;
 			};
 
 			charger-manager {
@@ -102,8 +159,6 @@
 
 				cm-fullbatt-vchkdrop-ms = <30000>;
 				cm-fullbatt-vchkdrop-volt = <60000>;
-				cm-fullbatt-voltage = <4300000>;
-				cm-fullbatt-current = <120000>;
 				cm-fullbatt-capacity = <100>;
 
 				cm-num-chargers = <2>;
@@ -138,30 +193,15 @@
 				/* when the safe charging voltage is exceeded, stop charging */
 				cm-charge-voltage-max = <6500000>;
 				cm-fast-charge-voltage-max = <10500000>;
-
+				cm-flash-charge-voltage-max = <12000000>;
 				/* drop voltage in microVolts to restart charging */
 				cm-charge-voltage-drop = <700000>;
 				cm-fast-charge-voltage-drop = <700000>;
-
-				cm-dcp-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 700000 4340000>,
-					<1450 1420 2000000 4340000>, <1600 1570 700000 4100000>;
-				cm-sdp-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 500000 4340000>,
-					<1450 1420 500000 4340000>, <1600 1570 500000 4100000>;
-				cm-cdp-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 700000 4340000>,
-					<1450 1420 1500000 4340000>, <1600 1570 700000 4100000>;
-				cm-unknown-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 500000 4340000>,
-					<1450 1420 500000 4340000>, <1600 1570 500000 4100000>;
-				cm-fchg-jeita-temp-table = <1000 1030 0 4340000>, <1150 1180 2000000 4340000>,
-					<1450 1420 3600000 4340000>, <1600 1570 1440000 4100000>;
+				cm-flash-charge-voltage-drop = <1000000>;
 
 				cm-cap-remap-table = <1 2 3>, <2 3 2>, <98 99 2>, <99 100 3>;
 
 				monitored-battery = <&bat>;
-				cm-capacity-track;
-
-				cm-ir-cv-offset-microvolt = <100000>;
-				cm-ir-rc = <20>;
-				cm-ir-us-upper-limit-microvolt = <4500000>;
 
 				regulator@0 {
 					cm-regulator-name = "vddgen0";
@@ -240,6 +280,73 @@
 					114889 57
 					124872 43 >;
 			};
+
+			audio-voice-trig {
+				status = "disable";
+				compatible = "sprd,voice_trig";
+				irq_gpio = <&ap_gpio 169 GPIO_ACTIVE_HIGH>;
+			};
+
+			sprd_marlin3: sprd-marlin3 {
+				status = "disable";
+				compatible = "unisoc,marlin3lite_sdio";
+				m2-wakeup-ap-gpios = <&ap_gpio 53 GPIO_ACTIVE_LOW>;
+				reset-gpios = <&ap_gpio 177 GPIO_ACTIVE_LOW>;
+				enable-gpios = <&ap_gpio 116 GPIO_ACTIVE_LOW>;
+				m2-to-ap-irq-gpios = <&ap_gpio 52 GPIO_ACTIVE_LOW>;
+				avdd12-supply = <&vddwcn>;
+				avdd33-supply = <&vddwifipa>;
+				dcxo18-supply = <&vddsim2>;
+
+				clock-names = "clk_32k","source","enable";
+				clocks = <&aon_clk CLK_AUX2>,
+					 <&ext_32k>,
+					 <&aonapb_gate CLK_AUX2_EB>;
+
+				extcon = <&sdio1>;
+				sdhci-name = <&sdio1>;
+				sprd,btwf-file-name = "/dev/block/by-name/wcnmodem";
+				sprd,gnss-file-name = "/vendor/firmware/gnssmodem.bin";
+				adma-tx;
+				adma-rx;
+
+				/*
+				 * bound parameter:
+				 * [0]:addr offset, [1]:mask, [2]:unboundval, [3]:boundval
+				 */
+				avdd12-parent-bound-chip = <REG_ANA_SLP_DCDC_PD_CTRL MASK_ANA_SLP_DCDCGEN1_PD_EN 0x0 MASK_ANA_SLP_DCDCGEN1_PD_EN>;
+				avdd12-bound-wbreq = <REG_ANA_LDO_XTL_EN10 MASK_ANA_LDO_VDDWCN_EXT_XTL3_EN 0x0 MASK_ANA_LDO_VDDWCN_EXT_XTL3_EN>;
+				avdd33-bound-wbreq = <REG_ANA_LDO_XTL_EN11 MASK_ANA_LDO_VDDWIFIPA_EXT_XTL3_EN 0x0 MASK_ANA_LDO_VDDWIFIPA_EXT_XTL3_EN>;
+
+				sprd-mtty {
+					compatible = "sprd,mtty";
+					sprd,name = "ttyBT";
+					status = "disable";
+				};
+
+				sprd-fm {
+					compatible = "sprd,marlin3-fm";
+					sprd,name = "sprd-fm";
+					status = "disable";
+				};
+
+				wlan {
+					compatible = "sprd,sc2355-sdio-wifi";
+					status = "disable";
+				};
+
+				gnss {
+					compatible = "sprd,gnss";
+					status = "disable";
+				};
+			};
+
+			sprd_uid {
+				compatible = "sprd-uid";
+				nvmem-cells = <&uid_start>, <&uid_end>;
+				nvmem-cell-names = "uid_start", "uid_end";
+			};
+
 		};
 	};
 };
@@ -249,28 +356,18 @@
 };
 
 &reserved_memory {
-	wcn_reserved: wcn-mem@87000000 {
-		reg = <0x0 0x87000000 0x0 0x00800000>;
-	};
-
+	#address-cells = <2>;
+	#size-cells = <2>;
 	logo_reserved: logobuffer@9e000000{
 		reg = <0x0 0x9e000000 0x0 0x00ab0000>;
 	};
 
-	widevine_reserved: widevine@a3800000 {
-		reg = <0x0 0xa3800000 0x0 0x0c800000>;
+	widevine_reserved: widevine@e3800000 {
+		reg = <0x0 0xe3800000 0x0 0x0c800000>;
 	};
 
-	fd_reserved: faceid-mem@fc3a0000 {
-		reg = <0x0 0xfc3a0000 0x0 0x00500000>;
-	};
-
-	wb_reserved: writeback-mem@fc8a0000 {
-		reg = <0x0 0xfc8a0000 0x0 0x00ae0000>;
-	};
-
-	fb_reserved: framebuffer-mem@fd380000 {
-		reg = <0x0 0xfd380000 0x0 0x02c00000>;
+	fd_reserved: faceid-mem@ffa70000 {
+		reg = <0x0 0xffa70000 0x0 0x00500000>;
 	};
 };
 
@@ -297,6 +394,8 @@
 &i2c0 {
 	status = "okay";
 	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	sensor_main: sensor-main@20 {
 		compatible = "sprd,sensor-main";
@@ -315,6 +414,7 @@
 		power-down-gpios = <&ap_gpio 47 0>;
 		sprd,phyid = <0>;
 		csi = <&csi0>;
+		power-domains = <&mm_domain>;
 	};
 
 	sensor_sub: sensor-sub@5a {
@@ -336,12 +436,15 @@
 	/*	mipi-switch-mode-gpios = <&ap_gpio 8 0>;*/
 		sprd,phyid = <2>;
 		csi = <&csi0>;
+		power-domains = <&mm_domain>;
 	};
 };
 
 &i2c1 {
 	status = "okay";
 	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	sensor_main2: sensor-main2@20 {
 		compatible = "sprd,sensor-main2";
@@ -364,6 +467,7 @@
 	/*	mipi-switch-mode-gpios = <&ap_gpio 8 0>;*/
 		sprd,phyid = <4>;
 		csi = <&csi1>;
+		power-domains = <&mm_domain>;
 	};
 
 
@@ -372,6 +476,8 @@
 &i2c5 {
 	status = "okay";
 	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	bq25890_chg: charger@6a {
 		compatible = "ti,bq25890_chg";
@@ -413,6 +519,8 @@
 &i2c6 {
 	status = "okay";
 	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	sensor_sub2: sensor-sub2@6e {
 		compatible = "sprd,sensor-sub2";
@@ -435,13 +543,10 @@
 	};
 };
 
-&aon_i2c0 {
-	status = "okay";
-	clock-frequency = <1000000>;
-};
-
 &spi3 {
 	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	focaltech@0 {
 		compatible = "focaltech,fts";
@@ -454,67 +559,25 @@
 	};
 };
 
-&dvfs_dcdc_cpu0_supply {
+&dvfs_dcdc_cpu0_cfg {
 	pmic-type-num = <0>;
 	slew-rate = <9375>; /* 9375uV/us */
-	top-dvfs-adi-state = <0x70 0 0xf>;
-	voltage-grade-num = <8>;
-	voltage-grade = <0 0xf0 0xf4 0 0x1ff>,
-		<1 0xf0 0xf4 9 0x1ff>,
-		<2 0x100 0xf4 18 0x1ff>,
-		<3 0x110 0xf8 0 0x1ff>,
-		<4 0x120 0xf8 9 0x1ff>,
-		<5 0x130 0xf8 18 0x1ff>,
-		<6 0x140 0xfc 0 0x1ff>,
-		<7 0x140 0xfc 9 0x1ff>;
-	voltage-up-delay = <50 0x58 0 0xffff 0x600>,
-		<100 0x58 16 0xffff 0xa00>,
-		<150 0x54 0 0xffff 0xf00>,
-		<200 0x54 16 0xffff 0x1400>,
-		<250 0x50 0 0xffff 0x1900>,
-		<300 0x50 16 0xffff 0x1e00>,
-		<350 0x110 0 0xffff 0x2300>;
-	voltage-down-delay = <50 0x64 0 0xffff 0x600>,
-		<100 0x64 16 0xffff 0xa00>,
-		<150 0x60 0 0xffff 0xf00>,
-		<200 0x60 16 0xffff 0x1400>,
-		<250 0x5c 0 0xffff 0x1900>,
-		<300 0x5c 16 0xffff 0x1e00>,
-		<350 0x114 0 0xffff 0x2300>;
 	tuning-latency-us = <0>;
-	chnl-in-i2c = <0>;
 };
 
-&dvfs_dcdc_cpu1_supply {
+&dvfs_dcdc_cpu1_cfg {
+	chnl-i2c-used;
+	third-pmic-used;
+	pmic-type-num = <2>;
+	slew-rate = <4000>; /* 4000uV/us */
+	tuning-latency-us = <0>;
+};
+
+&dvfs_dcdc_cpu1_cfg1 {
+	third-pmic-used;
 	pmic-type-num = <0>;
 	slew-rate = <9375>; /* 9375uV/us */
-	supply-type-sel = <0x120 0 0>;
-	top-dvfs-adi-state = <0x9c 0 0xf>;
-	voltage-grade-num = <8>;
-	voltage-grade = <0 0xf0 0x100 0 0x1ff>,
-		<1 0x100 0x100 9 0x1ff>,
-		<2 0x110 0x100 18 0x1ff>,
-		<3 0x120 0x104 0 0x1ff>,
-		<4 0x130 0x104 9 0x1ff>,
-		<5 0x140 0x104 18 0x1ff>,
-		<6 0x140 0x108 0 0x1ff>,
-		<7 0x140 0x108 9 0x1ff>;
-	voltage-up-delay = <50 0x84 0 0xffff 0x600>,
-		<100 0x84 16 0xffff 0xa00>,
-		<150 0x80 0 0xffff 0xf00>,
-		<200 0x80 16 0xffff 0x1400>,
-		<250 0x7c 0 0xffff 0x1900>,
-		<300 0x7c 16 0xffff 0x1e00>,
-		<350 0x118 0 0xffff 0x2300>;
-	voltage-down-delay = <50 0x90 0 0xffff 0x600>,
-		<100 0x90 16 0xffff 0xa00>,
-		<150 0x8c 0 0xffff 0xf00>,
-		<200 0x8c 16 0xffff 0x1400>,
-		<250 0x88 0 0xffff 0x1900>,
-		<300 0x88 16 0xffff 0x1e00>,
-		<350 0x11c 0 0xffff 0x2300>;
-	tuning-latency-us = <200>;
-	chnl-in-i2c = <0>;
+	tuning-latency-us = <0>;
 };
 
 &hsphy {
@@ -535,28 +598,23 @@
 	cd-gpios = <&eic_sync 35 GPIO_ACTIVE_HIGH>;
 };
 
-&ion {
-	heap@3 {
-		reg = <3>;
-		label = "carveout_fb";
-		type = <2>;
-		memory-region = <&fb_reserved>;
-	};
-
-	heap@4 {
-		reg = <4>;
-		label = "carveout_fd";
-		type = <2>;
-		memory-region = <&fd_reserved>;
-	};
-};
-
-&ufs {
+&sdio1 {
+	sprd,phy-delay-sd-uhs-sdr104 = <0x7f 0x7f 0x7f 0x7f>;
+	sprd,phy-delay-sd-uhs-sdr50 = <0x7f 0x7f 0x8f 0x8f>;
+	sd-uhs-sdr104;
+	sd-uhs-sdr50;
+	bus-width = <4>;
+	sprd,name = "sdio_wifi";
+	sprd,sdio-adma;
+	no-sd;
+	no-mmc;
 	status = "okay";
 };
 
 &i2c2 {
 	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
 	sec-nfc@27 {
 		compatible = "sec-nfc";
 		reg = <0x27>;
@@ -578,16 +636,34 @@
 
 &i2c3 {
 	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
 };
 
 &i2c4 {
 	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
 	ucp1301_spk: ucp1301@58 {
 		compatible = "sprd,ucp1301-spk";
 		reg = <0x58>;
 		reset-gpios = <&ap_gpio 167 GPIO_ACTIVE_HIGH>;
 		#sound-dai-cells = <1>;
 	};
+
+	stm_vl53l0: vl53l0@52 {
+		compatible = "st,stmvl53l0";
+		reg = <0x52>;
+		reset_gpios = <168>;
+		irq_gpios = <169>;
+		interrupt-parent = <&ap_gpio>;
+		interrupts = <169 IRQ_TYPE_LEVEL_LOW>;
+	};
+};
+
+&aon_i2c0 {
+	status = "okay";
+	clock-frequency = <1000000>;
 };
 
 &sprd_headset {
@@ -692,10 +768,11 @@
 
 &pmic_fgu {
 	monitored-battery = <&bat>;
-	sprd,calib-resistance-real = <4850>;
-	sprd,calib-resistance-spec = <20000>;
-	first-calib-voltage = <3580000>;
-	first-calib-capacity = <50>;
+	sprd,calib-resistance-micro-ohms = <4850>;
+	sprd,comp-resistance-mohm = <20>;
+
+	fgu-capacity-track;
+	phys = <&hsphy>;
 };
 
 &panel {
@@ -708,7 +785,6 @@
 
 &dpu {
 	sprd,logo-memory = <&logo_reserved>;
-	sprd,wb-memory = <&wb_reserved>;
 
 	sprd,backlight = <&pwm_backlight>;
 };
@@ -730,9 +806,11 @@
 };
 
 &pmic_fchg {
+	status = "okay";
 	sprd,input-voltage-microvolt = <5000000>;
 	sprd,pd-fixed-max-microwatt = <18000000>;
 	sprd,support-sfcp;
+	sprd,support-pd-pps;
 	phys = <&hsphy>;
 };
 
@@ -744,30 +822,16 @@
 		power-role = "dual";
 		try-power-role = "sink";
 		source-pdos = <PDO_FIXED(5000, 400, PDO_FIXED_USB_COMM)>;
-		sink-pdos = <PDO_FIXED(5000, 3000, PDO_FIXED_USB_COMM)>;
+		sink-pdos = <PDO_FIXED(5000, 3000, PDO_FIXED_USB_COMM)
+			     PDO_PPS_APDO(3300, 11000, 3000)>;
 		op-sink-microwatt = <10000000>;
 	};
 };
 
 &ddr_dfs {
 	  sprd-scene = "boost", "lcdon", "lcdoff", "camlow",
-			"camhigh", "camveryhigh", "faceid";
-	  sprd-freq = <1333 768 256 1333 1333 0xbacd 1333>;
-};
-
-&adi_bus {
-	sprd,hw-channels = <2 0x18cc>, <3 0x18cc>, <13 0x1874>, <15 0x1874>,
-			<17 0x1844>,<19 0x1854>, <21 0x1864>, <30 0x1820>,
-			<35 0x19b8>, <39 0x19ac>;
-};
-
-&ion {
-	heap@1 {
-		reg = <1>;
-		label = "carveout_mm";
-		type = <2>;
-		memory-region = <&widevine_reserved>;
-	};
+			"camhigh", "camveryhigh", "faceid", "top";
+	  sprd-freq = <1333 768 256 1333 1333 0xbacd 1333 0xbacd>;
 };
 
 &pin_controller {
@@ -822,3 +886,30 @@
 	};
 };
 
+&ion {
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	heap@1 {
+		reg = <1>;
+		label = "carveout_mm";
+		type = <2>;
+		memory-region = <&widevine_reserved>;
+	};
+
+	heap@4 {
+		reg = <4>;
+		label = "carveout_fd";
+		type = <2>;
+		memory-region = <&fd_reserved>;
+	};
+};
+
+&adi_bus {
+	sprd,hw-channels0 = <2 0x18cc>, <3 0x18cc>, <13 0x1874>, <15 0x1874>,
+			<17 0x1844>, <19 0x1854>, <21 0x1864>, <30 0x1820>,
+			<32 0x197c>, <33 0x1988>, <35 0x19b8>, <39 0x19ac>;
+	sprd,hw-channels1 = <2 0x18cc>, <3 0x18cc>, <13 0x1854>, <15 0x1874>,
+			<17 0x1844>, <19 0x1844>, <21 0x1864>, <30 0x1820>,
+			<32 0x197c>, <33 0x1988>, <35 0x19b8>, <39 0x19ac>;
+};

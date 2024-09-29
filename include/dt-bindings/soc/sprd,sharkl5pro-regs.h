@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+ OR MIT
 /*
- * Spreadtrum Sharkl5 platform system global register file
+ * Spreadtrum Sharkl5Pro platform system global register file
  *
  * Copyright C 2019, Spreadtrum Communications Inc.
  */

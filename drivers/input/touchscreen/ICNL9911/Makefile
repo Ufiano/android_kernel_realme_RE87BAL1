@@ -26,22 +26,20 @@
 #	@#$(MAKE) -C $(BSP_KERNEL_PATH) M=$(KO_MODULE_OUT) src=$(CURDIR) $@
 #	rm -rf $(KO_MODULE_OUT)
 
+sprd-cts-y += \
+	cts_charger_detect.o \
+	cts_core.o \
+	cts_earjack_detect.o \
+	cts_firmware.o \
+	cts_i2c_driver.o \
+	cts_oem_huaqin.o \
+	cts_platform.o \
+	cts_sfctrlv2.o \
+	cts_spi_flash.o \
+	cts_strerror.o \
+	cts_sysfs.o \
+	cts_test.o \
+	cts_tool.o \
+	cts_proc.o
 
-
-
-obj-y	+=  cts_charger_detect.o
-obj-y	+=  cts_core.o
-obj-y   +=  cts_earjack_detect.o
-
-obj-y	+=  cts_firmware.o
-obj-y	+=  cts_i2c_driver.o
-obj-y	+=  cts_oem_huaqin.o
-obj-y	+=  cts_platform.o
-obj-y   +=  cts_sfctrlv2.o
-
-obj-y   +=  cts_spi_flash.o
-obj-y   +=  cts_strerror.o
-obj-y   +=  cts_sysfs.o
-obj-y   +=  cts_test.o
-obj-y   +=  cts_tool.o
-obj-y   +=  cts_proc.o
+obj-m += sprd-cts.o

@@ -224,13 +224,23 @@ struct aw32257_platform_data {
 	const char *notify_device;	/* name */
 };
 
+struct aw32257_charge_current {
+	int sdp_limit;
+	int sdp_cur;
+	int dcp_limit;
+	int dcp_cur;
+	int cdp_limit;
+	int cdp_cur;
+	int unknown_limit;
+	int unknown_cur;
+};
 struct aw32257_device {
 	struct device *dev;
 	struct aw32257_platform_data init_data;
 	struct usb_phy *usb_phy;
 	struct notifier_block usb_notify;
 	struct power_supply *charger;
-	struct power_supply_charge_current cur;
+	struct aw32257_charge_current cur;
 	struct extcon_dev *edev;
 	struct power_supply_desc charger_desc;
 	struct delayed_work otg_work;
@@ -1140,6 +1150,8 @@ static bool aw32257_charger_is_bat_present(struct aw32257_device *info)
 		dev_err(info->dev, "Failed to get psy of sc27xx_fgu\n");
 		return present;
 	}
+
+	val.intval = 0;
 	ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,
 					&val);
 	if (ret == 0 && val.intval)
@@ -1261,14 +1273,70 @@ static int aw32257_charger_set_status(struct aw32257_device *info,
 
 	return ret;
 }
+int aw32257_charger_get_battery_cur(struct power_supply *psy,
+				    struct aw32257_charge_current *cur)
+{
+	struct device_node *battery_np;
+	const char *value;
+	int err;
+
+	cur->sdp_cur = -EINVAL;
+	cur->sdp_limit = -EINVAL;
+	cur->dcp_cur = -EINVAL;
+	cur->dcp_limit = -EINVAL;
+	cur->cdp_cur = -EINVAL;
+	cur->cdp_limit = -EINVAL;
+	cur->unknown_cur = -EINVAL;
+	cur->unknown_limit = -EINVAL;
+
+	if (!psy->of_node) {
+		dev_warn(&psy->dev, "%s currently only supports devicetree\n",
+			 __func__);
+		return -ENXIO;
+	}
+
+	battery_np = of_parse_phandle(psy->of_node, "monitored-battery", 0);
+	if (!battery_np)
+		return -ENODEV;
+
+	err = of_property_read_string(battery_np, "compatible", &value);
+	if (err)
+		goto out_put_node;
+
+	if (strcmp("simple-battery", value)) {
+		err = -ENODEV;
+		goto out_put_node;
+	}
+
+	of_property_read_u32_index(battery_np, "charge-sdp-current-microamp", 0,
+				   &cur->sdp_cur);
+	of_property_read_u32_index(battery_np, "charge-sdp-current-microamp", 1,
+				   &cur->sdp_limit);
+	of_property_read_u32_index(battery_np, "charge-dcp-current-microamp", 0,
+				   &cur->dcp_cur);
+	of_property_read_u32_index(battery_np, "charge-dcp-current-microamp", 1,
+				   &cur->dcp_limit);
+	of_property_read_u32_index(battery_np, "charge-cdp-current-microamp", 0,
+				   &cur->cdp_cur);
+	of_property_read_u32_index(battery_np, "charge-cdp-current-microamp", 1,
+				   &cur->cdp_limit);
+	of_property_read_u32_index(battery_np, "charge-unknown-current-microamp", 0,
+				   &cur->unknown_cur);
+	of_property_read_u32_index(battery_np, "charge-unknown-current-microamp", 1,
+				   &cur->unknown_limit);
+
+out_put_node:
+	of_node_put(battery_np);
+	return err;
+}
 
 static int aw32257_charger_hw_init(struct aw32257_device *info)
 {
 	struct power_supply_battery_info bat_info = { };
-	int voltage_max_microvolt, current_max_ua;
+	int voltage_max_microvolt;
 	int ret;
 
-	ret = power_supply_get_battery_info(info->charger, &bat_info, 0);
+	ret = aw32257_charger_get_battery_cur(info->charger, &info->cur);
 	if (ret) {
 		dev_warn(info->dev, "no battery information is supplied\n");
 
@@ -1285,23 +1353,18 @@ static int aw32257_charger_hw_init(struct aw32257_device *info)
 		info->cur.cdp_cur = 1500000;
 		info->cur.unknown_limit = 5000000;
 		info->cur.unknown_cur = 500000;
-	} else {
-		info->cur.sdp_limit = bat_info.cur.sdp_limit;
-		info->cur.sdp_cur = bat_info.cur.sdp_cur;
-		info->cur.dcp_limit = bat_info.cur.dcp_limit;
-		info->cur.dcp_cur = bat_info.cur.dcp_cur;
-		info->cur.cdp_limit = bat_info.cur.cdp_limit;
-		info->cur.cdp_cur = bat_info.cur.cdp_cur;
-		info->cur.unknown_limit = bat_info.cur.unknown_limit;
-		info->cur.unknown_cur = bat_info.cur.unknown_cur;
+	}
 
-		voltage_max_microvolt =
-			bat_info.constant_charge_voltage_max_uv / 1000;
+	ret = power_supply_get_battery_info(info->charger, &bat_info);
+	if (ret) {
+		dev_warn(info->dev, "no battery information is supplied\n");
+		voltage_max_microvolt = 4440;
+	} else {
+		voltage_max_microvolt = bat_info.constant_charge_voltage_max_uv / 1000;
 
 		if (aw32257_set_battery_regulation_voltage(info, bat_info.constant_charge_voltage_max_uv) < 0)
 			dev_err(info->dev, "set regulation voltage failed\n");
 
-		current_max_ua = bat_info.constant_charge_current_max_ua / 1000;
 		power_supply_put_battery_info(info->charger, &bat_info);
 	}
 
@@ -1883,13 +1946,13 @@ static int aw32257_dts_init(struct aw32257_device *bq, struct device_node *np)
 	if (ret)
 		goto error_3;
 	ret = device_property_read_u32(bq->dev,
-				"ti,weak-battery-voltage",
-				&bq->init_data.weak_battery_voltage);
+				       "ti,weak-battery-voltage",
+				       &bq->init_data.weak_battery_voltage);
 	if (ret)
 		goto error_3;
 	ret = device_property_read_u32(bq->dev,
-			"ti,battery-regulation-voltage",
-			&bq->init_data.battery_regulation_voltage);
+				       "ti,battery-regulation-voltage",
+				       &bq->init_data.battery_regulation_voltage);
 	if (ret)
 		goto error_3;
 	ret = device_property_read_u32(bq->dev,
@@ -1898,8 +1961,8 @@ static int aw32257_dts_init(struct aw32257_device *bq, struct device_node *np)
 	if (ret)
 		goto error_3;
 	ret = device_property_read_u32(bq->dev,
-			"ti,termination-current",
-			&bq->init_data.termination_current);
+				       "ti,termination-current",
+				       &bq->init_data.termination_current);
 	if (ret)
 		goto error_3;
 	ret = device_property_read_u32(bq->dev,
@@ -1933,6 +1996,7 @@ static int aw32257_probe(struct i2c_client *client,
 
 	if (id)
 		bq->chip = id->driver_data;
+
 	dev_info(dev, "id name = %s\n", id->name);
 	bq->dev = dev;
 	bq->mode = AW32257_MODE_OFF;

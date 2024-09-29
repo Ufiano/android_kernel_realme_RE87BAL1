@@ -1,19 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #ifndef _VSP_DVFS_H
 #define _VSP_DVFS_H
 
+#include <linux/apsys_dvfs.h>
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/devfreq.h>
@@ -39,42 +32,43 @@ struct vsp_dvfs {
 	u32 idle_freq;
 	struct devfreq *devfreq;
 	struct devfreq_event_dev *edev;
-	struct ip_dvfs_ops  *dvfs_ops;
+	const struct ip_dvfs_ops  *dvfs_ops;
 	struct ip_dvfs_status ip_status;
 	struct ip_dvfs_coffe ip_coeff;
 	set_freq_type freq_type;
 	struct notifier_block vsp_dvfs_nb;
 	u32 max_freq_level;
+	struct apsys_dev *apsys;
 };
 
 struct ip_dvfs_ops {
 	/* userspace interface */
 	void (*parse_dt)(struct vsp_dvfs *vsp, struct device_node *np);
 	int (*dvfs_init)(struct vsp_dvfs *vsp);
-	void (*hw_dvfs_en)(u32 dvfs_eb);
+	void (*hw_dvfs_en)(struct vsp_dvfs *vsp, u32 dvfs_eb);
 
-	void (*set_work_freq)(u32 work_freq);
-	u32 (*get_work_freq)(void);
-	void (*set_idle_freq)(u32 idle_freq);
-	u32 (*get_idle_freq)(void);
+	void (*set_work_freq)(struct vsp_dvfs *vsp, u32 work_freq);
+	u32 (*get_work_freq)(struct vsp_dvfs *vsp);
+	void (*set_idle_freq)(struct vsp_dvfs *vsp, u32 idle_freq);
+	u32 (*get_idle_freq)(struct vsp_dvfs *vsp);
 
 	/* work-idle dvfs map ops */
 	void (*get_dvfs_table)(struct ip_dvfs_map_cfg *dvfs_table);
-	void (*get_dvfs_status)(struct ip_dvfs_status *ip_status);
+	void (*get_dvfs_status)(struct vsp_dvfs *vsp, struct ip_dvfs_status *ip_status);
 
 	/* coffe setting ops */
-	void (*set_gfree_wait_delay)(u32 wind_para);
-	void (*set_freq_upd_en_byp)(u32 on);
-	void (*set_freq_upd_delay_en)(u32 on);
-	void (*set_freq_upd_hdsk_en)(u32 on);
-	void (*set_dvfs_swtrig_en)(u32 en);
+	void (*set_gfree_wait_delay)(struct vsp_dvfs *vsp, u32 wind_para);
+	void (*set_freq_upd_en_byp)(struct vsp_dvfs *vsp, u32 on);
+	void (*set_freq_upd_delay_en)(struct vsp_dvfs *vsp, u32 on);
+	void (*set_freq_upd_hdsk_en)(struct vsp_dvfs *vsp, u32 on);
+	void (*set_dvfs_swtrig_en)(struct vsp_dvfs *vsp, u32 en);
 
 	/* work-idle dvfs index ops */
-	void (*set_work_index)(u32 index);
-	u32 (*get_work_index)(void);
-	void (*set_idle_index)(u32 index);
-	u32 (*get_idle_index)(void);
-	void (*updata_target_freq)(u32 freq, set_freq_type freq_type);
+	void (*set_work_index)(struct vsp_dvfs *vsp, u32 index);
+	u32 (*get_work_index)(struct vsp_dvfs *vsp);
+	void (*set_idle_index)(struct vsp_dvfs *vsp, u32 index);
+	u32 (*get_idle_index)(struct vsp_dvfs *vsp);
+	void (*updata_target_freq)(struct vsp_dvfs *vsp, u32 freq, set_freq_type freq_type);
 };
 
 typedef enum {
@@ -100,21 +94,9 @@ typedef enum {
 
 #define MAX_FREQ_LEVEL 8
 
-extern struct list_head vsp_dvfs_head;
+extern const struct ip_dvfs_ops sharkl5pro_vsp_dvfs_ops;
+extern const struct ip_dvfs_ops sharkl5_vsp_dvfs_ops;
+extern const struct ip_dvfs_ops roc1_vsp_dvfs_ops;
 
-#define vsp_dvfs_ops_register(entry) \
-	dvfs_ops_register(entry, &vsp_dvfs_head)
-
-#define vsp_dvfs_ops_attach(str) \
-	dvfs_ops_attach(str, &vsp_dvfs_head)
-
-#if IS_ENABLED(CONFIG_SPRD_APSYS_DVFS_DEVFREQ)
-int vsp_dvfs_notifier_call_chain(void *data);
-#else
-static inline int vsp_dvfs_notifier_call_chain(void *data)
-{
-	return 0;
-}
-#endif
 
 #endif

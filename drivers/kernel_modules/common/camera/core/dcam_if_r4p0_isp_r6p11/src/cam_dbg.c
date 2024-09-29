@@ -200,16 +200,18 @@ static struct file *_open_file_frame_dump(char *path, struct camera_frame *frm,
 	sprintf(path, CAMERA_DUMP_PATH"cam%d_s%d_m%d_%dx%d_frame%d.mipi_raw",
 		ISP_GET_IID(idx), scene, ISP_GET_MID(idx),
 		frm->width, frm->height, frm->fid);
-
+/*add for GKI*/
+/*
 	fp = filp_open(path, O_CREAT|O_RDWR, 0600);
 	if (IS_ERR_OR_NULL(fp)) {
 		pr_err("fail to open file %s, err:%ld\n", path, PTR_ERR(fp));
 		return NULL;
 	}
-
+*/
 	return fp;
 }
-
+/*add for GKI*/
+/*
 static void _write_file_frame_dump(struct file *fp, char *buf, ssize_t size)
 {
 	ssize_t result = 0, ws = 0;
@@ -226,7 +228,7 @@ static void _write_file_frame_dump(struct file *fp, char *buf, ssize_t size)
 		}
 	} while ((result > 0) && (size > 0));
 }
-
+*/
 static void _close_file_frame_dump(struct file *fp)
 {
 	if (!fp)
@@ -272,10 +274,11 @@ static void dump_into_file(enum isp_scene_id scene,
 	fp = _open_file_frame_dump(path, frame, idx, scene);
 	if (!fp)
 		goto exit;
-
+/*add for GKI*/
+/*
 	_write_file_frame_dump(fp, buf, size);
 	_close_file_frame_dump(fp);
-
+*/
 	if (scene == ISP_SCENE_PRE)
 		dump_info->bin_frame = NULL;
 	else if (scene == ISP_SCENE_CAP)

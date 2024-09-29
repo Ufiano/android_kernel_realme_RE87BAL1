@@ -1,5 +1,6 @@
 #define LOG_TAG         "Plat"
 
+#include <uapi/linux/sched/types.h>
 #include "cts_config.h"
 #include "cts_platform.h"
 #include "cts_core.h"
@@ -469,11 +470,11 @@ static void cts_plat_touch_dev_irq_work(struct work_struct *work)
 static int cts_plat_irq_thread_fn(void *arg)
 {
     struct cts_platform_data *pdata = (struct cts_platform_data *)arg;
-    struct sched_param sched_param = { .sched_priority = 4 };
+    struct sched_param sched_param1 = { .sched_priority = 4 };
 
     cts_info("IRQ thread start ...");
 
-    sched_setscheduler(current, SCHED_RR, &sched_param);
+    sched_setscheduler(current, SCHED_RR, &sched_param1);
     do {
         set_current_state(TASK_INTERRUPTIBLE);
         wait_event_interruptible(pdata->irq_waitq_head,
@@ -495,7 +496,7 @@ static int cts_plat_irq_thread_fn(void *arg)
 static int cts_plat_parse_dt(struct cts_platform_data *pdata,
         struct device_node *dev_node)
 {
-    int ret;
+    int ret = 0;
 
     cts_info("Parse device tree");
 
@@ -592,7 +593,7 @@ int cts_init_platform_data(struct cts_platform_data *pdata,
     pdata->spi_client = spi;
     pdata->spi_client->irq = pdata->irq;
 #endif /* CONFIG_CTS_I2C_HOST */
-    rt_mutex_init(&pdata->dev_lock);
+    mutex_init(&pdata->dev_lock);
     spin_lock_init(&pdata->irq_lock);
 
     input_dev = input_allocate_device();

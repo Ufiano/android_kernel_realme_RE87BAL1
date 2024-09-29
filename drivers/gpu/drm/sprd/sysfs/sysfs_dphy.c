@@ -1,32 +1,30 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/pm_runtime.h>
 #include <linux/platform_device.h>
+#include <linux/slab.h>
 #include <linux/sysfs.h>
 
 #include "disp_lib.h"
 #include "sprd_dphy.h"
 #include "sprd_dsi.h"
 #include "sysfs_display.h"
+#include "../dphy/sprd_dphy_api.h"
 
-static int hop_freq;
-static int ssc_en;
-static int ulps_en;
-static u32 input_param[64];
-static u32 read_buf[64];
+struct dphy_sysfs {
+	int hop_freq;
+	int ssc_en;
+	int ulps_en;
+	u32 input_param[64];
+	u32 read_buf[64];
+};
+
+static struct dphy_sysfs *sysfs;
 
 static ssize_t cali_dphy_suspend_store(struct device *dev,
 				struct device_attribute *attr,
@@ -46,30 +44,34 @@ static ssize_t reg_read_store(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf, size_t count)
 {
-	int i;
-	u32 reg;
-	u8 reg_stride;
 	struct sprd_dphy *dphy = dev_get_drvdata(dev);
 	struct dphy_context *ctx = &dphy->ctx;
 	struct regmap *regmap = ctx->regmap;
+	int i;
+	u32 reg;
+	u8 reg_stride;
 
 	if (!regmap)
 		return -ENODEV;
 
 	mutex_lock(&dphy->ctx.lock);
-	if (!dphy->ctx.is_enabled) {
+	if (!dphy->ctx.enabled) {
 		mutex_unlock(&dphy->ctx.lock);
-		pr_err("dphy is not initialized\n");
+		pr_err("dphy is not initialized.\n");
 		return -ENXIO;
 	}
 
-	str_to_u32_array(buf, 0, input_param);
+	str_to_u32_array(buf, 0, sysfs->input_param);
 
 	reg_stride = regmap_get_reg_stride(regmap);
 
-	for (i = 0; i < (input_param[1] ? : 1); i++) {
-		reg = input_param[0] + i * reg_stride;
-		regmap_read(regmap, reg, &read_buf[i]);
+	for (i = 0; i < (sysfs->input_param[1] ? : 1); i++) {
+		if (i >= sizeof(sysfs->read_buf) / 4) {
+			pr_err("%s() read data is overwrite read buf, i = %d\n", __func__, i);
+			break;
+		}
+		reg = sysfs->input_param[0] + i * reg_stride;
+		regmap_read(regmap, reg, &sysfs->read_buf[i]);
 	}
 	mutex_unlock(&dphy->ctx.lock);
 
@@ -80,14 +82,14 @@ static ssize_t reg_read_show(struct device *dev,
 			       struct device_attribute *attr,
 			       char *buf)
 {
+	struct sprd_dphy *dphy = dev_get_drvdata(dev);
+	struct dphy_context *ctx = &dphy->ctx;
+	struct regmap *regmap = ctx->regmap;
+	const char *fmt = NULL;
 	int i;
 	int ret = 0;
 	u8 val_width;
 	u8 reg_stride;
-	const char *fmt = NULL;
-	struct sprd_dphy *dphy = dev_get_drvdata(dev);
-	struct dphy_context *ctx = &dphy->ctx;
-	struct regmap *regmap = ctx->regmap;
 
 	if (!regmap)
 		return -ENODEV;
@@ -110,10 +112,15 @@ static ssize_t reg_read_show(struct device *dev,
 	} else
 		return -ENODEV;
 
-	for (i = 0; i < (input_param[1] ? : 1); i++)
+	for (i = 0; i < (sysfs->input_param[1] ? : 1); i++) {
+		if (i >= sizeof(sysfs->read_buf) / 4) {
+			pr_err("%s() read data is overwrite read buf, i = %d\n", __func__, i);
+			break;
+		}
 		ret += snprintf(buf + ret, PAGE_SIZE, fmt,
-				input_param[0] + i * reg_stride,
-				read_buf[i]);
+				sysfs->input_param[0] + i * reg_stride,
+				sysfs->read_buf[i]);
+	}
 
 	return ret;
 }
@@ -123,30 +130,29 @@ static ssize_t reg_write_store(struct device *dev,
 			struct device_attribute *attr,
 			const char *buf, size_t count)
 {
-	int i, len;
-	u8 reg_stride;
-	u32 reg, val;
 	struct sprd_dphy *dphy = dev_get_drvdata(dev);
 	struct dphy_context *ctx = &dphy->ctx;
 	struct regmap *regmap = ctx->regmap;
+	int i, len;
+	u8 reg_stride;
+	u32 reg, val;
 
 	if (!regmap)
 		return -ENODEV;
 
 	mutex_lock(&dphy->ctx.lock);
-	if (!dphy->ctx.is_enabled) {
+	if (!dphy->ctx.enabled) {
 		mutex_unlock(&dphy->ctx.lock);
 		pr_err("dphy is not initialized\n");
 		return -ENXIO;
 	}
 
-	len = str_to_u32_array(buf, 16, input_param);
-
+	len = str_to_u32_array(buf, 16, sysfs->input_param);
 	reg_stride = regmap_get_reg_stride(regmap);
 
 	for (i = 0; i < len - 1; i++) {
-		reg = input_param[0] + i * reg_stride;
-		val = input_param[1 + i];
+		reg = sysfs->input_param[0] + i * reg_stride;
+		val = sysfs->input_param[1 + i];
 		regmap_write(regmap, reg, val);
 	}
 	mutex_unlock(&dphy->ctx.lock);
@@ -160,7 +166,7 @@ static ssize_t ssc_show(struct device *dev,
 {
 	int ret = 0;
 
-	ret = snprintf(buf, PAGE_SIZE, "%u\n", ssc_en);
+	ret = snprintf(buf, PAGE_SIZE, "%u\n", sysfs->ssc_en);
 
 	return ret;
 }
@@ -169,24 +175,24 @@ static ssize_t ssc_store(struct device *dev,
 			struct device_attribute *attr,
 			const char *buf, size_t count)
 {
-	int ret;
 	struct sprd_dphy *dphy = dev_get_drvdata(dev);
+	int ret;
 
 	mutex_lock(&dphy->ctx.lock);
-	if (!dphy->ctx.is_enabled) {
+	if (!dphy->ctx.enabled) {
 		mutex_unlock(&dphy->ctx.lock);
 		pr_err("dphy is not initialized\n");
 		return -ENXIO;
 	}
 
-	ret = kstrtoint(buf, 10, &ssc_en);
+	ret = kstrtoint(buf, 10, &sysfs->ssc_en);
 	if (ret) {
 		mutex_unlock(&dphy->ctx.lock);
 		pr_err("Invalid input value\n");
 		return -EINVAL;
 	}
 
-	sprd_dphy_ssc_en(dphy, ssc_en);
+	sprd_dphy_ssc_en(dphy, sysfs->ssc_en);
 	mutex_unlock(&dphy->ctx.lock);
 
 	return count;
@@ -198,7 +204,7 @@ static ssize_t hop_show(struct device *dev,
 {
 	int ret = 0;
 
-	ret = snprintf(buf, PAGE_SIZE, "%u\n", hop_freq);
+	ret = snprintf(buf, PAGE_SIZE, "%u\n", sysfs->hop_freq);
 
 	return ret;
 }
@@ -207,19 +213,19 @@ static ssize_t hop_store(struct device *dev,
 			struct device_attribute *attr,
 			const char *buf, size_t count)
 {
-	int ret;
-	int delta;
 	struct sprd_dphy *dphy = dev_get_drvdata(dev);
 	struct dphy_context *ctx = &dphy->ctx;
+	int ret;
+	int delta;
 
 	mutex_lock(&dphy->ctx.lock);
-	if (!dphy->ctx.is_enabled) {
+	if (!dphy->ctx.enabled) {
 		mutex_unlock(&dphy->ctx.lock);
 		pr_err("dphy is not initialized\n");
 		return -ENXIO;
 	}
 
-	ret = kstrtoint(buf, 10, &hop_freq);
+	ret = kstrtoint(buf, 10, &sysfs->hop_freq);
 	if (ret) {
 		mutex_unlock(&dphy->ctx.lock);
 		pr_err("Invalid input freq\n");
@@ -232,13 +238,13 @@ static ssize_t hop_store(struct device *dev,
 	 * Eg: Required freq is 500M
 	 * Equation: 2500*2*1000/10=500*1000=2500*200=500M
 	 */
-	if (hop_freq == 0)
-		hop_freq = ctx->freq;
+	if (sysfs->hop_freq == 0)
+		sysfs->hop_freq = ctx->freq;
 	else
-		hop_freq *= 200;
-	pr_info("input freq is %d\n", hop_freq);
+		sysfs->hop_freq *= 200;
+	pr_info("input freq is %d\n", sysfs->hop_freq);
 
-	delta = hop_freq - ctx->freq;
+	delta = sysfs->hop_freq - ctx->freq;
 	sprd_dphy_hop_config(dphy, delta, 200);
 	mutex_unlock(&dphy->ctx.lock);
 
@@ -251,7 +257,7 @@ static ssize_t ulps_show(struct device *dev,
 {
 	int ret = 0;
 
-	ret = snprintf(buf, PAGE_SIZE, "%u\n", ulps_en);
+	ret = snprintf(buf, PAGE_SIZE, "%u\n", sysfs->ulps_en);
 
 	return ret;
 }
@@ -260,24 +266,24 @@ static ssize_t ulps_store(struct device *dev,
 			struct device_attribute *attr,
 			const char *buf, size_t count)
 {
-	int ret;
 	struct sprd_dphy *dphy = dev_get_drvdata(dev);
+	int ret;
 
 	mutex_lock(&dphy->ctx.lock);
-	if (!dphy->ctx.is_enabled) {
+	if (!dphy->ctx.enabled) {
 		mutex_unlock(&dphy->ctx.lock);
 		pr_err("dphy is not initialized\n");
 		return -ENXIO;
 	}
 
-	ret = kstrtoint(buf, 10, &ulps_en);
+	ret = kstrtoint(buf, 10, &sysfs->ulps_en);
 	if (ret) {
 		mutex_unlock(&dphy->ctx.lock);
 		pr_err("Invalid input freq\n");
 		return -EINVAL;
 	}
 
-	if (ulps_en)
+	if (sysfs->ulps_en)
 		sprd_dphy_ulps_enter(dphy);
 	else
 		sprd_dphy_ulps_exit(dphy);
@@ -290,9 +296,9 @@ static DEVICE_ATTR_RW(ulps);
 static ssize_t freq_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
-	int ret = 0;
 	struct sprd_dphy *dphy = dev_get_drvdata(dev);
 	struct dphy_context *ctx = &dphy->ctx;
+	int ret;
 
 	ret = snprintf(buf, PAGE_SIZE, "%u\n", ctx->freq);
 
@@ -303,10 +309,10 @@ static ssize_t freq_store(struct device *dev,
 			struct device_attribute *attr,
 			const char *buf, size_t count)
 {
-	int ret;
-	int freq;
 	struct sprd_dphy *dphy = dev_get_drvdata(dev);
 	struct dphy_context *ctx = &dphy->ctx;
+	int ret;
+	int freq;
 
 	ret = kstrtoint(buf, 10, &freq);
 	if (ret) {
@@ -332,11 +338,12 @@ static ssize_t suspend_store(struct device *dev,
 				const char *buf, size_t count)
 {
 	struct sprd_dphy *dphy = dev_get_drvdata(dev);
-	struct sprd_dsi *dsi = dev_get_drvdata(dphy->dsi_dev);
+	struct device *dsi_dev = sprd_disp_pipe_get_input(dphy->dev.parent);
+	struct sprd_dsi *dsi = dev_get_drvdata(dsi_dev);
 
-	if ((dsi->ctx.is_inited) && (dphy->ctx.is_enabled)) {
-		sprd_dphy_suspend(dphy);
-		dphy->ctx.is_enabled = false;
+	if ((dsi->ctx.enabled) && (dphy->ctx.enabled)) {
+		sprd_dphy_disable(dphy);
+		dphy->ctx.enabled = false;
 	}
 
 	return count;
@@ -348,11 +355,12 @@ static ssize_t resume_store(struct device *dev,
 				const char *buf, size_t count)
 {
 	struct sprd_dphy *dphy = dev_get_drvdata(dev);
-	struct sprd_dsi *dsi = dev_get_drvdata(dphy->dsi_dev);
+	struct device *dsi_dev = sprd_disp_pipe_get_input(dphy->dev.parent);
+	struct sprd_dsi *dsi = dev_get_drvdata(dsi_dev);
 
-	if ((dsi->ctx.is_inited) && (!dphy->ctx.is_enabled)) {
-		sprd_dphy_resume(dphy);
-		dphy->ctx.is_enabled = true;
+	if ((dsi->ctx.enabled) && (!dphy->ctx.enabled)) {
+		sprd_dphy_enable(dphy);
+		dphy->ctx.enabled = true;
 	}
 
 	return count;
@@ -366,7 +374,7 @@ static ssize_t reset_store(struct device *dev,
 	struct sprd_dphy *dphy = dev_get_drvdata(dev);
 
 	mutex_lock(&dphy->ctx.lock);
-	if (!dphy->ctx.is_enabled) {
+	if (!dphy->ctx.enabled) {
 		mutex_unlock(&dphy->ctx.lock);
 		pr_err("dphy is not initialized\n");
 		return -ENXIO;
@@ -386,7 +394,7 @@ static ssize_t shutdown_store(struct device *dev,
 	struct sprd_dphy *dphy = dev_get_drvdata(dev);
 
 	mutex_lock(&dphy->ctx.lock);
-	if (!dphy->ctx.is_enabled) {
+	if (!dphy->ctx.enabled) {
 		mutex_unlock(&dphy->ctx.lock);
 		pr_err("dphy is not initialized\n");
 		return -ENXIO;
@@ -419,6 +427,11 @@ int sprd_dphy_sysfs_init(struct device *dev)
 {
 	int rc;
 
+	sysfs = kzalloc(sizeof(*sysfs), GFP_KERNEL);
+	if (!sysfs) {
+		pr_err("alloc dphy sysfs failed\n");
+		return -ENOMEM;
+	}
 	rc = sysfs_create_groups(&dev->kobj, dphy_groups);
 	if (rc)
 		pr_err("create dphy attr node failed, rc=%d\n", rc);

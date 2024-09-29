@@ -4,14 +4,15 @@
 #include <linux/sched/clock.h>
 #include <linux/timekeeping.h>
 #include <linux/trusty/smcall.h>
-#include <linux/trusty/trusty.h>
 #include <asm/arch_timer.h>
 
+#include "trusty.h"
+#include <trace/hooks/psci.h>
 
 #ifdef pr_fmt
 #undef pr_fmt
 #endif
-#define pr_fmt(fmt) "sprd-trusty: " fmt
+#define pr_fmt(fmt) "sprd-trusty-pm: " fmt
 
 /*
  * This call synchronizes linux boot time to trusty OS by calling two SMC
@@ -32,7 +33,7 @@ static int trusty_sync_boot_time(void)
 	 * comparing to physical timer counter used in trusty OS.
 	 * The offset between virtual timer and physical timer will be ingored.
 	 */
-	cnt = arch_counter_get_cntvct();
+	cnt = __arch_counter_get_cntvct();
 	ret = trusty_fast_call32(NULL, SMC_FC_SYNC_TIMER_CNT,
 				 (u32)cnt,  (u32)(cnt >> 32), 0);
 	if (ret) {
@@ -64,12 +65,26 @@ static struct syscore_ops trusty_pm_ops = {
 	.resume = trusty_pm_resume,
 };
 
+static void trusty_resident_on_cpu(void *data, int cpu, bool *resident)
+{
+	*resident = !trusty_fast_call32(NULL, SMC_FC_CPU_CAN_DOWN, cpu, 0, 0);
+}
+
+static void trusty_check_cpu_suspend(void *data, u32 state, bool *deny)
+{
+	trusty_resident_on_cpu(NULL, smp_processor_id(), deny);
+}
+
 static int __init trusty_pm_init(void)
 {
 	/* Fist time sync on boot up */
 	trusty_sync_boot_time();
 
 	register_syscore_ops(&trusty_pm_ops);
+
+	/* vendor hooks cannot be unregistered */
+	register_trace_android_vh_psci_tos_resident_on(trusty_resident_on_cpu, NULL);
+	register_trace_android_vh_psci_cpu_suspend(trusty_check_cpu_suspend, NULL);
 
 	return 0;
 }
@@ -81,3 +96,6 @@ static void __exit trusty_pm_exit(void)
 
 module_init(trusty_pm_init);
 module_exit(trusty_pm_exit);
+
+MODULE_DESCRIPTION("Sprd trusty pm driver");
+MODULE_LICENSE("GPL v2");

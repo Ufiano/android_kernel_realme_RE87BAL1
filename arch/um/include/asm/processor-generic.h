@@ -1,6 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /* 
  * Copyright (C) 2000 - 2007 Jeff Dike (jdike@{addtoit,linux.intel}.com)
- * Licensed under the GPL
  */
 
 #ifndef __UM_PROCESSOR_GENERIC_H
@@ -27,7 +27,6 @@ struct thread_struct {
 	struct task_struct *prev_sched;
 	struct arch_thread arch;
 	jmp_buf switch_buf;
-	bool is_running_test;
 	struct {
 		int op;
 		union {
@@ -52,15 +51,17 @@ struct thread_struct {
 	.fault_addr		= NULL, \
 	.prev_sched		= NULL, \
 	.arch			= INIT_ARCH_THREAD, \
-	.request		= { 0 }, \
-	.is_running_test	= false, \
+	.request		= { 0 } \
 }
 
 static inline void release_thread(struct task_struct *task)
 {
 }
 
-#define init_stack	(init_thread_union.stack)
+static inline void mm_copy_segments(struct mm_struct *from_mm,
+				    struct mm_struct *new_mm)
+{
+}
 
 /*
  * User space process size: 3GB (default).

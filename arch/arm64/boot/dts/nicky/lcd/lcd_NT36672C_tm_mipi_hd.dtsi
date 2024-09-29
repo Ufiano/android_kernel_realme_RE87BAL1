@@ -21,11 +21,9 @@
 					sprd,phy-bit-clock = <1158000>;	/* kbps */
 					sprd,phy-escape-clock = <20000>;/* kHz */
 
-					
 					sprd,video-lp-cmd-enable = <1>;
 					sprd,hporch-lp-disable = <1>;
 					sprd,dpi-clk-div = <6>;
-					
 
 					sprd,width-mm = <67>;
 					sprd,height-mm = <153>;

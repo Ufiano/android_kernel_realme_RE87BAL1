@@ -446,9 +446,10 @@ static bool set_short_test_type(struct cts_device *cts_dev, u8 type)
 
 int cts_write_file(struct file *filp, const void *data, size_t size)
 {
-    loff_t  pos;
-    ssize_t ret;
-
+    //loff_t  pos;
+    ssize_t ret = 0;
+	cts_err("%s:for GKI , cancel write  to file ", __func__);
+#if 0
     pos = filp->f_pos;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,14,0)
@@ -460,7 +461,7 @@ int cts_write_file(struct file *filp, const void *data, size_t size)
     if (ret >= 0) {
         filp->f_pos += ret;
     }
-
+#endif
     return ret;
 }
 
@@ -559,11 +560,22 @@ int cts_mkdir_for_file(const char *filepath, umode_t mode)
 struct file *cts_test_data_filp = NULL;
 int cts_start_dump_test_data_to_file(const char *filepath, bool append_to_file)
 {
-    int ret = 0;
+	cts_err("%s:for GKI,cancel save data", __func__);
+	return 0;
+}
+
+void cts_stop_dump_test_data_to_file(void)
+{
+	cts_err("%s:for GKI,cancel save data", __func__);
+	return ;
+}
+#if 0
+int cts_start_dump_test_data_to_file(const char *filepath, bool append_to_file)
+{
+    //int ret = 0;
 
 #define START_BANNER \
         ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n"
-
     cts_info("Start dump test data to file '%s'", filepath);
 
     /*ret = cts_mkdir_for_file(filepath, 0777);
@@ -610,6 +622,7 @@ void cts_stop_dump_test_data_to_file(void)
     }
 #undef END_BANNER
 }
+#endif
 
 static void cts_dump_tsdata(struct cts_device *cts_dev,
         const char *desc, const u16 *data, bool to_console)

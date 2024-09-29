@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  *  Universal power supply monitor class
  *
@@ -6,8 +7,6 @@
  *  Copyright © 2003  Ian Molton <spyro@f2s.com>
  *
  *  Modified: 2004, Oct     Szabolcs Gyurko
- *
- *  You may use this code as per GPL version 2
  */
 
 #ifndef __LINUX_POWER_SUPPLY_H__
@@ -18,7 +17,7 @@
 #include <linux/leds.h>
 #include <linux/spinlock.h>
 #include <linux/notifier.h>
-#include <linux/types.h>
+#include <linux/android_kabi.h>
 
 /*
  * All voltages, currents, charges, energies, time and temperatures in uV,
@@ -41,11 +40,21 @@ enum {
 	POWER_SUPPLY_STATUS_FULL,
 };
 
+/* What algorithm is the charger using? */
 enum {
 	POWER_SUPPLY_CHARGE_TYPE_UNKNOWN = 0,
 	POWER_SUPPLY_CHARGE_TYPE_NONE,
-	POWER_SUPPLY_CHARGE_TYPE_TRICKLE,
-	POWER_SUPPLY_CHARGE_TYPE_FAST,
+	POWER_SUPPLY_CHARGE_TYPE_TRICKLE,	/* slow speed */
+	POWER_SUPPLY_CHARGE_TYPE_FAST,		/* fast speed */
+	POWER_SUPPLY_CHARGE_TYPE_STANDARD,	/* normal speed */
+	POWER_SUPPLY_CHARGE_TYPE_ADAPTIVE,	/* dynamically adjusted speed */
+	POWER_SUPPLY_CHARGE_TYPE_CUSTOM,	/* use CHARGE_CONTROL_* props */
+
+	/*
+	 * force to 50 to minimize the chances of userspace binary
+	 * incompatibility on newer upstream kernels
+	 */
+	POWER_SUPPLY_CHARGE_TYPE_TAPER = 50, 	/* charging in CV phase */
 };
 
 enum {
@@ -59,6 +68,7 @@ enum {
 	POWER_SUPPLY_HEALTH_WATCHDOG_TIMER_EXPIRE,
 	POWER_SUPPLY_HEALTH_SAFETY_TIMER_EXPIRE,
 	POWER_SUPPLY_HEALTH_OVERCURRENT,
+	POWER_SUPPLY_HEALTH_CALIBRATION_REQUIRED,
 	POWER_SUPPLY_HEALTH_WARM,
 	POWER_SUPPLY_HEALTH_COOL,
 	POWER_SUPPLY_HEALTH_HOT,
@@ -107,7 +117,6 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_VOLTAGE_AVG,
 	POWER_SUPPLY_PROP_VOLTAGE_OCV,
 	POWER_SUPPLY_PROP_VOLTAGE_BOOT,
-	POWER_SUPPLY_PROP_BATID_VOLT,
 	POWER_SUPPLY_PROP_CURRENT_MAX,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_CURRENT_AVG,
@@ -126,11 +135,12 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE,
 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE_MAX,
 	POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT,
-	POWER_SUPPLY_PROP_RUNIN_STOP,
-	POWER_SUPPLY_PROP_SHIP_MODE,
 	POWER_SUPPLY_PROP_CHARGE_CONTROL_LIMIT_MAX,
+	POWER_SUPPLY_PROP_CHARGE_CONTROL_START_THRESHOLD, /* in percents! */
+	POWER_SUPPLY_PROP_CHARGE_CONTROL_END_THRESHOLD, /* in percents! */
 	POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
-	POWER_SUPPLY_PROP_INPUT_CURRENT_NOW,
+	POWER_SUPPLY_PROP_INPUT_VOLTAGE_LIMIT,
+	POWER_SUPPLY_PROP_INPUT_POWER_LIMIT,
 	POWER_SUPPLY_PROP_ENERGY_FULL_DESIGN,
 	POWER_SUPPLY_PROP_ENERGY_EMPTY_DESIGN,
 	POWER_SUPPLY_PROP_ENERGY_FULL,
@@ -140,6 +150,7 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_CAPACITY, /* in percents! */
 	POWER_SUPPLY_PROP_CAPACITY_ALERT_MIN, /* in percents! */
 	POWER_SUPPLY_PROP_CAPACITY_ALERT_MAX, /* in percents! */
+	POWER_SUPPLY_PROP_CAPACITY_ERROR_MARGIN, /* in percents! */
 	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
 	POWER_SUPPLY_PROP_TEMP,
 	POWER_SUPPLY_PROP_TEMP_MAX,
@@ -153,34 +164,15 @@ enum power_supply_property {
 	POWER_SUPPLY_PROP_TIME_TO_EMPTY_AVG,
 	POWER_SUPPLY_PROP_TIME_TO_FULL_NOW,
 	POWER_SUPPLY_PROP_TIME_TO_FULL_AVG,
-	POWER_SUPPLY_PROP_NOTIFY_CODE,
-	POWER_SUPPLY_PROP_FAST_CHARGE_SUPPORT,
 	POWER_SUPPLY_PROP_TYPE, /* use power_supply.type instead */
 	POWER_SUPPLY_PROP_USB_TYPE,
-	POWER_SUPPLY_PROP_WIRELESS_TYPE,
 	POWER_SUPPLY_PROP_SCOPE,
 	POWER_SUPPLY_PROP_PRECHARGE_CURRENT,
 	POWER_SUPPLY_PROP_CHARGE_TERM_CURRENT,
 	POWER_SUPPLY_PROP_CALIBRATE,
-	// otg_switch,1:open otg;0:close otg!
-	POWER_SUPPLY_PROP_OTG_SWITCHER,
-	POWER_SUPPLY_PROP_USB_TYPE_ROLE,
-	POWER_SUPPLY_PROP_TYPEC_CC_POLARITY,
-	POWER_SUPPLY_PROP_IS_FAST_CHARGER,
-	POWER_SUPPLY_PROP_MAIN_CHARGER_CURRENT,
-	POWER_SUPPLY_PROP_SECOND_CHARGER_CURRENT,
-	POWER_SUPPLY_PROP_IS_FACTORY_MODE,
-	POWER_SUPPLY_PROP_COOL_DOWN,
-	POWER_SUPPLY_PROP_FEED_WATCHDOG,
-	/* Local extensions */
-	POWER_SUPPLY_PROP_USB_HC,
-	POWER_SUPPLY_PROP_USB_OTG,
-	POWER_SUPPLY_PROP_CHARGE_ENABLED,
-	POWER_SUPPLY_PROP_ENABLE_SAFTY_TIMER,
-	POWER_SUPPLY_PROP_SET_HIZ_MODE,
-	POWER_SUPPLY_PROP_DUMP_REGISTER,
-	/* Local extensions of type int64_t */
-	POWER_SUPPLY_PROP_CHARGE_COUNTER_EXT,
+	POWER_SUPPLY_PROP_MANUFACTURE_YEAR,
+	POWER_SUPPLY_PROP_MANUFACTURE_MONTH,
+	POWER_SUPPLY_PROP_MANUFACTURE_DAY,
 	/* Properties of type `const char *' */
 	POWER_SUPPLY_PROP_MODEL_NAME,
 	POWER_SUPPLY_PROP_MANUFACTURER,
@@ -200,9 +192,7 @@ enum power_supply_type {
 	POWER_SUPPLY_TYPE_USB_PD,		/* Power Delivery Port */
 	POWER_SUPPLY_TYPE_USB_PD_DRP,		/* PD Dual Role Port */
 	POWER_SUPPLY_TYPE_APPLE_BRICK_ID,	/* Apple Charging Method */
-	POWER_SUPPLY_TYPE_USB_SFCP_1P0,		/* SFCP1.0 Port*/
-	POWER_SUPPLY_TYPE_USB_SFCP_2P0,		/* SFCP2.0 Port*/
-	POWER_SUPPLY_TYPE_WIRELESS,             /* wireless charger*/
+	POWER_SUPPLY_TYPE_WIRELESS,		/* Wireless */
 };
 
 enum power_supply_usb_type {
@@ -216,27 +206,7 @@ enum power_supply_usb_type {
 	POWER_SUPPLY_USB_TYPE_PD_DRP,		/* PD Dual Role Port */
 	POWER_SUPPLY_USB_TYPE_PD_PPS,		/* PD Programmable Power Supply */
 	POWER_SUPPLY_USB_TYPE_APPLE_BRICK_ID,	/* Apple Charging Method */
-	POWER_SUPPLY_USB_TYPE_SFCP_1P0,		/* SFCP1.0 Port*/
-	POWER_SUPPLY_USB_TYPE_SFCP_2P0,		/* SFCP2.0 Port*/
-	POWER_SUPPLY_USB_TYPE_QC2,		/* Quick Charger 2.0 Port */
-};
-
-enum power_supply_wireless_type {
-	POWER_SUPPLY_WIRELESS_TYPE_UNKNOWN = 0x20,
-	POWER_SUPPLY_WIRELESS_TYPE_BPP,		/* Standard wireless bpp mode */
-	POWER_SUPPLY_WIRELESS_TYPE_EPP,		/* Standard wireless epp mode */
-};
-
-enum power_supply_charge_type {
-	USB_CHARGE_TYPE_NORMAL = 0,		/* Charging Power <= 10W*/
-	USB_CHARGE_TYPE_FAST,			/* 10W < Charging Power <= 20W */
-	USB_CHARGE_TYPE_FLASH,			/* 20W < Charging Power <= 30W */
-	USB_CHARGE_TYPE_TURBE,			/* 30W < Charging Power <= 50W */
-	USB_CHARGE_TYPE_SUPER,			/* Charging Power > 50W */
-	WIRELESS_CHARGE_TYPE_NORMAL,
-	WIRELESS_CHARGE_TYPE_FAST,
-	WIRELESS_CHARGE_TYPE_FLASH,
-	CHARGE_MAX,
+	//POWER_SUPPLY_USB_TYPE_QC2,		/* Quick Charger 2.0 Port */
 };
 
 enum power_supply_notifier_events {
@@ -246,7 +216,6 @@ enum power_supply_notifier_events {
 union power_supply_propval {
 	int intval;
 	const char *strval;
-	int64_t int64val;
 };
 
 struct device_node;
@@ -260,8 +229,13 @@ struct power_supply_config {
 	/* Driver private data */
 	void *drv_data;
 
+	/* Device specific sysfs attributes */
+	const struct attribute_group **attr_grp;
+
 	char **supplied_to;
 	size_t num_supplicants;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /* Description of power supply */
@@ -303,6 +277,8 @@ struct power_supply_desc {
 	bool no_thermal;
 	/* For APM emulation, think legacy userspace. */
 	int use_for_apm;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 struct power_supply {
@@ -344,6 +320,8 @@ struct power_supply {
 	struct led_trigger *charging_blink_full_solid_trig;
 	char *charging_blink_full_solid_trig_name;
 #endif
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /*
@@ -370,40 +348,9 @@ struct power_supply_battery_ocv_table {
 	int capacity;	/* percent */
 };
 
-struct power_supply_vol_temp_table {
-	int vol;	/* microVolts */
-	int temp;	/* celsius */
-};
-
-struct power_supply_capacity_temp_table {
-	int temp;	/* celsius */
-	int cap;	/* capacity percentage */
-};
-
 struct power_supply_resistance_temp_table {
 	int temp;	/* celsius */
-	int resistance;	/* internal resistance percentage */
-};
-
-struct power_supply_charge_current {
-	int sdp_limit;
-	int sdp_cur;
-	int dcp_limit;
-	int dcp_cur;
-	int cdp_limit;
-	int cdp_cur;
-	int aca_limit;
-	int aca_cur;
-	int unknown_limit;
-	int unknown_cur;
-	int fchg_limit;
-	int fchg_cur;
-	int flash_limit;
-	int flash_cur;
-	int wl_bpp_cur;
-	int wl_bpp_limit;
-	int wl_epp_cur;
-	int wl_epp_limit;
+	int resistance;	/* internal resistance percent */
 };
 
 #define POWER_SUPPLY_OCV_TEMP_MAX 20
@@ -421,6 +368,7 @@ struct power_supply_battery_info {
 	int energy_full_design_uwh;	    /* microWatt-hours */
 	int charge_full_design_uah;	    /* microAmp-hours */
 	int voltage_min_design_uv;	    /* microVolts */
+	int voltage_max_design_uv;	    /* microVolts */
 	int precharge_current_ua;	    /* microAmps */
 	int charge_term_current_ua;	    /* microAmps */
 	int constant_charge_current_max_ua; /* microAmps */
@@ -429,14 +377,10 @@ struct power_supply_battery_info {
 	int ocv_temp[POWER_SUPPLY_OCV_TEMP_MAX];/* celsius */
 	struct power_supply_battery_ocv_table *ocv_table[POWER_SUPPLY_OCV_TEMP_MAX];
 	int ocv_table_size[POWER_SUPPLY_OCV_TEMP_MAX];
-	struct power_supply_vol_temp_table *temp_table;
-	struct power_supply_capacity_temp_table *cap_table;
-	struct power_supply_resistance_temp_table *resistance_table;
-	int temp_table_size;
-	int cap_table_size;
-	int resistance_table_size;
-	struct power_supply_charge_current cur;
-	int fchg_ocv_threshold;
+	struct power_supply_resistance_temp_table *resist_table;
+	int resist_table_size;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 extern struct atomic_notifier_head power_supply_notifier;
@@ -447,19 +391,29 @@ extern void power_supply_put(struct power_supply *psy);
 #ifdef CONFIG_OF
 extern struct power_supply *power_supply_get_by_phandle(struct device_node *np,
 							const char *property);
+extern int power_supply_get_by_phandle_array(struct device_node *np,
+					     const char *property,
+					     struct power_supply **psy,
+					     ssize_t size);
 extern struct power_supply *devm_power_supply_get_by_phandle(
 				    struct device *dev, const char *property);
 #else /* !CONFIG_OF */
 static inline struct power_supply *
 power_supply_get_by_phandle(struct device_node *np, const char *property)
 { return NULL; }
+static inline int
+power_supply_get_by_phandle_array(struct device_node *np,
+				  const char *property,
+				  struct power_supply **psy,
+				  int size)
+{ return 0; }
 static inline struct power_supply *
 devm_power_supply_get_by_phandle(struct device *dev, const char *property)
 { return NULL; }
 #endif /* CONFIG_OF */
 
 extern int power_supply_get_battery_info(struct power_supply *psy,
-					 struct power_supply_battery_info *info, int num);
+					 struct power_supply_battery_info *info);
 extern void power_supply_put_battery_info(struct power_supply *psy,
 					  struct power_supply_battery_info *info);
 extern int power_supply_ocv2cap_simple(struct power_supply_battery_ocv_table *table,
@@ -469,6 +423,9 @@ power_supply_find_ocv2cap_table(struct power_supply_battery_info *info,
 				int temp, int *table_len);
 extern int power_supply_batinfo_ocv2cap(struct power_supply_battery_info *info,
 					int ocv, int temp);
+extern int
+power_supply_temp2resist_simple(struct power_supply_resistance_temp_table *table,
+				int table_len, int temp);
 extern void power_supply_changed(struct power_supply *psy);
 extern int power_supply_am_i_supplied(struct power_supply *psy);
 extern int power_supply_set_input_current_limit_from_supplier(
@@ -509,6 +466,8 @@ devm_power_supply_register_no_ws(struct device *parent,
 				 const struct power_supply_config *cfg);
 extern void power_supply_unregister(struct power_supply *psy);
 extern int power_supply_powers(struct power_supply *psy, struct device *dev);
+
+#define to_power_supply(device) container_of(device, struct power_supply, dev)
 
 extern void *power_supply_get_drvdata(struct power_supply *psy);
 /* For APM emulation, think legacy userspace. */
@@ -567,5 +526,18 @@ static inline bool power_supply_is_watt_property(enum power_supply_property psp)
 
 	return 0;
 }
+
+#ifdef CONFIG_POWER_SUPPLY_HWMON
+int power_supply_add_hwmon_sysfs(struct power_supply *psy);
+void power_supply_remove_hwmon_sysfs(struct power_supply *psy);
+#else
+static inline int power_supply_add_hwmon_sysfs(struct power_supply *psy)
+{
+	return 0;
+}
+
+static inline
+void power_supply_remove_hwmon_sysfs(struct power_supply *psy) {}
+#endif
 
 #endif /* __LINUX_POWER_SUPPLY_H__ */

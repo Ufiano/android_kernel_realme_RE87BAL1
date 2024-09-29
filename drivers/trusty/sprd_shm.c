@@ -26,10 +26,9 @@
 #include <linux/uaccess.h>
 #include "sprd_shm.h"
 
-#ifdef CONFIG_TRUSTY
 #include <linux/trusty/smcall.h>
-#include <linux/trusty/trusty.h>
-#endif
+#include <trusty.h>
+
 
 #define TSHM_KERN_POOL_ORDER (3)
 #define TSHM_USER_POOL_ORDER  (PAGE_SHIFT)
@@ -274,11 +273,6 @@ static void *tshm_dma_buf_map(struct dma_buf *dmabuf, unsigned long page)
 	return NULL;
 }
 
-static void *tshm_dma_buf_map_atomic(struct dma_buf *dmabuf, unsigned long page)
-{
-	return NULL;
-}
-
 static void tshm_dma_buf_release(struct dma_buf *dmabuf)
 {
 	struct tshm *shm = dmabuf->priv;
@@ -298,7 +292,6 @@ static int tshm_dma_buf_mmap(struct dma_buf *dmabuf, struct vm_area_struct *vma)
 static const struct dma_buf_ops tshm_dma_buf_ops = {
 	.map_dma_buf = tshm_dma_buf_map_dma_buf,
 	.unmap_dma_buf = tshm_dma_buf_unmap,
-	.map_atomic = tshm_dma_buf_map_atomic,
 	.map = tshm_dma_buf_map,
 	.mmap = tshm_dma_buf_mmap,
 	.release = tshm_dma_buf_release,

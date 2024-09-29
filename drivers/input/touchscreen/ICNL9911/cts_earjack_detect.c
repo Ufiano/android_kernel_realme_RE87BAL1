@@ -5,6 +5,7 @@
 #include "cts_core.h"
 #include "cts_sysfs.h"
 
+
 #ifdef CONFIG_CTS_EARJACK_DETECT
 struct cts_earjack_detect_data {
     bool enable;
@@ -128,13 +129,15 @@ static int stop_earjack_detect(struct cts_earjack_detect_data *ed_data)
     return 0;
 }
 
+#if 0
 static int get_earjack_state(struct cts_earjack_detect_data *ed_data)
 {
+
     struct file *file = NULL;
     loff_t pos = 0;
     int    ret, read_size;
     char   buff[10];
-    u32    state;
+    u32    state = 0;
 
     cts_dbg("Get state from file '%s'",
         ed_data->earjack_state_filepath);
@@ -179,6 +182,13 @@ static int get_earjack_state(struct cts_earjack_detect_data *ed_data)
     cts_dbg("State: %s", earjack_state_str(ed_data->state));
 
     return 0;
+}
+#endif
+static int get_earjack_state(struct cts_earjack_detect_data *ed_data)
+{
+	ed_data->state = earjack_state;
+	cts_err("State: %s", earjack_state_str(ed_data->state));
+	return 0;
 }
 
 /* Sysfs */

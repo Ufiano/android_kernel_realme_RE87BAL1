@@ -1,17 +1,3 @@
-/*
- * Trusty Virtio driver
- *
- * Copyright (C) 2015 Google, Inc.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
 #include <linux/device.h>
 #include <linux/err.h>
 #include <linux/kernel.h>
@@ -21,19 +7,22 @@
 #include <linux/notifier.h>
 #include <linux/workqueue.h>
 #include <linux/remoteproc.h>
-
 #include <linux/platform_device.h>
-#include <linux/trusty/smcall.h>
-#include <linux/trusty/trusty.h>
-
 #include <linux/virtio.h>
 #include <linux/virtio_config.h>
 #include <linux/virtio_ids.h>
 #include <linux/virtio_ring.h>
-
 #include <linux/atomic.h>
+#include <linux/trusty/smcall.h>
+#include "trusty.h"
+
+#ifdef pr_fmt
+#undef pr_fmt
+#endif
+#define pr_fmt(fmt) "sprd-trusty-virtio: " fmt
 
 #define  RSC_DESCR_VER  1
+
 
 struct trusty_vdev;
 
@@ -132,6 +121,7 @@ static void kick_vqs(struct work_struct *work)
 	list_for_each_entry(tvdev, &tctx->vdev_list, node) {
 		for (i = 0; i < tvdev->vring_num; i++) {
 			struct trusty_vring *tvr = &tvdev->vrings[i];
+
 			if (atomic_xchg(&tvr->needs_kick, 0))
 				kick_vq(tctx, tvdev, tvr);
 		}
@@ -219,6 +209,7 @@ static void trusty_virtio_reset(struct virtio_device *vdev)
 static u64 trusty_virtio_get_features(struct virtio_device *vdev)
 {
 	struct trusty_vdev *tvdev = vdev_to_tvdev(vdev);
+
 	return tvdev->vdev_descr->dfeatures;
 }
 
@@ -227,15 +218,15 @@ static int trusty_virtio_finalize_features(struct virtio_device *vdev)
 	struct trusty_vdev *tvdev = vdev_to_tvdev(vdev);
 
 	/* Make sure we don't have any features > 32 bits! */
-	BUG_ON((u32)vdev->features != vdev->features);
+	WARN_ON((u32)vdev->features != vdev->features);
 
 	tvdev->vdev_descr->gfeatures = vdev->features;
 	return 0;
 }
 
 static void trusty_virtio_get_config(struct virtio_device *vdev,
-				     unsigned offset, void *buf,
-				     unsigned len)
+				     unsigned int offset, void *buf,
+				     unsigned int len)
 {
 	struct trusty_vdev *tvdev = vdev_to_tvdev(vdev);
 
@@ -249,8 +240,8 @@ static void trusty_virtio_get_config(struct virtio_device *vdev,
 }
 
 static void trusty_virtio_set_config(struct virtio_device *vdev,
-				     unsigned offset, const void *buf,
-				     unsigned len)
+				     unsigned int offset, const void *buf,
+				     unsigned int len)
 {
 	dev_dbg(&vdev->dev, "%s\n", __func__);
 }
@@ -258,12 +249,14 @@ static void trusty_virtio_set_config(struct virtio_device *vdev,
 static u8 trusty_virtio_get_status(struct virtio_device *vdev)
 {
 	struct trusty_vdev *tvdev = vdev_to_tvdev(vdev);
+
 	return tvdev->vdev_descr->status;
 }
 
 static void trusty_virtio_set_status(struct virtio_device *vdev, u8 status)
 {
 	struct trusty_vdev *tvdev = vdev_to_tvdev(vdev);
+
 	tvdev->vdev_descr->status = status;
 }
 
@@ -298,7 +291,7 @@ static void trusty_virtio_del_vqs(struct virtio_device *vdev)
 
 
 static struct virtqueue *_find_vq(struct virtio_device *vdev,
-				  unsigned id,
+				  unsigned int id,
 				  void (*callback)(struct virtqueue *vq),
 				  const char *name)
 {
@@ -336,23 +329,14 @@ static struct virtqueue *_find_vq(struct virtio_device *vdev,
 	/* da field is only 32 bit wide. Use previously unused 'reserved' field
 	 * to store top 32 bits of 64-bit address
 	 */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
 	tvr->vr_descr->pa = high_4bytes;
-#else
-	tvr->vr_descr->reserved = high_4bytes;
-#endif
 
 	dev_info(&vdev->dev, "vring%d: va(pa)  %p(%llx) qsz %d notifyid %d\n",
 		 id, tvr->vaddr, (u64)tvr->paddr, tvr->elem_num, tvr->notifyid);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
+
 	tvr->vq = vring_new_virtqueue(id, tvr->elem_num, tvr->align,
 				      vdev, true, true, tvr->vaddr,
 				      trusty_virtio_notify, callback, name);
-#else
-	tvr->vq = vring_new_virtqueue(id, tvr->elem_num, tvr->align,
-				      vdev, true, tvr->vaddr,
-				      trusty_virtio_notify, callback, name);
-#endif
 	if (!tvr->vq) {
 		dev_err(&vdev->dev, "vring_new_virtqueue %s failed\n",
 			name);
@@ -369,19 +353,11 @@ err_new_virtqueue:
 	return ERR_PTR(-ENOMEM);
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
-static int trusty_virtio_find_vqs(struct virtio_device *vdev, unsigned nvqs,
+static int trusty_virtio_find_vqs(struct virtio_device *vdev, unsigned int nvqs,
 				  struct virtqueue *vqs[],
 				  vq_callback_t *callbacks[],
 				  const char * const names[], const bool *ctx,
 				  struct irq_affinity *desc)
-#else
-
-static int trusty_virtio_find_vqs(struct virtio_device *vdev, unsigned nvqs,
-				  struct virtqueue *vqs[],
-				  vq_callback_t *callbacks[],
-				  const char * const names[])
-#endif
 {
 	uint i;
 	int ret;
@@ -449,6 +425,7 @@ static int trusty_virtio_add_device(struct trusty_ctx *tctx,
 
 	for (i = 0; i < tvdev->vring_num; i++, vr_descr++) {
 		struct trusty_vring *tvr = &tvdev->vrings[i];
+
 		tvr->tvdev    = tvdev;
 		tvr->vr_descr = vr_descr;
 		tvr->align    = vr_descr->align;
@@ -657,10 +634,9 @@ static int trusty_virtio_probe(struct platform_device *pdev)
 	dev_info(&pdev->dev, "initializing\n");
 
 	tctx = kzalloc(sizeof(*tctx), GFP_KERNEL);
-	if (!tctx) {
-		dev_err(&pdev->dev, "Failed to allocate context\n");
+
+	if (!tctx)
 		return -ENOMEM;
-	}
 
 	tctx->dev = &pdev->dev;
 	tctx->call_notifier.notifier_call = trusty_call_notify;
@@ -673,7 +649,6 @@ static int trusty_virtio_probe(struct platform_device *pdev)
 	tctx->check_wq = alloc_workqueue("trusty-check-wq", WQ_UNBOUND, 0);
 	if (!tctx->check_wq) {
 		ret = -ENODEV;
-		dev_err(&pdev->dev, "Failed create trusty-check-wq\n");
 		goto err_create_check_wq;
 	}
 
@@ -734,17 +709,17 @@ static int trusty_virtio_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id trusty_of_match[] = {
-	{.compatible = "android,trusty-virtio-v1",},
+	{ .compatible = "sprd,trusty-virtio-v1", },
 	{},
 };
 
 MODULE_DEVICE_TABLE(of, trusty_of_match);
 
-static struct platform_driver trusty_virtio_driver = {
+struct platform_driver trusty_virtio_driver = {
 	.probe = trusty_virtio_probe,
 	.remove = trusty_virtio_remove,
 	.driver = {
-		.name = "trusty-virtio",
+		.name = "sprd-trusty-virtio",
 		.owner = THIS_MODULE,
 		.of_match_table = trusty_of_match,
 	},

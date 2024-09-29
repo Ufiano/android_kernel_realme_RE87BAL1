@@ -1,9 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * SPRD CPU USAGE TOOL:
- *    1. cpu usage per real-cpu & total
- *    2. cpu usage per thread
- *    3. cpu system info per real-cpu & total:
- *		contextswitch, pagefault, pagemajfault per cpu & total
+ * sprd/debug/cpu_usage
  */
 #include <linux/init.h>
 #include <linux/module.h>
@@ -12,156 +9,111 @@
 #include <linux/fs.h>
 #include <linux/debugfs.h>
 #include <linux/seq_file.h>
-#include <linux/interrupt.h>
 #include <linux/kernel_stat.h>
 #include <linux/sched.h>
 #include <linux/slab.h>
 #include <linux/time.h>
 #include <linux/hrtimer.h>
-#include <linux/irqnr.h>
 #include <linux/tick.h>
 #include <linux/threads.h>
-#include <linux/spinlock.h>
 #include <linux/rtc.h>
-#include <linux/uaccess.h>
 #include <asm/div64.h>
 #include <../../../kernel/sched/sched.h>
 #ifdef CONFIG_VM_EVENT_COUNTERS
-#include <linux/mm.h>
 #include <linux/vmstat.h>
 #endif
 #include "../sprd_debugfs.h"
 
-/*
- * Macros Definitions:
- * ----------------------------------------------
- * ns_2_ms     : change ns to ms
- * bufferid    : id for thread_cpuinfo.rec[id] and g_rec[id]
- */
-#define NR_REC 3
-#define bufferid(index) ((index) % (NR_REC))
-#define nextid(index) (((index) + 1) % (NR_REC))
-#define ns_2_ms(time) (do_div(time, 1000000))
+#define NR_RECORD 3
+#define HRTIMER_INTERVAL 10
+#define MAX_SIZE_A_LOG	32
+#define LOG_BUFF_SIZE	256
+#define BUFF_ID(idx)	((idx) % (NR_RECORD))
+#define NEXT_ID(idx)	BUFF_ID((idx) + 1)
+#define ns_to_ms(time)	(do_div(time, NSEC_PER_MSEC))
+#define ns_to_us(time)  (do_div(time, NSEC_PER_USEC))
 #define unused(x) ((void)(x))
 
 /*
- * CpuInfo Structure Per Thread:
- * ----------------------------------------------
- * 1. Located at each-thread stack area, beside threadinfo struct:
- *  HIGH ADDR ---> Thread Stack End.
- *   |--------------------------
- *   |    ...
- *   |    stack
- *   |    ...
- *   |--------------------------
- *   |    thread_cpuinfo
- *   |--------------------------
- *   |    thread_info
- *   |--------------------------
- *  LOW ADDR ---> Thread Stack Start.
- *
- * 2. Cpu Threadinfo:
- *   index : for update;
- *   start : utime stime start record;
- *   rec[] : ringbuffer --> size according to NR_REC;
+ * struct task_struct defined in linux/sched.h
+ *   u64  utime;
+ *   u64  stime;
  */
-struct thread_cpuinfo {
-	ulong index;
-	struct u_s_time {
-		u64 ut;
-		u64 st;
-	} start, rec[NR_REC];
+struct sprd_thread_time {
+	u64	ut;
+	u64	st;
 };
 
-/*
- * Cpu Info Structure:
- * ----------------------------------------------
- *   user    : user usage, percentage;
- *   nice    : nice usage, percentage;
- *   system  : system usage, percentage;
- *   softirq : softirq usage, percentage;
- *   irq     : irq usage, percentage;
- *   idle    : idle usage, percentage;
- *   iowait  : iowait usage, percentage;
- *   steal   : steal usage, percentage;
- *   sum     : sum usage, percentage;
- *   ------------------------------------
- *   nr_cs   : context switch count;
- *   nr_pf   : page fault count;
- *   nr_pmf  : page majfault count;
- */
-struct cpu_usage_info {
-	u64 user;
-	u64 nice;
-	u64 system;
-	u64 softirq;
-	u64 irq;
-	u64 idle;
-	u64 iowait;
-	u64 steal;
-	u64 sum;
-	u64 nr_cs;
+/* === thread info kept on stack === */
+struct sprd_thread_info {
+	/* arm:   int<4> long<4>
+	 * arm64: int<4> long<8>*/
+	ulong	idx;
+	struct sprd_thread_time	start;
+	struct sprd_thread_time	delta[NR_RECORD];
+};
+
+struct sprd_cpu_stat {
+	struct kernel_cpustat k;
+	u64	sum;
+	u64	nr_switches;
 #ifdef CONFIG_VM_EVENT_COUNTERS
-	ulong nr_pf;
-	ulong nr_pmf;
+	unsigned long	nr_pgfault;
+	unsigned long	nr_pgmajfault;
 #endif
 };
 
-/*
- * Time Stamp Structure:
- * ----------------------------------------------
- *  1. ns_start : this record start cpu clock
- *     ns_end   : this record end cpu clock
- *  2. ts_start :
- *     ts_end   :
- *  3. tm_start :
- *     tm_end   :
- */
-struct time_stamp {
+struct sprd_time_info {
 	u64 ns_start;
 	u64 ns_end;
 	struct timespec ts_start;
 	struct timespec ts_end;
-	struct rtc_time tm_start;
-	struct rtc_time tm_end;
+	struct rtc_time rtc_start;
+	struct rtc_time rtc_end;
 };
 
-/*
- * Recorder Structure:
- * ----------------------------------------------
- * 1. percpu : each cpu cpuinfo
- * 2. total  : total cpu_info
- * 3. ts     : timestamp for this record
- */
-struct cpu_recorder {
-	struct cpu_usage_info percpu[NR_CPUS];
-	struct cpu_usage_info total;
-	struct time_stamp ts;
+struct sprd_cpu_info {
+	struct sprd_cpu_stat cpu[NR_CPUS];
+	struct sprd_cpu_stat all;
+	struct sprd_time_info time;
 };
 
-/*
- * Global Data:
- * ----------------------------------------------
- * 1. hrtimer     : hrtimer every hrtimer_se
- * 2. global_id   : current id for g_rec and per thread
- * 3. usage_lock  : spinlock for update & print
- * 4. g_rec       : NR_REC records, each hrtimer_se cpu usage
- */
-static long hrtimer_se = 10;
-static struct hrtimer stat_hrtimer;
-static ulong global_id;
-static DEFINE_SPINLOCK(usage_lock);
-static struct cpu_recorder g_rec[NR_REC];
-static struct cpu_usage_info info_saved[NR_CPUS];
-static struct timespec ts_saved;
-static u64 ns_saved;
+/* === cpu usage struct === */
+struct sprd_cpu_usage {
+	spinlock_t lock;
+	struct sprd_cpu_info info[NR_RECORD];
+	struct sprd_cpu_info cat;
 
-/*
- * Functions Start
- * ----------------------------------------------
- * now divider is clock_t or ms, need u64?
- */
-static void _ratio_calc(const u64 dividend, const u64 divider, ulong *result)
+	/* idx++ when hrtimer interval */
+	unsigned long idx;
+	unsigned int interval;
+	struct hrtimer hrtimer;
+
+	struct sprd_cpu_stat cpu_last[NR_CPUS];
+	struct timespec ts_last;
+	u64 ns_last;
+
+	char *buf;
+	int offset;
+
+	unsigned int cating;
+	unsigned int ticking;
+};
+
+static char stat_table[] = {
+	CPUTIME_IDLE,
+	CPUTIME_USER,
+	CPUTIME_SYSTEM,
+	CPUTIME_NICE,
+	CPUTIME_IOWAIT,
+	CPUTIME_IRQ,
+	CPUTIME_SOFTIRQ,
+	CPUTIME_STEAL
+};
+
+static struct sprd_cpu_usage *p_sprd_cpu_usage;
+
+static void _ratio_calc(u64 dividend, u64 divider, ulong *result)
 {
 	u64 tmp;
 
@@ -171,486 +123,519 @@ static void _ratio_calc(const u64 dividend, const u64 divider, ulong *result)
 	}
 
 	/*save result as xx.xx% */
+#if BITS_PER_LONG == 64
+	tmp = 10000 * dividend;
+	tmp = tmp / divider;
+
+	result[1] = (ulong)(tmp % 100);
+	result[0] = (ulong)(tmp / 100);
+#elif BITS_PER_LONG == 32
+	/* convert ns to us, then 32 bits is enough for 10s */
+	ns_to_us(dividend);
+	ns_to_us(divider);
+
 	tmp = 10000 * dividend;
 	do_div(tmp, divider);
 
 	result[1] = (ulong)(do_div(tmp, 100));
 	result[0] = (ulong)tmp;
+#endif
 }
 
-/* collect new info of the cpu base on kernel_stat, rq, and vm_event_states */
-static void get_curr_percpu_data(struct cpu_usage_info *new, int cpu)
+/*
+ * new: new line
+ */
+static void sprd_cpu_log(bool new, const char *fmt, ...)
 {
+	va_list va;
+	struct sprd_cpu_usage *p = p_sprd_cpu_usage;
+	int len;
+
+	if (new)
+		p->offset = 0;
+	else if ((p->offset + MAX_SIZE_A_LOG) >= LOG_BUFF_SIZE)
+		return;
+
+	va_start(va, fmt);
+	len = vsnprintf(&p->buf[p->offset], MAX_SIZE_A_LOG, fmt, va);
+	va_end(va);
+
+	p->offset += len;
+}
+
+static void _clean_thread_info(struct sprd_thread_info *t, unsigned long id)
+{
+	/* no record from (t->idx + 1) to p->idx */
+	int clear = NEXT_ID(t->idx);
+	unsigned long count = id - t->idx;
+
+	if (count > NR_RECORD)
+		count = NR_RECORD;
+
+	/* dead loop: int count */
+	while (count--) {
+		t->delta[clear].ut = 0;
+		t->delta[clear].st = 0;
+		clear = NEXT_ID(clear);
+	}
+
+	t->idx = id;
+}
+
+#ifdef CONFIG_THREAD_INFO_IN_TASK
+#define T_OFFSET (16)
+#else
+#define T_OFFSET (sizeof(struct thread_info) + 8)
+#endif
+
+#define T_BUF(task) ((struct sprd_thread_info *)(task->stack + T_OFFSET))
+
+/* update the thread utime and stime*/
+void sprd_update_cpu_usage(struct task_struct *prev, struct task_struct *next)
+{
+	struct sprd_cpu_usage *p = p_sprd_cpu_usage;
+	struct sprd_thread_info *t;
+	struct sprd_thread_time *time;
+
+	if (!p)
+		return;
+
+	/* update prev */
+	t = T_BUF(prev);
+	if (t->idx != p->idx)
+		_clean_thread_info(t, p->idx);
+
+	time = &t->delta[BUFF_ID(t->idx)];
+	time->ut += (prev->utime - t->start.ut);
+	time->st += (prev->stime - t->start.st);
+
+	/* update next */
+	t = T_BUF(next);
+	t->start.ut = next->utime;
+	t->start.st = next->stime;
+}
+EXPORT_SYMBOL(sprd_update_cpu_usage);
+
+/* copy from fs/proc/stat.c */
+static u64 get_idle_time(struct kernel_cpustat *kcs, int cpu)
+{
+	u64 idle, idle_usecs = -1ULL;
+
+	if (cpu_online(cpu))
+		idle_usecs = get_cpu_idle_time_us(cpu, NULL);
+
+	if (idle_usecs == -1ULL)
+		/* !NO_HZ or cpu offline so we can rely on cpustat.idle */
+		idle = kcs->cpustat[CPUTIME_IDLE];
+	else
+		idle = idle_usecs * NSEC_PER_USEC;
+
+	return idle;
+}
+
+static u64 get_iowait_time(struct kernel_cpustat *kcs, int cpu)
+{
+	u64 iowait, iowait_usecs = -1ULL;
+
+	if (cpu_online(cpu))
+		iowait_usecs = get_cpu_iowait_time_us(cpu, NULL);
+
+	if (iowait_usecs == -1ULL)
+		/* !NO_HZ or cpu offline so we can rely on cpustat.iowait */
+		iowait = kcs->cpustat[CPUTIME_IOWAIT];
+	else
+		iowait = iowait_usecs * NSEC_PER_USEC;
+
+	return iowait;
+}
+
+static void __get_cpu_stat(struct sprd_cpu_stat *stat, int cpu)
+{
+	struct kernel_cpustat *kcs = &kcpustat_cpu(cpu);
+	int i;
 #ifdef CONFIG_VM_EVENT_COUNTERS
 	struct vm_event_state *this = &per_cpu(vm_event_states, cpu);
 
-	new->nr_pf = this->event[PGFAULT];
-	new->nr_pmf = this->event[PGMAJFAULT];
+	stat->nr_pgfault = this->event[PGFAULT];
+	stat->nr_pgmajfault = this->event[PGMAJFAULT];
 #endif
 
-	new->nr_cs = cpu_rq(cpu)->nr_switches;
+	stat->nr_switches = cpu_rq(cpu)->nr_switches;
 
-#define CPU_STAT(cpu, stat) (kcpustat_cpu(cpu).cpustat[CPUTIME_##stat])
-	new->sum = new->user = CPU_STAT(cpu, USER);
-	new->sum += new->system = CPU_STAT(cpu, SYSTEM);
-	new->sum += new->nice = CPU_STAT(cpu, NICE);
-	new->sum += new->idle = CPU_STAT(cpu, IDLE);
-	new->sum += new->iowait = CPU_STAT(cpu, IOWAIT);
-	new->sum += new->irq = CPU_STAT(cpu, IRQ);
-	new->sum += new->softirq = CPU_STAT(cpu, SOFTIRQ);
-	new->sum += new->steal = CPU_STAT(cpu, STEAL);
+	stat->sum = 0;
+	for (i = 0; i < NR_STATS; i++) {
+		if (i == CPUTIME_IDLE)
+			stat->k.cpustat[i] = get_idle_time(kcs, cpu);
+		else if (i == CPUTIME_IOWAIT)
+			stat->k.cpustat[i] = get_iowait_time(kcs, cpu);
+		else
+			stat->k.cpustat[i] = kcs->cpustat[i];
 
-	/* kernel_cpustat keep nano secord in kernel 4.14
-	 * convert to clock_t base on USER_HZ, which always 100
-	 */
-	new->user = nsec_to_clock_t(new->user);
-	new->system = nsec_to_clock_t(new->system);
-	new->nice = nsec_to_clock_t(new->nice);
-	new->idle = nsec_to_clock_t(new->idle);
-	new->iowait = nsec_to_clock_t(new->iowait);
-	new->irq = nsec_to_clock_t(new->irq);
-	new->softirq = nsec_to_clock_t(new->softirq);
-	new->steal = nsec_to_clock_t(new->steal);
-	new->sum = nsec_to_clock_t(new->sum);
+		/* todo: convert to clock_t base on USER_HZ? */
+		stat->sum += stat->k.cpustat[i];
+	}
 }
 
-/* calc the delta base on new and saved.
- * and update to the percpu data of global_id.
- */
-static void update_cpu_record(struct cpu_recorder *record,
-			      struct cpu_usage_info *saved,
-			      struct cpu_usage_info *new, int cpu)
+static void __get_cpu_stat_delta(struct sprd_cpu_stat *delta,
+				 struct sprd_cpu_stat *new,
+				 struct sprd_cpu_stat *saved)
 {
-	struct cpu_usage_info *pcpu = &record->percpu[cpu];
-	struct cpu_usage_info *ptotal = &record->total;
+	int i;
 
-	ptotal->user += pcpu->user = new->user - saved->user;
-	ptotal->system += pcpu->system = new->system - saved->system;
-	ptotal->nice += pcpu->nice = new->nice - saved->nice;
-	/*
-	 * FIXME begin: idle from system maybe wrong!!!
-	 *      in our multi-core system idle may not monotone increasing!!!
-	 *      SO: here we walk-around, but need modify in future!!!
-	 */
-	if (new->idle < saved->idle) {
-		saved->sum -= saved->idle;
-		saved->idle = (new->idle > 200) ? (new->idle - 200) : 0;
-		saved->sum += saved->idle;
+	for (i = 0; i < NR_STATS; i++) {
+		delta->k.cpustat[i] = new->k.cpustat[i] - saved->k.cpustat[i];
+		if (new->k.cpustat[i] < saved->k.cpustat[i])
+			printk(KERN_INFO "stat[%d]: <%lld> < save<%lld>\r\n",
+			       i, new->k.cpustat[i], saved->k.cpustat[i]);
 	}
-	ptotal->idle += pcpu->idle = new->idle - saved->idle;
-	ptotal->iowait += pcpu->iowait = new->iowait - saved->iowait;
-	ptotal->irq += pcpu->irq = new->irq - saved->irq;
-	ptotal->softirq += pcpu->softirq = new->softirq - saved->softirq;
-	ptotal->steal += pcpu->steal = new->steal - saved->steal;
-	ptotal->sum += pcpu->sum = new->sum - saved->sum;
 
+	delta->sum = new->sum - saved->sum;
+	delta->nr_switches = new->nr_switches - saved->nr_switches;
 #ifdef CONFIG_VM_EVENT_COUNTERS
-	/*
-	 * FIXME begin: pagefault & pagemajfault maybe wrong!!!
-	 *       in our multi-core system pagefault & pagemajfault
-	 *       may not monotone increasing!!!
-	 *       SO: here we walk-around, but need modify in future!!!
-	 */
-	if (new->nr_pf < saved->nr_pf)
-		saved->nr_pf = new->nr_pf;
-	ptotal->nr_pf += pcpu->nr_pf = new->nr_pf - saved->nr_pf;
-
-	if (new->nr_pmf < saved->nr_pmf)
-		saved->nr_pmf = new->nr_pmf;
-	ptotal->nr_pmf += pcpu->nr_pmf = new->nr_pmf - saved->nr_pmf;
+	delta->nr_pgfault = new->nr_pgfault - saved->nr_pgfault;
+	delta->nr_pgmajfault = new->nr_pgmajfault - saved->nr_pgmajfault;
 #endif
-
-	if (new->nr_cs < saved->nr_cs)
-		saved->nr_cs = new->nr_cs;
-	ptotal->nr_cs += pcpu->nr_cs = new->nr_cs - saved->nr_cs;
 }
 
-static void cpu_threadinfo_clean(struct thread_cpuinfo *buffer)
+static void __get_all_cpu_stat_delta(struct sprd_cpu_info *info)
 {
-	ulong clr_id = nextid(buffer->index);
-	ulong clr_cnt = global_id - buffer->index;
+	int i, j;
 
-	/*
-	 * No records from (buffer->index + 1) to global_id,
-	 * then the entry must clear, or previous data will be used.
-	 */
-	if (clr_cnt >= NR_REC)
-		clr_cnt = NR_REC;
+	memset(&info->all, 0, sizeof(struct sprd_cpu_stat));
 
-	while (clr_cnt--) {
-		buffer->rec[clr_id].ut = 0;
-		buffer->rec[clr_id].st = 0;
-
-		clr_id = nextid(clr_id);
-	}
-
-	/* update index */
-	buffer->index = global_id;
-}
-
-/* thread buffer. Skip SCHED_STACK_END_CHECK by end add 8 */
-#define T_OFFSET (sizeof(struct thread_info) + 8)
-#define T_BUFF(task) ((struct thread_cpuinfo *)((task)->stack + T_OFFSET))
-
-static void update_prev(struct task_struct *prev)
-{
-	struct thread_cpuinfo *buffer = T_BUFF(prev);
-	struct u_s_time *pcurr;
-
-	if (buffer->index != global_id)
-		cpu_threadinfo_clean(buffer);
-
-	/* task->utime changed to nano secord in kernel 4.14 */
-	pcurr = &buffer->rec[bufferid(buffer->index)];
-	pcurr->ut += (prev->utime - buffer->start.ut);
-	pcurr->st += (prev->stime - buffer->start.st);
-}
-
-static void update_next(struct task_struct *next)
-{
-	struct thread_cpuinfo *buffer = T_BUFF(next);
-
-	buffer->start.ut = next->utime;
-	buffer->start.st = next->stime;
-}
-
-void sprd_update_cpu_usage(struct task_struct *prev, struct task_struct *next)
-{
-	ulong flags;
-
-	spin_lock_irqsave(&usage_lock, flags);
-	update_prev(prev);
-	update_next(next);
-	spin_unlock_irqrestore(&usage_lock, flags);
-}
-
-/* update: if update ns_saved, ts_saved, info_saved, and global_id
- *         true: when hrtimer expire
- *         false: when cat "cpu_usage"
- *
- * record cpu usage of global_id
- */
-static void record_cpu_usage(bool update)
-{
-	int i, id;
-	struct cpu_usage_info info_new;
-	struct time_stamp *pts;
-
-	id = bufferid(global_id);
-	memset(&g_rec[id].total, 0, sizeof(struct cpu_usage_info));
-	pts = &g_rec[id].ts;
-
-	/* record start ns/ts/tm */
-	pts->ns_start = ns_saved;
-	memcpy(&pts->ts_start, &ts_saved, sizeof(struct timespec));
-	rtc_time_to_tm(pts->ts_start.tv_sec, &pts->tm_start);
-
-	/* record end ns/ts/tm */
-	pts->ns_end = cpu_clock(0);
-	getnstimeofday(&pts->ts_end);
-	rtc_time_to_tm(pts->ts_end.tv_sec, &pts->tm_end);
-
-	/* update global_id cpu_usage_info */
 	for_each_possible_cpu(i) {
-		get_curr_percpu_data(&info_new, i);
-		update_cpu_record(&g_rec[id], &info_saved[i], &info_new, i);
+		/* for pclint */
+		if (i >= NR_CPUS)
+			continue;
 
-		if (update)
-			memcpy(&info_saved[i], &info_new, sizeof(info_new));
+		for (j = 0; j < NR_STATS; j++)
+			info->all.k.cpustat[j] += info->cpu[i].k.cpustat[j];
+
+		info->all.sum += info->cpu[i].sum;
+		info->all.nr_switches += info->cpu[i].nr_switches;
+#ifdef CONFIG_VM_EVENT_COUNTERS
+		info->all.nr_pgfault += info->cpu[i].nr_pgfault;
+		info->all.nr_pgmajfault += info->cpu[i].nr_pgmajfault;
+#endif
 	}
+}
+
+/*
+ * update:
+ *   true:  when hrtimer come
+ *   false: when cat /d/sprd_debug/cpu/cpu_usage
+ *
+ *   update sprd_cpu_info of p->idx
+ */
+static ulong _update_cpu_usage(bool update)
+{
+	struct sprd_cpu_usage *p = p_sprd_cpu_usage;
+	struct sprd_cpu_info *info;
+	struct sprd_cpu_stat tmp;
+	ulong flags, id;
+	int i;
+
+	id = p->idx;
+	if (update)
+		info = &p->info[BUFF_ID(id)];
+	else
+		info = &p->cat;
+
+	/* record the start ns/timespec/rtc_time */
+	info->time.ns_start = p->ns_last;
+	memcpy(&info->time.ts_start, &p->ts_last, sizeof(struct timespec));
+	rtc_time_to_tm(info->time.ts_start.tv_sec, &info->time.rtc_start);
+
+	/* record the end */
+	info->time.ns_end = cpu_clock(0);
+	getnstimeofday(&info->time.ts_end);
+	rtc_time_to_tm(info->time.ts_end.tv_sec, &info->time.rtc_end);
+
+	/* update per-cpu struct sprd_cpu_stat */
+	for_each_possible_cpu(i) {
+		if (i >= NR_CPUS)
+			continue;
+
+		__get_cpu_stat(&tmp, i);
+		__get_cpu_stat_delta(&info->cpu[i], &tmp, &p->cpu_last[i]);
+		if (update)
+			memcpy(&p->cpu_last[i], &tmp, sizeof(tmp));
+	}
+
+	/* update all-cpu struct sprd_cpu_stat */
+	__get_all_cpu_stat_delta(info);
 
 	if (update) {
-		ns_saved = pts->ns_end;
-		memcpy(&ts_saved, &pts->ts_end, sizeof(struct timespec));
-		global_id++;
+		p->ns_last = info->time.ns_end;
+		memcpy(&p->ts_last, &info->time.ts_end, sizeof(struct timespec));
+		spin_lock_irqsave(&p->lock, flags);
+		if (p->cating)
+			/* idx++ when cating clear*/
+			p->ticking++;
+		else
+			p->idx++;
+		spin_unlock_irqrestore(&p->lock, flags);
 	}
+
+	return id;
 }
 
-ulong sprd_g_irq_ratio;
-static void _print_cpu_rate(struct seq_file *p, struct cpu_recorder *record)
+static void _print_time_info(struct seq_file *m, struct sprd_cpu_info *info)
 {
-	ulong idle_ratio[2], user_ratio[2], system_ratio[2], nice_ratio[2];
-	ulong iowait_ratio[2], irq_ratio[2] = {0}, softirq_ratio[2];
-	ulong steal_ratio[2], sum_ratio[2];
+	u64 start_ms, end_ms;
+
+	/* nano second */
+	start_ms = info->time.ns_start;
+	end_ms = info->time.ns_end;
+
+	/* ns to ms for print */
+	ns_to_ms(start_ms);
+	ns_to_ms(end_ms);
+
+	seq_printf(m, "\n\nCpu Core Count: %-6d\n", num_possible_cpus());
+	seq_printf(m, "Timer Circle: %-llums.\n", (end_ms - start_ms));
+	seq_printf(m,
+		"  From time %llums(%d-%02d-%02d %02d:%02d:%02d.%09lu UTC) "\
+		"to %llums(%d-%02d-%02d %02d:%02d:%02d.%09lu UTC).\n\n",
+		start_ms,
+		info->time.rtc_start.tm_year + 1900,
+		info->time.rtc_start.tm_mon + 1,
+		info->time.rtc_start.tm_mday,
+		info->time.rtc_start.tm_hour,
+		info->time.rtc_start.tm_min,
+		info->time.rtc_start.tm_sec,
+		info->time.ts_start.tv_nsec, end_ms,
+		info->time.rtc_end.tm_year + 1900,
+		info->time.rtc_end.tm_mon + 1,
+		info->time.rtc_end.tm_mday,
+		info->time.rtc_end.tm_hour,
+		info->time.rtc_end.tm_min,
+		info->time.rtc_end.tm_sec,
+		info->time.ts_end.tv_nsec);
+}
+
+static void __add_cpu_stat_log(struct sprd_cpu_stat *cpu)
+{
+	ulong rati[2];
+	int i, j;
+
+	for (i = 0; i < sizeof(stat_table); i++) {
+		j = stat_table[i];
+		/* just for pc lint */
+		if (j >= NR_STATS)
+			continue;
+
+		if (cpu->k.cpustat[j]) {
+			_ratio_calc(cpu->k.cpustat[j], cpu->sum, rati);
+			sprd_cpu_log(false, "%4lu.%02lu%% ", rati[0], rati[1]);
+		} else
+			sprd_cpu_log(false, "%8s ", "-----");
+	}
+
+	sprd_cpu_log(false, " 100.00%% |");
+	sprd_cpu_log(false, " %15llu", cpu->nr_switches);
+#ifdef CONFIG_VM_EVENT_COUNTERS
+	sprd_cpu_log(false, " %15llu", cpu->nr_pgfault);
+	sprd_cpu_log(false, " %15llu", cpu->nr_pgmajfault);
+#endif
+}
+
+static void _print_cpu_stat(struct seq_file *m,
+			    struct sprd_cpu_info *info, int id)
+{
 	int i;
-	struct cpu_usage_info *pt;
+
+	seq_printf(m, "%-87s   %-s\n", " * CPU USAGE:", " | * OTHER COUNTS:");
+#ifdef CONFIG_VM_EVENT_COUNTERS
+	seq_printf(m,
+		" -%d-      %8s %8s %8s %8s %8s %8s %8s %8s %8s "\
+		"| %15s %15s %15s\n",
+		id, "IDLE", "USER", "SYSTEM", "NICE", "IOWAIT", "IRQ",
+		"SOFTIRQ", "STEAL", "TOTAL", "CTXT_SWITCH",
+		"FG_FAULT", "FG_MAJ_FAULT");
+#else
+	seq_printf(m,
+		" -%d-      %8s %8s %8s %8s %8s %8s %8s %8s %8s | %15s\n",
+		id, "IDLE", "USER", "SYSTEM", "NICE", "IOWAIT", "IRQ",
+		"SOFTIRQ", "STEAL", "TOTAL", "CTXT_SWITCH");
+#endif
 
 	for_each_possible_cpu(i) {
-		pt = &record->percpu[i];
-		/* compute each cpu */
-		_ratio_calc(pt->idle, pt->sum, idle_ratio);
-		_ratio_calc(pt->user, pt->sum, user_ratio);
-		_ratio_calc(pt->system, pt->sum, system_ratio);
-		_ratio_calc(pt->nice, pt->sum, nice_ratio);
-		_ratio_calc(pt->iowait, pt->sum, iowait_ratio);
-		_ratio_calc(pt->irq, pt->sum, irq_ratio);
-		_ratio_calc(pt->softirq, pt->sum, softirq_ratio);
-		_ratio_calc(pt->steal, pt->sum, steal_ratio);
-		_ratio_calc(pt->sum, pt->sum, sum_ratio);
-		/* print each cpu */
-#ifdef CONFIG_VM_EVENT_COUNTERS
-		seq_printf(p,
-			   " cpu%d(%d): %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% | %15llu %15lu %15lu\n",
-			   i, cpu_online(i), idle_ratio[0], idle_ratio[1],
-			   user_ratio[0], user_ratio[1], system_ratio[0],
-			   system_ratio[1], nice_ratio[0], nice_ratio[1],
-			   iowait_ratio[0], iowait_ratio[1], irq_ratio[0],
-			   irq_ratio[1], softirq_ratio[0], softirq_ratio[1],
-			   steal_ratio[0], steal_ratio[1], sum_ratio[0],
-			   sum_ratio[1], pt->nr_cs, pt->nr_pf, pt->nr_pmf);
-#else
-		seq_printf(p,
-			   " cpu%d(%d): %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% | %15llu\n",
-			   i, cpu_online(i), idle_ratio[0], idle_ratio[1],
-			   user_ratio[0], user_ratio[1], system_ratio[0],
-			   system_ratio[1], nice_ratio[0], nice_ratio[1],
-			   iowait_ratio[0], iowait_ratio[1], irq_ratio[0],
-			   irq_ratio[1], softirq_ratio[0], softirq_ratio[1],
-			   steal_ratio[0], steal_ratio[1], sum_ratio[0],
-			   sum_ratio[1], pt->nr_cs);
-#endif
+		if (i >= NR_CPUS)
+			continue;
+
+		sprd_cpu_log(true, " cpu%d(%d): ", i, cpu_online(i));
+		__add_cpu_stat_log(&info->cpu[i]);
+		seq_printf(m, "%s\n", p_sprd_cpu_usage->buf);
 	}
 
-	if (num_possible_cpus() > 1) {
-		pt = &record->total;
-		/* compute total */
-		_ratio_calc(pt->idle, pt->sum, idle_ratio);
-		_ratio_calc(pt->user, pt->sum, user_ratio);
-		_ratio_calc(pt->system, pt->sum, system_ratio);
-		_ratio_calc(pt->nice, pt->sum, nice_ratio);
-		_ratio_calc(pt->iowait, pt->sum, iowait_ratio);
-		_ratio_calc(pt->irq, pt->sum, irq_ratio);
-		_ratio_calc(pt->softirq, pt->sum, softirq_ratio);
-		_ratio_calc(pt->steal, pt->sum, steal_ratio);
-		_ratio_calc(pt->sum, pt->sum, sum_ratio);
-		/* print total */
-		seq_puts(p, " ------------------\n");
-#ifdef CONFIG_VM_EVENT_COUNTERS
-		seq_printf(p,
-			   " Total:   %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% | %15llu %15lu %15lu\n",
-			   idle_ratio[0], idle_ratio[1], user_ratio[0],
-			   user_ratio[1], system_ratio[0], system_ratio[1],
-			   nice_ratio[0], nice_ratio[1], iowait_ratio[0],
-			   iowait_ratio[1], irq_ratio[0], irq_ratio[1],
-			   softirq_ratio[0], softirq_ratio[1], steal_ratio[0],
-			   steal_ratio[1], sum_ratio[0], sum_ratio[1],
-			   pt->nr_cs, pt->nr_pf, pt->nr_pmf);
-#else
-		seq_printf(p,
-			   " Total:   %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% %4lu.%02lu%% | %15llu\n",
-			   idle_ratio[0], idle_ratio[1], user_ratio[0],
-			   user_ratio[1], system_ratio[0], system_ratio[1],
-			   nice_ratio[0], nice_ratio[1], iowait_ratio[0],
-			   iowait_ratio[1], irq_ratio[0], irq_ratio[1],
-			   softirq_ratio[0], softirq_ratio[1], steal_ratio[0],
-			   steal_ratio[1], sum_ratio[0], sum_ratio[1],
-			   pt->nr_cs);
-#endif
-	}
-	sprd_g_irq_ratio = irq_ratio[0];
+	seq_puts(m, " ==================\n");
+
+	sprd_cpu_log(true, " Total:   ");
+	__add_cpu_stat_log(&info->all);
+	seq_printf(m, "%s\n", p_sprd_cpu_usage->buf);
 }
 
-static void _print_a_thread_rate(struct seq_file *p, int pid, char *name,
-					u64 u_ms, u64 s_ms, u64 total_ms)
+static void __add_a_thread(u64 item, u64 sum)
 {
-	ulong u_rto[2] = { 0, 0 };
-	ulong s_rto[2] = { 0, 0 };
-	ulong t_rto[2] = { 0, 0 };
+	ulong ratio[2];
 
-	/* compute ratio */
-	_ratio_calc(u_ms, total_ms, u_rto);
-	_ratio_calc(s_ms, total_ms, s_rto);
-	_ratio_calc((u_ms + s_ms), total_ms, t_rto);
-
-	if (name != NULL) {
-		seq_printf(p,
-			   " %-6d  %4lu.%02lu%%  %4lu.%02lu%%  %4lu.%02lu%%    %-15s\n",
-			   pid, u_rto[0], u_rto[1], s_rto[0], s_rto[1],
-			   t_rto[0], t_rto[1], name);
-	} else {
-		seq_printf(p,
-			   " %-6s  %4lu.%02lu%%  %4lu.%02lu%%  %4lu.%02lu%%\n",
-			   "Total:", u_rto[0], u_rto[1], s_rto[0], s_rto[1],
-			   t_rto[0], t_rto[1]);
-	}
+	if (item) {
+		_ratio_calc(item, sum, ratio);
+		sprd_cpu_log(false, "%4lu.%02lu%%", ratio[0], ratio[1]);
+	} else
+		sprd_cpu_log(false, "%8s", "-----");
 }
 
-static void print_summary(struct seq_file *p, ulong id)
+/* id: sprd_thread_info->delta[id]
+ *     sprd_cpu_usage->info[id]
+ */
+static void _print_thread_info(struct seq_file *m, ulong id)
 {
-	u64 longth_ms;
-	u64 start_ms = 0;
-	u64 end_ms = 0;
-
-	/* start_ms & end_ms & length */
-	start_ms = g_rec[id].ts.ns_start;
-	end_ms = g_rec[id].ts.ns_end;
-	longth_ms = end_ms - start_ms;
-
-	/* change ns to ms */
-	ns_2_ms(start_ms);
-	ns_2_ms(end_ms);
-	ns_2_ms(longth_ms);
-
-	/* print cpu core count */
-	seq_printf(p, "\n\nCpu Core Count: %-6d\n", num_possible_cpus());
-
-	/* from start_ms to end_ms */
-	seq_printf(p, "Timer Circle: %-llums.\n", longth_ms);
-	seq_printf(p,
-		   "  From time %llums(%d-%02d-%02d %02d:%02d:%02d.%09lu UTC) to %llums(%d-%02d-%02d %02d:%02d:%02d.%09lu UTC).\n\n",
-		   start_ms,
-		   g_rec[id].ts.tm_start.tm_year + 1900,
-		   g_rec[id].ts.tm_start.tm_mon + 1,
-		   g_rec[id].ts.tm_start.tm_mday,
-		   g_rec[id].ts.tm_start.tm_hour,
-		   g_rec[id].ts.tm_start.tm_min,
-		   g_rec[id].ts.tm_start.tm_sec,
-		   g_rec[id].ts.ts_start.tv_nsec, end_ms,
-		   g_rec[id].ts.tm_end.tm_year + 1900,
-		   g_rec[id].ts.tm_end.tm_mon + 1,
-		   g_rec[id].ts.tm_end.tm_mday,
-		   g_rec[id].ts.tm_end.tm_hour,
-		   g_rec[id].ts.tm_end.tm_min,
-		   g_rec[id].ts.tm_end.tm_sec,
-		   g_rec[id].ts.ts_end.tv_nsec);
-}
-
-static void print_cpu_usage(struct seq_file *p, ulong id)
-{
-	/* print tile */
-	seq_printf(p, "%-87s   %-s\n", " * CPU USAGE:", " | * OTHER COUNTS:");
-#ifdef CONFIG_VM_EVENT_COUNTERS
-	seq_printf(p,
-		   " -%lu-      %8s %8s %8s %8s %8s %8s %8s %8s %8s | %15s %15s %15s\n",
-		   id, "IDLE", "USER", "SYSTEM", "NICE", "IOWAIT", "IRQ",
-		   "SOFTIRQ", "STEAL", "TOTAL", "CTXT_SWITCH",
-		   "FG_FAULT", "FG_MAJ_FAULT");
-#else
-	seq_printf(p,
-		   " -%lu-      %8s %8s %8s %8s %8s %8s %8s %8s %8s | %15s\n",
-		   id, "IDLE", "USER", "SYSTEM", "NICE", "IOWAIT", "IRQ",
-		   "SOFTIRQ", "STEAL", "TOTAL", "CTXT_SWITCH");
-#endif
-
-	/* compute & print */
-	_print_cpu_rate(p, &g_rec[id]);
-}
-
-static void print_threads_usage(struct seq_file *p, ulong id)
-{
-	u64 total_usr = 0;
-	u64 total_sys = 0;
-	u64 u_time, s_time;
+	struct sprd_cpu_usage *p = p_sprd_cpu_usage;
+	struct sprd_cpu_info *info;
 	struct task_struct *gp, *pp;
-	struct thread_cpuinfo *buffer;
-	u64 total_ms = g_rec[id].ts.ns_end - g_rec[id].ts.ns_start;
+	struct sprd_thread_info *t;
+	struct sprd_thread_time	*delta;
+	void *stack;
+	u64 time[NR_RECORD];
+	u64 st[NR_RECORD], ut[NR_RECORD];
+	u64 st_all[NR_RECORD], ut_all[NR_RECORD];
+	int i, j;
+	bool print;
 
-	ns_2_ms(total_ms);
+	id = BUFF_ID(id);
+	for (i = 0; i < NR_RECORD; i++) {
+		if (id == i)
+			info = &p->cat;
+		else
+			info = &p->info[i];
+		time[i] = info->time.ns_end - info->time.ns_start;
+		st_all[i] = ut_all[i] = 0;
+	}
 
-	/* print tile */
-	seq_puts(p, "\n* USAGE PER THREAD:\n");
-	seq_printf(p, " %-6s  %8s  %8s  %8s    %-15s\n", "PID", "USER",
-			"SYSTEM", "TOTAL", "NAME");
+	seq_puts(m, "\n* USAGE PER THREAD:\n");
+	seq_printf(m, " %-6s%24s   %24s   %24s       %-15s\n", "PID", "USER",
+		       "SYSTEM", "TOTAL", "NAME");
 
 	read_lock(&tasklist_lock);
 	do_each_thread(gp, pp) {
-		void *stack = try_get_task_stack(pp);
-
+		stack = try_get_task_stack(pp);
 		if (stack == NULL)
 			continue;
 
-		buffer = (struct thread_cpuinfo *)(stack + T_OFFSET);
-		if (buffer->index != global_id)
-			cpu_threadinfo_clean(buffer);
+		print = false;
+		t = (struct sprd_thread_info *)(stack + T_OFFSET);
+		if (t->idx != p->idx)
+			_clean_thread_info(t, p->idx);
 
-		u_time = buffer->rec[id].ut;
-		s_time = buffer->rec[id].st;
+		for (i = 0; i < NR_RECORD; i++) {
+			delta = &t->delta[i];
+			st[i] = delta->st;
+			ut[i] = delta->ut;
 
+			if ((st[i] + ut[i]) != 0) {
+				st_all[i] += st[i];
+				ut_all[i] += ut[i];
+				print = true;
+			}
+		}
 		put_task_stack(pp);
 
-		if (0 != (u_time + s_time)) {
-			total_usr += u_time;
-			total_sys += s_time;
+		if (!print)
+			continue;
 
-			/* print none-zero thread */
-			ns_2_ms(u_time);
-			ns_2_ms(s_time);
-			_print_a_thread_rate(p, pp->pid, pp->comm,
-					u_time, s_time, total_ms);
+		/*print a thread's info */
+		sprd_cpu_log(true, " %-6d", pp->pid);
+		/* add user time */
+		for (i = NEXT_ID(id), j = 0; j < NR_RECORD; j++) {
+			__add_a_thread(ut[i], time[i]);
+			i = NEXT_ID(i);
 		}
+		sprd_cpu_log(false, "%s", " | ");
+		/* add system time */
+		for (i = NEXT_ID(id), j = 0; j < NR_RECORD; j++) {
+			__add_a_thread(st[i], time[i]);
+			i = NEXT_ID(i);
+		}
+		sprd_cpu_log(false, "%s", " | ");
+		/* add total time */
+		for (i = NEXT_ID(id), j = 0; j < NR_RECORD; j++) {
+			__add_a_thread((ut[i] + st[i]), time[i]);
+			i = NEXT_ID(i);
+		}
+		sprd_cpu_log(false, "%s    %-15s", " | ", pp->comm);
+		seq_printf(m, "%s\n", p->buf);
 	} while_each_thread(gp, pp);
 	read_unlock(&tasklist_lock);
 
-	/* print total */
-	seq_puts(p, " ------------------\n");
-
-	ns_2_ms(total_usr);
-	ns_2_ms(total_sys);
-	_print_a_thread_rate(p, 0, NULL, total_usr, total_sys, total_ms);
+	/* print total*/
+	seq_puts(m, " ==================\n");
+	sprd_cpu_log(true, " %-6s", "Total:");
+	for (i = NEXT_ID(id), j = 0; j < NR_RECORD; i = NEXT_ID(i), j++)
+		__add_a_thread(ut_all[i], time[i]);
+	sprd_cpu_log(false, "%s", " | ");
+	for (i = NEXT_ID(id), j = 0; j < NR_RECORD; i = NEXT_ID(i), j++)
+		__add_a_thread(st_all[i], time[i]);
+	sprd_cpu_log(false, "%s", " | ");
+	for (i = NEXT_ID(id), j = 0; j < NR_RECORD; i = NEXT_ID(i), j++)
+		__add_a_thread((ut_all[i] + st_all[i]), time[i]);
+	sprd_cpu_log(false, "%s    %-15s", " | ", current->comm);
+	seq_printf(m, "%s\n", p->buf);
 }
 
-static void print_usage(struct seq_file *p)
+static int show_cpu_usage(struct seq_file *m, void *v)
 {
-	ulong cnt = NR_REC;
-	ulong i;
+	struct sprd_cpu_usage *p = p_sprd_cpu_usage;
+	int cnt = NR_RECORD;
+	ulong flags, id;
+	int i;
 
-	record_cpu_usage(false);
+	unused(v);
+
+	spin_lock_irqsave(&p->lock, flags);
+	p->cating++;
+	spin_unlock_irqrestore(&p->lock, flags);
+
+	id = i = _update_cpu_usage(false);
 
 	/* print from the earliest time */
-	i = nextid(global_id);
-	while (cnt--) {
-		print_summary(p, i);
-		print_cpu_usage(p, i);
-		print_threads_usage(p, i);
-
-		i = nextid(i);
+	while (--cnt) {
+		i = NEXT_ID(i);
+		_print_time_info(m, &p->info[i]);
+		_print_cpu_stat(m, &p->info[i], i);
 	}
-}
 
-static enum hrtimer_restart hrtimer_handler(struct hrtimer *timer)
-{
-	ulong flags;
+	/* print cat saved */
+	i = BUFF_ID(id);
+	_print_time_info(m, &p->cat);
+	_print_cpu_stat(m, &p->cat, i);
 
-	spin_lock_irqsave(&usage_lock, flags);
-	record_cpu_usage(true);
-	spin_unlock_irqrestore(&usage_lock, flags);
+	/* print NR_RECORD times thread info in one line */
+	_print_thread_info(m, id);
 
-	hrtimer_forward_now(timer, ms_to_ktime(hrtimer_se * 1000));
-	return HRTIMER_RESTART;
-}
-
-static int show_cpu_usage(struct seq_file *p, void *v)
-{
-	unused(v);
-	print_usage(p);
-
+	spin_lock_irqsave(&p->lock, flags);
+	p->cating--;
+	if (p->cating == 0 && p->ticking) {
+		p->idx += p->ticking;
+		p->ticking = 0;
+	}
+	spin_unlock_irqrestore(&p->lock, flags);
 	return 0;
-}
-
-static ssize_t cpu_usage_write(struct file *file, const char __user *buf,
-			       size_t len, loff_t *ppos)
-{
-	char flag[8];
-	int ret;
-
-	/* >= 10000 seconds? */
-	if (len >= 5)
-		return -EFAULT;
-
-	memset(flag, 0, sizeof(flag));
-	if (copy_from_user(flag, buf, len))
-		return -EFAULT;
-
-	ret = kstrtol(flag, 10, &hrtimer_se);
-	if (ret < 0)
-		return ret;
-
-	return len;
 }
 
 static int cpu_usage_open(struct inode *inode, struct file *file)
 {
 	return single_open(file, show_cpu_usage, NULL);
+}
+
+/*
+ * change the hrtimer interval
+ */
+static ssize_t cpu_usage_write(struct file *file, const char __user *buf,
+		size_t len, loff_t *ppos)
+{
+	return len;
 }
 
 const struct file_operations cpu_usage_fops = {
@@ -661,28 +646,64 @@ const struct file_operations cpu_usage_fops = {
 	.release = single_release,
 };
 
+static enum hrtimer_restart sprd_cpu_usage_hr_func(struct hrtimer *timer)
+{
+	ktime_t kt;
+
+	_update_cpu_usage(true);
+
+	kt = ms_to_ktime(p_sprd_cpu_usage->interval * MSEC_PER_SEC);
+	hrtimer_forward_now(timer, kt);
+	return HRTIMER_RESTART;
+}
+
 static int __init sprd_cpu_usage_init(void)
 {
-	/* int static */
-	memset(g_rec, 0, sizeof(g_rec));
-	memset(info_saved, 0, sizeof(info_saved));
-	memset(&ts_saved, 0, sizeof(struct timespec));
+	struct sprd_cpu_usage *p;
+	struct dentry *dentry;
+	ktime_t kt;
 
-	/* init timer */
-	hrtimer_init(&stat_hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
-	stat_hrtimer.function = hrtimer_handler;
-	hrtimer_start(&stat_hrtimer, ms_to_ktime(hrtimer_se * 1000), HRTIMER_MODE_REL);
+	p = kzalloc(sizeof(struct sprd_cpu_usage), GFP_KERNEL);
+	if (!p)
+		return -ENOMEM;
 
-	/* create debugfs */
-	debugfs_create_file("cpu_usage", 0444, sprd_debugfs_entry(CPU),
-						NULL, &cpu_usage_fops);
+	p->buf = kmalloc(LOG_BUFF_SIZE, GFP_KERNEL);
+	if (!p->buf) {
+		kfree(p);
+		return -ENOMEM;
+	}
 
+	/* create /sys/kernel/debug/sprd_debug/cpu/cpu_usage */
+	dentry = debugfs_create_file("cpu_usage",
+				      0444,
+				      sprd_debugfs_entry(CPU),
+				      NULL,
+				      &cpu_usage_fops);
+	if (IS_ERR(dentry)) {
+		kfree(p->buf);
+		kfree(p);
+		return -ENOMEM;
+	}
+
+	/* init the member */
+	spin_lock_init(&p->lock);
+	p->interval = HRTIMER_INTERVAL;
+	kt = ms_to_ktime(p->interval * MSEC_PER_SEC);
+	hrtimer_init(&p->hrtimer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
+	p->hrtimer.function = sprd_cpu_usage_hr_func;
+	hrtimer_start(&p->hrtimer, kt, HRTIMER_MODE_REL);
+
+	p_sprd_cpu_usage = p;
 	return 0;
 }
 
 static void __exit sprd_cpu_usage_exit(void)
 {
-	hrtimer_cancel(&stat_hrtimer);
+	if (p_sprd_cpu_usage) {
+		hrtimer_cancel(&p_sprd_cpu_usage->hrtimer);
+		kfree(p_sprd_cpu_usage->buf);
+		kfree(p_sprd_cpu_usage);
+	}
 }
 
 subsys_initcall(sprd_cpu_usage_init);

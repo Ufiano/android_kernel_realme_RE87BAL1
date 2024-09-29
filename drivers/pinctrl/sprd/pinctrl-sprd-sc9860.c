@@ -1,24 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Spreadtrum pin controller driver
  * Copyright (C) 2017 Spreadtrum  - http://www.spreadtrum.com
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
  */
 
 #include <linux/module.h>
+#include <linux/mod_devicetable.h>
 #include <linux/platform_device.h>
 
 #include "pinctrl-sprd.h"
 
-#define	PINCTRL_REG_OFFSET		0x20
-#define	PINCTRL_REG_MISC_OFFSET		0x4020
+#define PINCTRL_REG_OFFSET              0x20
+#define PINCTRL_REG_MISC_OFFSET         0x4020
 
 enum sprd_sc9860_pins {
 	/* pin global control register 0 */
@@ -936,9 +929,9 @@ static struct sprd_pins_info sprd_sc9860_pins_info[] = {
 static int sprd_pinctrl_probe(struct platform_device *pdev)
 {
 	return sprd_pinctrl_core_probe(pdev, sprd_sc9860_pins_info,
-				       ARRAY_SIZE(sprd_sc9860_pins_info),
-				       PINCTRL_REG_OFFSET,
-				       PINCTRL_REG_MISC_OFFSET);
+					ARRAY_SIZE(sprd_sc9860_pins_info),
+					PINCTRL_REG_OFFSET,
+					PINCTRL_REG_MISC_OFFSET);
 }
 
 static const struct of_device_id sprd_pinctrl_of_match[] = {
@@ -952,7 +945,6 @@ MODULE_DEVICE_TABLE(of, sprd_pinctrl_of_match);
 static struct platform_driver sprd_pinctrl_driver = {
 	.driver = {
 		.name = "sprd-pinctrl",
-		.owner = THIS_MODULE,
 		.of_match_table = sprd_pinctrl_of_match,
 	},
 	.probe = sprd_pinctrl_probe,

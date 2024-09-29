@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0
 #
 # USB Dual Role (OTG-ready) Controller Drivers
 # for silicon based on Mentor Graphics INVENTRA designs
@@ -5,7 +6,7 @@
 
 # (M)HDRC = (Multipoint) Highspeed Dual-Role Controller
 config USB_MUSB_HDRC
-	tristate 'Inventra Highspeed Dual Role Controller (TI, ADI, AW, ...)'
+	tristate 'Inventra Highspeed Dual Role Controller'
 	depends on (USB || USB_GADGET)
 	depends on HAS_IOMEM
 	help
@@ -17,9 +18,6 @@ config USB_MUSB_HDRC
 
 	  Texas Instruments families using this IP include DaVinci
 	  (35x, 644x ...), OMAP 243x, OMAP 3, and TUSB 6010.
-
-	  Analog Devices parts using this IP include Blackfin BF54x,
-	  BF525 and BF527.
 
 	  Allwinner SoCs using this IP include A10, A13, A20, ...
 
@@ -69,7 +67,7 @@ config USB_MUSB_SUNXI
 	depends on NOP_USB_XCEIV
 	depends on PHY_SUN4I_USB
 	depends on EXTCON
-	depends on GENERIC_PHY
+	select GENERIC_PHY
 	select SUNXI_SRAM
 
 config USB_MUSB_DAVINCI
@@ -87,7 +85,7 @@ config USB_MUSB_DA8XX
 config USB_MUSB_TUSB6010
 	tristate "TUSB6010"
 	depends on HAS_IOMEM
-	depends on (ARCH_OMAP2PLUS || COMPILE_TEST) && !BLACKFIN
+	depends on ARCH_OMAP2PLUS || COMPILE_TEST
 	depends on NOP_USB_XCEIV = USB_MUSB_HDRC # both built-in or both modules
 
 config USB_MUSB_OMAP2PLUS
@@ -107,11 +105,6 @@ config USB_MUSB_DSPS
 	depends on ARCH_OMAP2PLUS || COMPILE_TEST
 	depends on OF_IRQ
 
-config USB_MUSB_BLACKFIN
-	tristate "Blackfin"
-	depends on (BF54x && !BF544) || (BF52x && ! BF522 && !BF523)
-	depends on NOP_USB_XCEIV
-
 config USB_MUSB_UX500
 	tristate "Ux500 platforms"
 	depends on ARCH_U8500 || COMPILE_TEST
@@ -119,15 +112,22 @@ config USB_MUSB_UX500
 config USB_MUSB_JZ4740
 	tristate "JZ4740"
 	depends on NOP_USB_XCEIV
-	depends on MACH_JZ4740 || COMPILE_TEST
+	depends on MIPS || COMPILE_TEST
 	depends on USB_MUSB_GADGET
-	depends on USB_OTG_BLACKLIST_HUB
+	depends on USB=n || USB_OTG_BLACKLIST_HUB
+
+config USB_MUSB_MEDIATEK
+	tristate "MediaTek platforms"
+	depends on ARCH_MEDIATEK || COMPILE_TEST
+	depends on NOP_USB_XCEIV
+	depends on GENERIC_PHY
+	select USB_ROLE_SWITCH
 
 config USB_MUSB_AM335X_CHILD
 	tristate
 
 config USB_MUSB_SPRD
-	bool 'SPRD platforms'
+	tristate 'SPRD platforms'
 	help
 	  Enable this to support the SPRD MUSB that is part of gadget. This driver
 	  takes care of all the usb driver functionality, normally paired with
@@ -149,7 +149,7 @@ config MUSB_PIO_ONLY
 if !MUSB_PIO_ONLY
 
 config USB_SPRD_DMA
-	bool 'USE DMA MODE SPRD'
+	tristate 'USE DMA MODE SPRD'
 	depends on USB_MUSB_SPRD
 	help
 	  Enable this to support the SPRD USB DMA mode that is part of gadget. This driver
@@ -172,13 +172,6 @@ config USB_SPRD_OFFLOAD
 	  interface automatically within host audio mode. Software need to add this macro to
 	  enable offload function.
 
-config USB_SPRD_LINKFIFO
-	bool 'USB LINKFIFO MODE'
-	depends on USB_SPRD_DMA
-	help
-	  Enable this to support the SPRD LINKFIFO that software can prepare linknode firstly
-	  without waiting for interrupt. Add this macro can speed up musb throughput.
-
 config USB_UX500_DMA
 	bool 'ST Ericsson Ux500'
 	depends on USB_MUSB_UX500
@@ -187,7 +180,7 @@ config USB_UX500_DMA
 
 config USB_INVENTRA_DMA
 	bool 'Inventra'
-	depends on USB_MUSB_OMAP2PLUS || USB_MUSB_BLACKFIN
+	depends on USB_MUSB_OMAP2PLUS || USB_MUSB_MEDIATEK
 	help
 	  Enable DMA transfers using Mentor's engine.
 

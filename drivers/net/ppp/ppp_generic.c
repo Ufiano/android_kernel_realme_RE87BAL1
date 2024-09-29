@@ -1,12 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * Generic PPP layer for Linux.
  *
  * Copyright 1999-2002 Paul Mackerras.
- *
- *  This program is free software; you can redistribute it and/or
- *  modify it under the terms of the GNU General Public License
- *  as published by the Free Software Foundation; either version
- *  2 of the License, or (at your option) any later version.
  *
  * The generic PPP layer handles the PPP network interfaces, the
  * /dev/ppp device, packet and VJ compression, and multilink.
@@ -51,6 +47,7 @@
 #include <asm/unaligned.h>
 #include <net/slhc_vj.h>
 #include <linux/atomic.h>
+#include <linux/refcount.h>
 
 #include <linux/nsproxy.h>
 #include <net/net_namespace.h>
@@ -84,7 +81,7 @@ struct ppp_file {
 	struct sk_buff_head xq;		/* pppd transmit queue */
 	struct sk_buff_head rq;		/* receive queue for pppd */
 	wait_queue_head_t rwait;	/* for poll on reading /dev/ppp */
-	atomic_t	refcnt;		/* # refs (incl /dev/ppp attached) */
+	refcount_t	refcnt;		/* # refs (incl /dev/ppp attached) */
 	int		hdrlen;		/* space to leave for headers */
 	int		index;		/* interface unit / channel number */
 	int		dead;		/* unit/channel has been shut down */
@@ -286,7 +283,7 @@ static struct channel *ppp_find_channel(struct ppp_net *pn, int unit);
 static int ppp_connect_channel(struct channel *pch, int unit);
 static int ppp_disconnect_channel(struct channel *pch);
 static void ppp_destroy_channel(struct channel *pch);
-static int unit_get(struct idr *p, void *ptr);
+static int unit_get(struct idr *p, void *ptr, int min);
 static int unit_set(struct idr *p, void *ptr, int n);
 static void unit_put(struct idr *p, int n);
 static void *unit_find(struct idr *p, int n);
@@ -389,7 +386,7 @@ static int ppp_open(struct inode *inode, struct file *file)
 	/*
 	 * This could (should?) be enforced by the permissions on /dev/ppp.
 	 */
-	if (!capable(CAP_NET_ADMIN))
+	if (!ns_capable(file->f_cred->user_ns, CAP_NET_ADMIN))
 		return -EPERM;
 	return 0;
 }
@@ -408,7 +405,7 @@ static int ppp_release(struct inode *unused, struct file *file)
 				unregister_netdevice(ppp->dev);
 			rtnl_unlock();
 		}
-		if (atomic_dec_and_test(&pf->refcnt)) {
+		if (refcount_dec_and_test(&pf->refcnt)) {
 			switch (pf->kind) {
 			case INTERFACE:
 				ppp_destroy_interface(PF_TO_PPP(pf));
@@ -529,19 +526,19 @@ static ssize_t ppp_write(struct file *file, const char __user *buf,
 }
 
 /* No kernel lock - fine */
-static unsigned int ppp_poll(struct file *file, poll_table *wait)
+static __poll_t ppp_poll(struct file *file, poll_table *wait)
 {
 	struct ppp_file *pf = file->private_data;
-	unsigned int mask;
+	__poll_t mask;
 
 	if (!pf)
 		return 0;
 	poll_wait(file, &pf->rwait, wait);
-	mask = POLLOUT | POLLWRNORM;
+	mask = EPOLLOUT | EPOLLWRNORM;
 	if (skb_peek(&pf->rq))
-		mask |= POLLIN | POLLRDNORM;
+		mask |= EPOLLIN | EPOLLRDNORM;
 	if (pf->dead)
-		mask |= POLLHUP;
+		mask |= EPOLLHUP;
 	else if (pf->kind == INTERFACE) {
 		/* see comment in ppp_read */
 		struct ppp *ppp = PF_TO_PPP(pf);
@@ -549,7 +546,7 @@ static unsigned int ppp_poll(struct file *file, poll_table *wait)
 		ppp_recv_lock(ppp);
 		if (ppp->n_channels == 0 &&
 		    (ppp->flags & SC_LOOP_TRAFFIC) == 0)
-			mask |= POLLIN | POLLRDNORM;
+			mask |= EPOLLIN | EPOLLRDNORM;
 		ppp_recv_unlock(ppp);
 	}
 
@@ -604,30 +601,13 @@ static long ppp_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	if (cmd == PPPIOCDETACH) {
 		/*
-		 * We have to be careful here... if the file descriptor
-		 * has been dup'd, we could have another process in the
-		 * middle of a poll using the same file *, so we had
-		 * better not free the interface data structures -
-		 * instead we fail the ioctl.  Even in this case, we
-		 * shut down the interface if we are the owner of it.
-		 * Actually, we should get rid of PPPIOCDETACH, userland
-		 * (i.e. pppd) could achieve the same effect by closing
-		 * this fd and reopening /dev/ppp.
+		 * PPPIOCDETACH is no longer supported as it was heavily broken,
+		 * and is only known to have been used by pppd older than
+		 * ppp-2.4.2 (released November 2003).
 		 */
+		pr_warn_once("%s (%d) used obsolete PPPIOCDETACH ioctl\n",
+			     current->comm, current->pid);
 		err = -EINVAL;
-		if (pf->kind == INTERFACE) {
-			ppp = PF_TO_PPP(pf);
-			rtnl_lock();
-			if (file == ppp->owner)
-				unregister_netdevice(ppp->dev);
-			rtnl_unlock();
-		}
-		if (atomic_long_read(&file->f_count) < 2) {
-			ppp_release(NULL, file);
-			err = 0;
-		} else
-			pr_warn("PPPIOCDETACH file->f_count=%ld\n",
-				atomic_long_read(&file->f_count));
 		goto out;
 	}
 
@@ -880,7 +860,7 @@ static int ppp_unattached_ioctl(struct net *net, struct ppp_file *pf,
 		mutex_lock(&pn->all_ppp_mutex);
 		ppp = ppp_find_unit(pn, unit);
 		if (ppp) {
-			atomic_inc(&ppp->file.refcnt);
+			refcount_inc(&ppp->file.refcnt);
 			file->private_data = &ppp->file;
 			err = 0;
 		}
@@ -895,7 +875,7 @@ static int ppp_unattached_ioctl(struct net *net, struct ppp_file *pf,
 		spin_lock_bh(&pn->all_channels_lock);
 		chan = ppp_find_channel(pn, unit);
 		if (chan) {
-			atomic_inc(&chan->file.refcnt);
+			refcount_inc(&chan->file.refcnt);
 			file->private_data = &chan->file;
 			err = 0;
 		}
@@ -960,6 +940,8 @@ static __net_exit void ppp_exit_net(struct net *net)
 
 	mutex_destroy(&pn->all_ppp_mutex);
 	idr_destroy(&pn->units_idr);
+	WARN_ON_ONCE(!list_empty(&pn->all_channels));
+	WARN_ON_ONCE(!list_empty(&pn->new_channels));
 }
 
 static struct pernet_operations ppp_net_ops = {
@@ -977,9 +959,20 @@ static int ppp_unit_register(struct ppp *ppp, int unit, bool ifname_is_set)
 	mutex_lock(&pn->all_ppp_mutex);
 
 	if (unit < 0) {
-		ret = unit_get(&pn->units_idr, ppp);
+		ret = unit_get(&pn->units_idr, ppp, 0);
 		if (ret < 0)
 			goto err;
+		if (!ifname_is_set) {
+			while (1) {
+				snprintf(ppp->dev->name, IFNAMSIZ, "ppp%i", ret);
+				if (!__dev_get_by_name(ppp->ppp_net, ppp->dev->name))
+					break;
+				unit_put(&pn->units_idr, ret);
+				ret = unit_get(&pn->units_idr, ppp, ret + 1);
+				if (ret < 0)
+					goto err;
+			}
+		}
 	} else {
 		/* Caller asked for a specific unit number. Fail with -EEXIST
 		 * if unavailable. For backward compatibility, return -EEXIST
@@ -1128,7 +1121,7 @@ static int ppp_nl_newlink(struct net *src_net, struct net_device *dev,
 	 * the PPP unit identifer as suffix (i.e. ppp<unit_id>). This allows
 	 * userspace to infer the device name using to the PPPIOCGUNIT ioctl.
 	 */
-	if (!tb[IFLA_IFNAME])
+	if (!tb[IFLA_IFNAME] || !nla_len(tb[IFLA_IFNAME]) || !*(char *)nla_data(tb[IFLA_IFNAME]))
 		conf.ifname_is_set = false;
 
 	err = ppp_dev_configure(src_net, dev, &conf);
@@ -1342,14 +1335,12 @@ static int ppp_dev_init(struct net_device *dev)
 {
 	struct ppp *ppp;
 
-	netdev_lockdep_set_classes(dev);
-
 	ppp = netdev_priv(dev);
 	/* Let the netdevice take a reference on the ppp file. This ensures
 	 * that ppp_destroy_interface() won't run before the device gets
 	 * unregistered.
 	 */
-	atomic_inc(&ppp->file.refcnt);
+	refcount_inc(&ppp->file.refcnt);
 
 	return 0;
 }
@@ -1378,7 +1369,7 @@ static void ppp_dev_priv_destructor(struct net_device *dev)
 	struct ppp *ppp;
 
 	ppp = netdev_priv(dev);
-	if (atomic_dec_and_test(&ppp->file.refcnt))
+	if (refcount_dec_and_test(&ppp->file.refcnt))
 		ppp_destroy_interface(ppp);
 }
 
@@ -1685,7 +1676,7 @@ ppp_push(struct ppp *ppp)
 
 #ifdef CONFIG_PPP_MULTILINK
 static bool mp_protocol_compress __read_mostly = true;
-module_param(mp_protocol_compress, bool, S_IRUGO | S_IWUSR);
+module_param(mp_protocol_compress, bool, 0644);
 MODULE_PARM_DESC(mp_protocol_compress,
 		 "compress protocol id in multilink fragments");
 
@@ -2464,7 +2455,7 @@ ppp_mp_reconstruct(struct ppp *ppp)
 
 	if (ppp->mrru == 0)	/* do nothing until mrru is set */
 		return NULL;
-	head = list->next;
+	head = __skb_peek(list);
 	tail = NULL;
 	skb_queue_walk_safe(list, p, tmp) {
 	again:
@@ -2730,7 +2721,7 @@ ppp_unregister_channel(struct ppp_channel *chan)
 
 	pch->file.dead = 1;
 	wake_up_interruptible(&pch->file.rwait);
-	if (atomic_dec_and_test(&pch->file.refcnt))
+	if (refcount_dec_and_test(&pch->file.refcnt))
 		ppp_destroy_channel(pch);
 }
 
@@ -3100,7 +3091,7 @@ init_ppp_file(struct ppp_file *pf, int kind)
 	pf->kind = kind;
 	skb_queue_head_init(&pf->xq);
 	skb_queue_head_init(&pf->rq);
-	atomic_set(&pf->refcnt, 1);
+	refcount_set(&pf->refcnt, 1);
 	init_waitqueue_head(&pf->rwait);
 }
 
@@ -3227,7 +3218,7 @@ ppp_connect_channel(struct channel *pch, int unit)
 	list_add_tail(&pch->clist, &ppp->channels);
 	++ppp->n_channels;
 	pch->ppp = ppp;
-	atomic_inc(&ppp->file.refcnt);
+	refcount_inc(&ppp->file.refcnt);
 	ppp_unlock(ppp);
 	ret = 0;
 
@@ -3258,7 +3249,7 @@ ppp_disconnect_channel(struct channel *pch)
 		if (--ppp->n_channels == 0)
 			wake_up_interruptible(&ppp->file.rwait);
 		ppp_unlock(ppp);
-		if (atomic_dec_and_test(&ppp->file.refcnt))
+		if (refcount_dec_and_test(&ppp->file.refcnt))
 			ppp_destroy_interface(ppp);
 		err = 0;
 	}
@@ -3314,9 +3305,9 @@ static int unit_set(struct idr *p, void *ptr, int n)
 }
 
 /* get new free unit number and associate pointer with it */
-static int unit_get(struct idr *p, void *ptr)
+static int unit_get(struct idr *p, void *ptr, int min)
 {
-	return idr_alloc(p, ptr, 0, 0, GFP_KERNEL);
+	return idr_alloc(p, ptr, min, 0, GFP_KERNEL);
 }
 
 /* put unit number back to a pool */

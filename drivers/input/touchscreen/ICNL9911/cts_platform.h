@@ -48,6 +48,7 @@
 #endif /* CONFIG_OF */
 
 #include <linux/fb.h>
+#include <uapi/linux/fb.h>
 #include <linux/notifier.h>
 
 #include <linux/spi/spi.h>
@@ -81,9 +82,10 @@ enum cts_driver_log_level {
     CTS_DRIVER_LOG_INFO,
     CTS_DRIVER_LOG_DEBUG,
 };
-
+#if 0
 extern int cts_start_driver_log_redirect(const char *filepath, bool append_to_file,
         char *log_buffer, int log_buf_size, int log_level);
+#endif
 extern void cts_stop_driver_log_redirect(void);
 extern int cts_get_driver_log_redirect_size(void);
 extern void cts_log(int level, const char *fmt, ...);
@@ -130,7 +132,7 @@ struct cts_platform_data {
     wait_queue_head_t irq_waitq_head;
 #endif /* CFG_CTS_HANDLE_IRQ_USE_KTHREAD */
 
-    struct rt_mutex dev_lock;
+    struct mutex dev_lock;
     struct spinlock irq_lock;
     bool            irq_is_disable;
 
@@ -252,6 +254,8 @@ extern u8 *cts_plat_get_fw_log_buf(struct cts_platform_data *pdata, size_t size)
 
 extern int cts_plat_set_reset(struct cts_platform_data *pdata, int val);
 extern int cts_plat_get_int_pin(struct cts_platform_data *pdata);
+
+extern bool earjack_state;
 
 #endif /* CTS_PLATFORM_H */
 

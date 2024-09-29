@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include "gsp_r6p0_coef_cal.h"
@@ -164,15 +156,15 @@ static void adjust_coef_inter(int32_t *coef, int tap)
  * desc:find the entry have the same in_w in_h out_w out_h
  * return:if hit,return the entry pointer; else return null;
  */
-static struct COEF_ENTRY_T *gsp_r6p0_coef_cache_hit_check(
+static struct coef_entry *gsp_r6p0_coef_cache_hit_check(
 		struct gsp_r6p0_core *core,
-		uint16_t in_w, uint16_t in_h,
-		uint16_t out_w, uint16_t out_h,
-		uint16_t hor_tap, uint16_t ver_tap)
+		u16 in_w, u16 in_h,
+		u16 out_w, u16 out_h,
+		u16 hor_tap, u16 ver_tap)
 {
-	static uint32_t total_cnt = 1;
-	static uint32_t hit_cnt = 1;
-	struct COEF_ENTRY_T *pos = NULL;
+	static u32 total_cnt = 1;
+	static u32 hit_cnt = 1;
+	struct coef_entry *pos = NULL;
 
 	total_cnt++;
 	list_for_each_entry(pos, &core->coef_list, list) {
@@ -195,15 +187,14 @@ static struct COEF_ENTRY_T *gsp_r6p0_coef_cache_hit_check(
 }
 
 static inline void gsp_r6p0_coef_cache_move_to_head(struct gsp_r6p0_core *core,
-						struct COEF_ENTRY_T *entry)
+						struct coef_entry *entry)
 {
 	list_del(&entry->list);
 	list_add(&entry->list, &core->coef_list);
 }
 
-static uint8_t _InitPool(void *buffer_ptr,
-						 uint32_t buffer_size,
-						 struct GSC_MEM_POOL *pool_ptr)
+static u8 _InitPool(void *buffer_ptr, u32 buffer_size,
+		struct GSC_MEM_POOL *pool_ptr)
 {
 	if (NULL == buffer_ptr || 0 == buffer_size || NULL == pool_ptr)
 		return 0;
@@ -218,9 +209,7 @@ static uint8_t _InitPool(void *buffer_ptr,
 	return 1;
 }
 
-static void *_Allocate(uint32_t size,
-					   uint32_t align_shift,
-					   struct GSC_MEM_POOL *pool_ptr)
+static void *_Allocate(u32 size, u32 align_shift, struct GSC_MEM_POOL *pool_ptr)
 {
 	ulong begin_addr = 0;
 	ulong temp_addr = 0;
@@ -302,7 +291,7 @@ static void calc_coef(int tap, int32_t (*scaler_coef)[MAX_TAP],
 	/* sinc kernel, for down scaling */
 	if (kernel_type == GSP_SCL_TYPE_SINC) {
 		coef[mid_i] =
-			sin_32((int)((int64_t) 4096 * 256 / n_phase * N / M));
+		sin_32((int)((int64_t) 4096 * 256 / n_phase * N / M));
 
 		for (i = 0; i < mid_i; i++) {
 			coef[mid_i + i + 1] = (sin_32((int)((int64_t)
@@ -375,18 +364,17 @@ static void calc_coef(int tap, int32_t (*scaler_coef)[MAX_TAP],
 	}
 }
 
-uint32_t *gsp_r6p0_gen_block_scaler_coef(struct gsp_r6p0_core *core,
-				 uint32_t in_sz_x,
-				 uint32_t in_sz_y,
-				 uint32_t ouf_sz_x,
-				 uint32_t ouf_sz_y,
-				 uint32_t hor_tap,
-				 uint32_t ver_tap)
+u32 *gsp_r6p0_gen_block_scaler_coef(struct gsp_r6p0_core *core,
+				 u32 in_sz_x,
+				 u32 in_sz_y,
+				 u32 ouf_sz_x,
+				 u32 ouf_sz_y,
+				 u32 hor_tap,
+				 u32 ver_tap)
 {
 	struct GSC_MEM_POOL pool = { 0 };
-	struct COEF_ENTRY_T *entry = NULL;
-	int32_t icnt = 0;
-	int32_t jcnt = 0;
+	struct coef_entry *entry = NULL;
+	int32_t icnt, jcnt;
 	int32_t (*coeff_array_hor)[MAX_TAP] = NULL;
 	int32_t (*coeff_array_ver)[MAX_TAP] = NULL;
 	int32_t (*scaling_reg_buf_hor)[MAX_TAP / 2] = NULL;
@@ -434,7 +422,7 @@ uint32_t *gsp_r6p0_gen_block_scaler_coef(struct gsp_r6p0_core *core,
 
 	if (core->cache_coef_init_flag == 1) {
 		entry = list_entry(core->coef_list.prev,
-				struct COEF_ENTRY_T, list);
+				struct coef_entry, list);
 		if (entry->in_w == 0)
 			GSP_DEBUG("add.\n");
 		else

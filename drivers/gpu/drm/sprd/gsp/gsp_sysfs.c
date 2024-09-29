@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/device.h>
@@ -67,7 +59,7 @@ static void gsp_core_match_table_destroy(void)
 
 static struct gsp_core *gsp_core_match(struct device *dev)
 {
-	int i = 0;
+	int i;
 	struct gsp_core *core = NULL;
 
 	for (i = 0; i < table.core_cnt; i++) {
@@ -80,7 +72,7 @@ static struct gsp_core *gsp_core_match(struct device *dev)
 }
 
 static ssize_t core_cnt_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+			struct device_attribute *attr, char *buf)
 {
 	struct gsp_dev *gsp = NULL;
 
@@ -94,7 +86,7 @@ static ssize_t core_cnt_show(struct device *dev,
 }
 
 static ssize_t dev_state_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+			struct device_attribute *attr, char *buf)
 {
 
 	/* 1: idle, 0: busy*/
@@ -113,7 +105,7 @@ static ssize_t dev_state_show(struct device *dev,
 }
 
 static ssize_t core_state_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+			struct device_attribute *attr, char *buf)
 {
 	/* 1: idle, 0: busy*/
 	int idle = 0;
@@ -131,7 +123,7 @@ static ssize_t core_state_show(struct device *dev,
 }
 
 static ssize_t total_kcfg_num_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+			struct device_attribute *attr, char *buf)
 {
 	int num = 0;
 	struct gsp_core *core = NULL;
@@ -148,7 +140,7 @@ static ssize_t total_kcfg_num_show(struct device *dev,
 }
 
 static ssize_t empty_kcfg_num_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+			struct device_attribute *attr, char *buf)
 {
 	int num = 0;
 	struct gsp_core *core = NULL;
@@ -167,7 +159,7 @@ static ssize_t empty_kcfg_num_show(struct device *dev,
 }
 
 static ssize_t fill_kcfg_num_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
+			struct device_attribute *attr, char *buf)
 {
 	int num = 0;
 	struct gsp_core *core = NULL;

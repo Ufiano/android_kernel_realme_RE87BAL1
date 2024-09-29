@@ -5,24 +5,19 @@
 
 #include <linux/errno.h>
 #include <linux/types.h>
+#include <linux/kernel.h>
+#include <linux/string.h>
 
-#define WCNBUS_TX 1
-#define WCNBUS_RX 0
-#if IS_ENABLED(CONFIG_SDIOHAL)
-#define PUB_HEAD_RSV	4
-#else
+#define SDIOHAL_PUB_HEAD_RSV	4
 #define PUB_HEAD_RSV	0
-#endif
 
-#ifdef CONFIG_WCN_SIPC
-#define CHN_MAX_NUM (2 * BITS_PER_LONG)
+#define SIPC_CHN_MAX_NUM (2 * BITS_PER_LONG)
 #define SIPC_CHN_ATCMD 4
 #define SIPC_CHN_LOOPCHECK 11
 #define SIPC_CHN_ASSERT 12
 #define SIPC_CHN_LOG 5
-#else
+
 #define CHN_MAX_NUM 32
-#endif
 
 enum wcn_hard_intf_type {
 	HW_TYPE_SDIO,
@@ -61,7 +56,8 @@ enum slp_subsys {
 enum wcn_source_type {
 	WCN_SOURCE_BTWF,
 	WCN_SOURCE_GNSS,
-	WCN_SOURCE_WCN
+	WCN_SOURCE_WCN,
+	WCN_SOURCE_CP2_ALIVE  /*notify slogmodem wcn cp2 alive*/
 };
 
 enum wcn_bus_state {
@@ -91,7 +87,6 @@ struct mbuf_t {
 	unsigned int   seq;
 };
 
-#ifdef CONFIG_WCN_SIPC
 enum wcn_sipc_trans_type {
 	WCN_SIPC_TRANS_SBUF,
 	WCN_SIPC_TRANS_SBLOCK,
@@ -181,17 +176,16 @@ union wcn_chn_config {
 	.type = SIPC_TYPE_SBLOCK, \
 	.flag = _flag, .name = _name, \
 }
-#endif
 
 struct mchn_ops_t {
 	/* hardware interface type */
 	enum wcn_hard_intf_type hif_type;
 	/* channel index for wf/bt/fm */
 	int channel;
-	/* channel config paras */
-#ifdef CONFIG_WCN_SIPC
+
+	/* WCN_SIPC channel config paras */
 	union wcn_chn_config chn_config;
-#endif
+
 	/* inout=1 tx side, inout=0 rx side */
 	int inout;
 	/* set callback pop_link/push_link frequency */
@@ -317,6 +311,8 @@ extern void module_bus_init(void);
 extern void module_bus_deinit(void);
 extern struct sprdwcn_bus_ops *get_wcn_bus_ops(void);
 extern void wcn_assert_interface(enum wcn_source_type, char *str);
+extern bool wcn_is_assert(void);
+extern bool wcn_is_power_busy(void);
 
 static inline
 int sprdwcn_bus_preinit(void)

@@ -17,9 +17,9 @@
 #include "himax_ic_core.h"
 
 #if defined(HX_TP_PROC_2T2R)
-bool Is_2T2R;
-int HX_RX_NUM_2;
-int HX_TX_NUM_2;
+	bool Is_2T2R;
+	int HX_RX_NUM_2;
+	int HX_TX_NUM_2;
 #endif
 
 uint8_t g_diag_arr_num;
@@ -54,8 +54,8 @@ int32_t *diag_self_new;
 int32_t *diag_self_old;
 
 struct proc_dir_entry *himax_proc_debug_file;
-bool fw_update_complete;
-bool fw_update_going;
+bool	fw_update_complete;
+bool	fw_update_going;
 int handshaking_result;
 unsigned char debug_level_cmd;
 uint8_t cmd_set[8];
@@ -81,12 +81,12 @@ struct proc_dir_entry *himax_proc_pen_pos_file;
 
 struct timespec timeStart, timeEnd, timeDelta;
 int g_switch_mode;
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPLUS_PROC_NODE)	
 uint8_t g_log_pt_cnt = 0;
 #define LOG_POINT_CNT_MAX 150
 extern uint32_t g_oplus_debug_level;
-int oplus_baseline_read(struct seq_file *s);
-int oplus_delta_read_sub(struct seq_file *s);
+int oplus_baseline_read( struct seq_file *s );
+int oplus_delta_read_sub( struct seq_file *s );
 #endif
 /*
  *	Segment : Himax PROC Debug Function
@@ -100,20 +100,16 @@ static ssize_t himax_crc_test_read(char *buf, size_t len)
 
 	g_core_fp.fp_sense_off(true);
 	msleep(20);
-
 	if (g_core_fp._diff_overlay_flash() == 1)
 		size = FW_SIZE_128k;
-
 	else
 		size = FW_SIZE_64k;
-
 	result = g_core_fp.fp_calculateChecksum(false, size);
 	g_core_fp.fp_sense_on(0x01);
 
 	if (result)
 		ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
 				"CRC test is Pass!\n");
-
 	else
 		ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
 				"CRC test is Fail!\n");
@@ -122,7 +118,7 @@ static ssize_t himax_crc_test_read(char *buf, size_t len)
 }
 
 static ssize_t himax_vendor_read(struct file *file, char *buf,
-				 size_t len, loff_t *pos)
+				size_t len, loff_t *pos)
 {
 	ssize_t ret = 0;
 
@@ -137,7 +133,6 @@ static ssize_t himax_vendor_read(struct file *file, char *buf,
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
 					"CONFIG_VER = 0x%2.2X\n",
 					ic_data->vendor_config_ver);
-
 		} else {
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
 					"TOUCH_VER = 0x%2.2X\n",
@@ -148,27 +143,24 @@ static ssize_t himax_vendor_read(struct file *file, char *buf,
 		}
 
 		if (ic_data->vendor_cid_maj_ver < 0
-				&& ic_data->vendor_cid_min_ver < 0) {
+		&& ic_data->vendor_cid_min_ver < 0) {
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
 					"CID_VER = NULL\n");
-
 		} else {
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
 					"CID_VER = 0x%2.2X\n",
 					(ic_data->vendor_cid_maj_ver << 8 |
-					 ic_data->vendor_cid_min_ver));
+					ic_data->vendor_cid_min_ver));
 		}
 
 		if (ic_data->vendor_panel_ver < 0) {
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
 					"PANEL_VER = NULL\n");
-
 		} else {
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
 					"PANEL_VER = 0x%2.2X\n",
 					ic_data->vendor_panel_ver);
 		}
-
 		if (private_ts->chip_cell_type == CHIP_IS_IN_CELL) {
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
 					"Cusomer = %s\n",
@@ -177,7 +169,6 @@ static ssize_t himax_vendor_read(struct file *file, char *buf,
 					"Project = %s\n",
 					ic_data->vendor_proj_info);
 		}
-
 		ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret, "\n");
 		ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
 				"Himax Touch Driver Version:\n");
@@ -185,11 +176,12 @@ static ssize_t himax_vendor_read(struct file *file, char *buf,
 				HIMAX_DRIVER_VER);
 		HX_PROC_SEND_FLAG = 1;
 
-		if (copy_to_user(buf, buf_tmp, (len > BUF_SIZE) ? BUF_SIZE : len))
+		if (copy_to_user(buf, buf_tmp, (len > BUF_SIZE)?BUF_SIZE:len))
 			I("%s,here:%d\n", __func__, __LINE__);
 
-	} else
+	} else {
 		HX_PROC_SEND_FLAG = 0;
+	}
 
 	return ret;
 }
@@ -231,8 +223,8 @@ static int test_irq_pin(void)
 	usleep_range(20000, 20001);
 	g_core_fp.fp_register_read(tmp_addr, DATA_LEN_4, tmp_read, false);
 	I("R%02X%02X%02X%02XH = 0x%02X%02X%02X%02X\n",
-	  tmp_addr[3], tmp_addr[2], tmp_addr[1], tmp_addr[0],
-	  tmp_read[3], tmp_read[2], tmp_read[1], tmp_read[0]);
+		tmp_addr[3], tmp_addr[2], tmp_addr[1], tmp_addr[0],
+		tmp_read[3], tmp_read[2], tmp_read[1], tmp_read[0]);
 
 	usleep_range(20000, 20001);
 	himax_parse_assign_cmd(0x90028064, tmp_addr, DATA_LEN_4);
@@ -241,8 +233,8 @@ static int test_irq_pin(void)
 	usleep_range(20000, 20001);
 	g_core_fp.fp_register_read(tmp_addr, DATA_LEN_4, tmp_read, false);
 	I("R%02X%02X%02X%02XH = 0x%02X%02X%02X%02X\n",
-	  tmp_addr[3], tmp_addr[2], tmp_addr[1], tmp_addr[0],
-	  tmp_read[3], tmp_read[2], tmp_read[1], tmp_read[0]);
+		tmp_addr[3], tmp_addr[2], tmp_addr[1], tmp_addr[0],
+		tmp_read[3], tmp_read[2], tmp_read[1], tmp_read[0]);
 
 	usleep_range(20000, 20001);
 	himax_parse_assign_cmd(0x90028068, tmp_addr, DATA_LEN_4);
@@ -251,16 +243,14 @@ static int test_irq_pin(void)
 	usleep_range(20000, 20001);
 	g_core_fp.fp_register_read(tmp_addr, DATA_LEN_4, tmp_read, false);
 	I("R%02X%02X%02X%02XH = 0x%02X%02X%02X%02X\n",
-	  tmp_addr[3], tmp_addr[2], tmp_addr[1], tmp_addr[0],
-	  tmp_read[3], tmp_read[2], tmp_read[1], tmp_read[0]);
+		tmp_addr[3], tmp_addr[2], tmp_addr[1], tmp_addr[0],
+		tmp_read[3], tmp_read[2], tmp_read[1], tmp_read[0]);
 
 	usleep_range(20000, 20001);
 	irq_sts = himax_int_gpio_read(ts->pdata->gpio_irq);
-
 	if (irq_sts == 0) {
 		I("[LOW]Now IRQ is LOW!\n");
 		result += NO_ERR;
-
 	} else {
 		I("[LOW]Now IRQ is High!\n");
 		result += 1;
@@ -274,8 +264,8 @@ static int test_irq_pin(void)
 	usleep_range(20000, 20001);
 	g_core_fp.fp_register_read(tmp_addr, DATA_LEN_4, tmp_read, false);
 	I("R%02X%02X%02X%02XH = 0x%02X%02X%02X%02X\n",
-	  tmp_addr[3], tmp_addr[2], tmp_addr[1], tmp_addr[0],
-	  tmp_read[3], tmp_read[2], tmp_read[1], tmp_read[0]);
+		tmp_addr[3], tmp_addr[2], tmp_addr[1], tmp_addr[0],
+		tmp_read[3], tmp_read[2], tmp_read[1], tmp_read[0]);
 
 	usleep_range(20000, 20001);
 	himax_parse_assign_cmd(0x90028064, tmp_addr, DATA_LEN_4);
@@ -284,8 +274,8 @@ static int test_irq_pin(void)
 	usleep_range(20000, 20001);
 	g_core_fp.fp_register_read(tmp_addr, DATA_LEN_4, tmp_read, false);
 	I("R%02X%02X%02X%02XH = 0x%02X%02X%02X%02X\n",
-	  tmp_addr[3], tmp_addr[2], tmp_addr[1], tmp_addr[0],
-	  tmp_read[3], tmp_read[2], tmp_read[1], tmp_read[0]);
+		tmp_addr[3], tmp_addr[2], tmp_addr[1], tmp_addr[0],
+		tmp_read[3], tmp_read[2], tmp_read[1], tmp_read[0]);
 
 	usleep_range(20000, 20001);
 	himax_parse_assign_cmd(0x90028068, tmp_addr, DATA_LEN_4);
@@ -294,21 +284,18 @@ static int test_irq_pin(void)
 	usleep_range(20000, 20001);
 	g_core_fp.fp_register_read(tmp_addr, DATA_LEN_4, tmp_read, false);
 	I("R%02X%02X%02X%02XH = 0x%02X%02X%02X%02X\n",
-	  tmp_addr[3], tmp_addr[2], tmp_addr[1], tmp_addr[0],
-	  tmp_read[3], tmp_read[2], tmp_read[1], tmp_read[0]);
+		tmp_addr[3], tmp_addr[2], tmp_addr[1], tmp_addr[0],
+		tmp_read[3], tmp_read[2], tmp_read[1], tmp_read[0]);
 
 	usleep_range(20000, 20001);
 	irq_sts = himax_int_gpio_read(ts->pdata->gpio_irq);
-
 	if (irq_sts == 0) {
 		I("[High]Now IRQ is LOW!\n");
 		result += 1;
-
 	} else {
 		I("[High]Now IRQ is High!\n");
 		result += NO_ERR;
 	}
-
 	debug_data->is_checking_irq = false;
 
 	g_core_fp.fp_sense_on(0x00);
@@ -321,23 +308,20 @@ static ssize_t himax_int_en_read(char *buf, size_t len)
 	size_t ret = 0;
 	int check_rslt = -1;
 
+
 	if (debug_data->is_checking_irq) {
 		check_rslt = test_irq_pin();
-
 		if (check_rslt == NO_ERR) {
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
-					"IRQ check OK!\n");
-
+			"IRQ check OK!\n");
 		} else {
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
-					"IRQ check Fail!\n");
+			"IRQ check Fail!\n");
 		}
-
 	} else {
 		ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret, "%d\n",
-				ts->irq_enabled);
+		ts->irq_enabled);
 	}
-
 	return ret;
 }
 
@@ -351,17 +335,14 @@ static ssize_t himax_int_en_write(char *buf, size_t len)
 		return -EFAULT;
 	}
 
-	if (buf[0] == '0')
+	if (buf[0] == '0') {
 		himax_int_enable(0);
-
-	else if (buf[0] == '1')
+	} else if (buf[0] == '1') {
 		himax_int_enable(1);
-
-	else if (buf[0] == '2') {
+	} else if (buf[0] == '2') {
 		himax_int_enable(0);
 		free_irq(ts->hx_irq, ts);
 		ts->irq_enabled = 0;
-
 	} else if (buf[0] == '3') {
 		ret = himax_int_en_set();
 
@@ -369,14 +350,12 @@ static ssize_t himax_int_en_write(char *buf, size_t len)
 			ts->irq_enabled = 1;
 			atomic_set(&ts->irq_state, 1);
 		}
-
 	} else if (buf[0] == 't'
-			&& buf[1] == 'e'
-			&& buf[2] == 's'
-			&& buf[3] == 't') {
+		&& buf[1] == 'e'
+		&& buf[2] == 's'
+		&& buf[3] == 't') {
 		debug_data->is_checking_irq = true;
 		I("Checking IRQ start!\n");
-
 	} else
 		return -EINVAL;
 
@@ -418,10 +397,9 @@ static ssize_t himax_layout_write(char *buf, size_t len)
 		if (buf[i] == ',' || buf[i] == '\n') {
 			memset(buf_tmp, 0x0, sizeof(buf_tmp));
 
-			if (i - j <= 5)
+			if (i - j <= 5) {
 				memcpy(buf_tmp, buf + j, i - j);
-
-			else {
+			} else {
 				I("buffer size is over 5 char\n");
 				return len;
 			}
@@ -441,15 +419,14 @@ static ssize_t himax_layout_write(char *buf, size_t len)
 		ts->pdata->abs_y_min = layout[2];
 		ts->pdata->abs_y_max = (layout[3] - 1);
 		I("%d, %d, %d, %d\n",
-		  ts->pdata->abs_x_min, ts->pdata->abs_x_max,
-		  ts->pdata->abs_y_min, ts->pdata->abs_y_max);
+		ts->pdata->abs_x_min, ts->pdata->abs_x_max,
+		ts->pdata->abs_y_min, ts->pdata->abs_y_max);
 		input_unregister_device(ts->input_dev);
 		himax_input_register(ts);
-
 	} else {
 		I("ERR@%d, %d, %d, %d\n",
-		  ts->pdata->abs_x_min, ts->pdata->abs_x_max,
-		  ts->pdata->abs_y_min, ts->pdata->abs_y_max);
+		ts->pdata->abs_x_min, ts->pdata->abs_x_max,
+		ts->pdata->abs_y_min, ts->pdata->abs_y_max);
 	}
 
 	return len;
@@ -465,7 +442,7 @@ static ssize_t himax_debug_level_read(char *buf, size_t len)
 	ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret, "%u\n",
 			ts_data->debug_log_level);
 
-	if (copy_to_user(buf, buf_tmp, (len > BUF_SIZE) ? BUF_SIZE : len))
+	if (copy_to_user(buf, buf_tmp, (len > BUF_SIZE)?BUF_SIZE:len))
 		I("%s,here:%d\n", __func__, __LINE__);
 
 	return ret;
@@ -488,17 +465,14 @@ static ssize_t himax_debug_level_write(char *buf, size_t len)
 	for (i = 0; i < len; i++) {
 		if (buf[i] >= '0' && buf[i] <= '9')
 			ts->debug_log_level |= (buf[i] - '0');
-
 		else if (buf[i] >= 'A' && buf[i] <= 'F')
 			ts->debug_log_level |= (buf[i] - 'A' + 10);
-
 		else if (buf[i] >= 'a' && buf[i] <= 'f')
 			ts->debug_log_level |= (buf[i] - 'a' + 10);
 
 		if (i != len - 1)
 			ts->debug_log_level <<= 4;
 	}
-
 	I("Now debug level value=%d\n", ts->debug_log_level);
 
 	if (ts->debug_log_level & BIT(4)) {
@@ -508,36 +482,33 @@ static ssize_t himax_debug_level_write(char *buf, size_t len)
 
 	if (ts->debug_log_level & BIT(3)) {
 		if (ts->pdata->screenWidth > 0
-				&& ts->pdata->screenHeight > 0
-				&& (ts->pdata->abs_x_max - ts->pdata->abs_x_min) > 0
-				&& (ts->pdata->abs_y_max - ts->pdata->abs_y_min) > 0) {
+		&& ts->pdata->screenHeight > 0
+		&& (ts->pdata->abs_x_max - ts->pdata->abs_x_min) > 0
+		&& (ts->pdata->abs_y_max - ts->pdata->abs_y_min) > 0) {
 			ts->widthFactor =
 				(ts->pdata->screenWidth << SHIFTBITS)
 				/ (ts->pdata->abs_x_max
-				   - ts->pdata->abs_x_min);
+				- ts->pdata->abs_x_min);
 			ts->heightFactor =
 				(ts->pdata->screenHeight << SHIFTBITS)
 				/ (ts->pdata->abs_y_max
-				   - ts->pdata->abs_y_min);
+				- ts->pdata->abs_y_min);
 
-			if (ts->widthFactor > 0 && ts->heightFactor > 0)
+			if (ts->widthFactor > 0 && ts->heightFactor > 0) {
 				ts->useScreenRes = 1;
-
-			else {
+			} else {
 				ts->heightFactor = 0;
 				ts->widthFactor = 0;
 				ts->useScreenRes = 0;
 			}
-
-		} else
+		} else {
 			I("Enable finger debug with raw position mode!\n");
-
+		}
 	} else {
 		ts->useScreenRes = 0;
 		ts->widthFactor = 0;
 		ts->heightFactor = 0;
 	}
-
 END_FUNC:
 	return len;
 }
@@ -550,10 +521,10 @@ static ssize_t himax_proc_register_read(char *buf, size_t len)
 	memset(reg_read_data, 0x00, 128 * sizeof(uint8_t));
 
 	I("himax_register_show: %02X,%02X,%02X,%02X\n",
-	  reg_cmd[3], reg_cmd[2],
-	  reg_cmd[1], reg_cmd[0]);
+			reg_cmd[3], reg_cmd[2],
+			reg_cmd[1], reg_cmd[0]);
 	g_core_fp.fp_register_read(reg_cmd, 128,
-				   reg_read_data, cfg_flag);
+			reg_read_data, cfg_flag);
 
 	ret += snprintf(buf_tmp + ret, len - ret,
 			"command:  %02X,%02X,%02X,%02X\n",
@@ -562,13 +533,12 @@ static ssize_t himax_proc_register_read(char *buf, size_t len)
 
 	for (i = 0; i < 128; i++) {
 		ret += snprintf(buf_tmp + ret,
-				sizeof(buf_tmp) - ret,
-				"0x%2.2X ",
-				reg_read_data[i]);
-
+			sizeof(buf_tmp) - ret,
+			"0x%2.2X ",
+			reg_read_data[i]);
 		if ((i % 16) == 15)
 			ret += snprintf(buf_tmp + ret,
-					sizeof(buf_tmp) - ret, "\n");
+				sizeof(buf_tmp) - ret, "\n");
 
 	}
 
@@ -599,8 +569,8 @@ static ssize_t himax_proc_register_write(char *buf, size_t len)
 	I("himax %s\n", buf);
 
 	if ((buf[0] == 'r' || buf[0] == 'w')
-			&& buf[1] == ':'
-			&& buf[2] == 'x') {
+	&& buf[1] == ':'
+	&& buf[2] == 'x') {
 		length = strlen(buf);
 
 		/* I("%s: length = %d.\n", __func__,length); */
@@ -618,110 +588,96 @@ static ssize_t himax_proc_register_write(char *buf, size_t len)
 
 		switch (buf[0]) {
 		case 'r':
-			if (buf[3] == 'F' && buf[4] == 'E' && length == 4) {
-				length = length - base;
-				cfg_flag = 1;
-				memcpy(buff_tmp, data_str + base + 1, length);
+		if (buf[3] == 'F' && buf[4] == 'E' && length == 4) {
+			length = length - base;
+			cfg_flag = 1;
+			memcpy(buff_tmp, data_str + base + 1, length);
+		} else {
+			cfg_flag = 0;
+			memcpy(buff_tmp, data_str + 1, length);
+		}
+		byte_length = length / 2;
+		if (!kstrtoul(buff_tmp, 16, &result)) {
+			for (i = 0; i < byte_length; i++)
+				reg_cmd[i] =
+					(uint8_t)(result >> i * 8);
+		}
 
-			} else {
-				cfg_flag = 0;
-				memcpy(buff_tmp, data_str + 1, length);
-			}
+		if (strcmp(HX_85XX_H_SERIES_PWON,
+			private_ts->chip_name) == 0 && cfg_flag == 0)
+			cfg_flag = 2;
+		break;
+		case 'w':
+		if (buf[3] == 'F' && buf[4] == 'E') {
+			cfg_flag = 1;
+			memcpy(buff_tmp, buf + base + 3, length);
+		} else {
+			cfg_flag = 0;
+			memcpy(buff_tmp, buf + 3, length);
+		}
 
+		if (count < 3) {
 			byte_length = length / 2;
 
 			if (!kstrtoul(buff_tmp, 16, &result)) {
+				/* command */
 				for (i = 0; i < byte_length; i++)
-					reg_cmd[i] =
-						(uint8_t)(result >> i * 8);
+					reg_cmd[i] = (uint8_t)(result >> i * 8);
 			}
 
-			if (strcmp(HX_85XX_H_SERIES_PWON,
-					private_ts->chip_name) == 0 && cfg_flag == 0)
-				cfg_flag = 2;
-
-			break;
-
-		case 'w':
-			if (buf[3] == 'F' && buf[4] == 'E') {
-				cfg_flag = 1;
-				memcpy(buff_tmp, buf + base + 3, length);
-
-			} else {
-				cfg_flag = 0;
-				memcpy(buff_tmp, buf + 3, length);
+			if (!kstrtoul(data_str + 1, 16, &result)) {
+				/* data */
+				for (i = 0; i < byte_length; i++)
+					w_data[i] = (uint8_t)(result >> i * 8);
 			}
 
-			if (count < 3) {
-				byte_length = length / 2;
-
-				if (!kstrtoul(buff_tmp, 16, &result)) {
-					/* command */
-					for (i = 0; i < byte_length; i++)
-						reg_cmd[i] = (uint8_t)(result >> i * 8);
-				}
-
-				if (!kstrtoul(data_str + 1, 16, &result)) {
-					/* data */
-					for (i = 0; i < byte_length; i++)
-						w_data[i] = (uint8_t)(result >> i * 8);
-				}
-
-				g_core_fp.fp_register_write(reg_cmd,
-							    byte_length, w_data, cfg_flag);
-
-			} else {
-				for (i = 0; i < count; i++) {
-					/* parsing addr after 'x' */
-					memset(buff_tmp, 0x0, sizeof(buff_tmp));
-
-					if (cfg_flag != 0 && i != 0)
-						byte_length = 2;
-
-					else
-						byte_length = x_pos[1] - x_pos[0] - 2;
-
+			g_core_fp.fp_register_write(reg_cmd,
+			byte_length, w_data, cfg_flag);
+		} else {
+			for (i = 0; i < count; i++) {
+				/* parsing addr after 'x' */
+				memset(buff_tmp, 0x0, sizeof(buff_tmp));
+				if (cfg_flag != 0 && i != 0)
+					byte_length = 2;
+				else
+					byte_length = x_pos[1] - x_pos[0] - 2;
 					/* original */
 
-					memcpy(buff_tmp, buf + x_pos[i] + 1, byte_length);
+				memcpy(buff_tmp, buf+x_pos[i]+1, byte_length);
 
-					/* I("%s: buff_tmp = %s\n",*/
-					/*	__func__, buff_tmp);*/
-					if (!kstrtoul(buff_tmp, 16, &result)) {
-						if (i == 0)
-							reg_cmd[i] = (uint8_t)(result);
-
+				/* I("%s: buff_tmp = %s\n",*/
+				/*	__func__, buff_tmp);*/
+				if (!kstrtoul(buff_tmp, 16, &result)) {
+					if (i == 0)
+						reg_cmd[i] = (uint8_t)(result);
 						/* I("%s:
 						 * reg_cmd
 						 * = %X\n", __func__,
 						 * reg_cmd[0]);
 						 */
-						else
-							w_data[i - 1] =
-								(uint8_t)(result);
-
+					else
+						w_data[i - 1] =
+							(uint8_t)(result);
 						/* I("%s: w_data[%d] =
 						 * %2X\n", __func__,
 						 * loop_i - 1,
 						 * w_data[loop_i - 1]);
 						 */
-					}
 				}
-
-				byte_length = count - 1;
-
-				if (strcmp(HX_85XX_H_SERIES_PWON,
-						private_ts->chip_name) == 0 && cfg_flag == 0)
-					cfg_flag = 2;
-
-				g_core_fp.fp_register_write(reg_cmd,
-							    byte_length, &w_data[0], cfg_flag);
 			}
 
-			break;
+			byte_length = count - 1;
+			if (strcmp(HX_85XX_H_SERIES_PWON,
+				private_ts->chip_name) == 0 && cfg_flag == 0) {
+				cfg_flag = 2;
+			}
+
+			g_core_fp.fp_register_write(reg_cmd,
+				byte_length, &w_data[0], cfg_flag);
+			}
+		break;
 		};
 	}
-
 	return len;
 }
 
@@ -782,12 +738,12 @@ int32_t *getMutualBuffer_2(void)
 void setMutualBuffer_2(uint8_t x_num_2, uint8_t y_num_2)
 {
 	diag_mutual_2 =
-		kzalloc(x_num_2 * y_num_2 * sizeof(int32_t), GFP_KERNEL);
+	  kzalloc(x_num_2 * y_num_2 * sizeof(int32_t), GFP_KERNEL);
 }
 #endif
 
 int himax_set_diag_cmd(struct himax_ic_data *ic_data,
-		       struct himax_report_data *hx_touch_data)
+		struct himax_report_data *hx_touch_data)
 {
 	struct himax_ts_data *ts = private_ts;
 	int32_t *mutual_data;
@@ -803,15 +759,13 @@ int himax_set_diag_cmd(struct himax_ic_data *ic_data,
 			goto bypass_checksum_failed_packet;
 
 #if defined(HX_TP_PROC_2T2R)
-
 		if (Is_2T2R && (hx_touch_data->diag_cmd >= 4 &&
-				hx_touch_data->diag_cmd <= 6)) {
+			hx_touch_data->diag_cmd <= 6)) {
 			mutual_data = getMutualBuffer_2();
 			self_data = getSelfBuffer();
 			/* initiallize the block number of mutual and self */
 			mul_num = ic_data->HX_RX_NUM_2 * ic_data->HX_TX_NUM_2;
 			self_num = ic_data->HX_RX_NUM_2 + ic_data->HX_TX_NUM_2;
-
 		} else
 #endif
 		{
@@ -821,15 +775,13 @@ int himax_set_diag_cmd(struct himax_ic_data *ic_data,
 			mul_num = ic_data->HX_RX_NUM * ic_data->HX_TX_NUM;
 			self_num = ic_data->HX_RX_NUM + ic_data->HX_TX_NUM;
 		}
-
 		g_core_fp.fp_diag_parse_raw_data(hx_touch_data, mul_num,
-						 self_num, hx_touch_data->diag_cmd, mutual_data,
-						 self_data);
-
+			self_num, hx_touch_data->diag_cmd, mutual_data,
+			self_data);
 	} else if (hx_touch_data->diag_cmd == 8) {
 		memset(diag_coor, 0x00, sizeof(diag_coor));
 		memcpy(&(diag_coor[0]), &hx_touch_data->hx_coord_buf[0],
-		       hx_touch_data->touch_info_size);
+		  hx_touch_data->touch_info_size);
 	}
 
 	/* assign state info data */
@@ -852,25 +804,21 @@ void himax_log_touch_data(int start)
 	if (hx_touch_data->diag_cmd > 0) {
 		print_size = hx_touch_data->touch_all_size;
 		buf = kcalloc(print_size, sizeof(uint8_t), GFP_KERNEL);
-
 		if (buf == NULL) {
 			E("%s, Failed to allocate memory\n", __func__);
 			return;
 		}
 
 		memcpy(buf, hx_touch_data->hx_coord_buf,
-		       hx_touch_data->touch_info_size);
+		  hx_touch_data->touch_info_size);
 		memcpy(&buf[hx_touch_data->touch_info_size],
-		       hx_touch_data->hx_rawdata_buf,
-		       print_size - hx_touch_data->touch_info_size);
+		  hx_touch_data->hx_rawdata_buf,
+		  print_size - hx_touch_data->touch_info_size);
 	}
-
 #if defined(HX_SMART_WAKEUP)
-
-	else if ((private_ts->SMWP_enable || tp_gesture) > 0 && private_ts->suspended) {
+	else if ((private_ts->SMWP_enable || tp_gesture)> 0 && private_ts->suspended) {
 		print_size = hx_touch_data->event_size;
 		buf = kcalloc(print_size, sizeof(uint8_t), GFP_KERNEL);
-
 		if (buf == NULL) {
 			E("%s, Failed to allocate memory\n", __func__);
 			return;
@@ -878,20 +826,16 @@ void himax_log_touch_data(int start)
 
 		memcpy(buf, hx_touch_data->hx_event_buf, print_size);
 	}
-
 #endif
-
 	else if (hx_touch_data->diag_cmd == 0) {
 		print_size = hx_touch_data->touch_info_size;
 		buf = kcalloc(print_size, sizeof(uint8_t), GFP_KERNEL);
-
 		if (buf == NULL) {
 			E("%s, Failed to allocate memory\n", __func__);
 			return;
 		}
 
 		memcpy(buf, hx_touch_data->hx_coord_buf, print_size);
-
 	} else {
 		E("%s:cmd fault\n", __func__);
 		return;
@@ -900,9 +844,9 @@ void himax_log_touch_data(int start)
 	for (i = 0; i < print_size; i += 8) {
 		if ((i + 7) >= print_size) {
 			I("P %2d = 0x%2.2X P %2d = 0x%2.2X ",
-			  i, buf[i], i + 1, buf[i + 1]);
+				i, buf[i], i + 1, buf[i + 1]);
 			I("P %2d = 0x%2.2X P %2d = 0x%2.2X\n",
-			  i + 2, buf[i + 2], i + 3, buf[i + 3]);
+				i + 2, buf[i + 2], i + 3, buf[i + 3]);
 			break;
 		}
 
@@ -916,7 +860,6 @@ void himax_log_touch_data(int start)
 		  i + 6, buf[i + 6], i + 7, buf[i + 7]);
 		I("\n");
 	}
-
 	kfree(buf);
 }
 
@@ -929,31 +872,30 @@ void himax_log_touch_event(struct himax_ts_data *ts, int start)
 		return;   /*report data when end of ts_work*/
 
 	if (g_target_report_data->finger_on > 0 &&
-			g_target_report_data->finger_num > 0) {
+		g_target_report_data->finger_num > 0) {
 		for (i = 0; i < ts->nFinger_support; i++) {
 			if (g_target_report_data->p[i].x >= 0
-					&& g_target_report_data->p[i].x
-					<= ts->pdata->abs_x_max
-					&& g_target_report_data->p[i].y >= 0
-					&& g_target_report_data->p[i].y
-					<= ts->pdata->abs_y_max) {
+			&& g_target_report_data->p[i].x
+			<= ts->pdata->abs_x_max
+			&& g_target_report_data->p[i].y >= 0
+			&& g_target_report_data->p[i].y
+			<= ts->pdata->abs_y_max) {
 				I(PRT_LOG,
-				  i + 1,
-				  g_target_report_data->p[i].x,
-				  g_target_report_data->p[i].y,
-				  g_target_report_data->p[i].w,
-				  g_target_report_data->p[i].w,
-				  i + 1,
-				  g_target_report_data->ig_count);
-			}
+					i + 1,
+					g_target_report_data->p[i].x,
+					g_target_report_data->p[i].y,
+					g_target_report_data->p[i].w,
+					g_target_report_data->p[i].w,
+					i + 1,
+					g_target_report_data->ig_count);
+				}
 		}
-
 	} else if (g_target_report_data->finger_on == 0
-			&& g_target_report_data->finger_num == 0)
+	&& g_target_report_data->finger_num == 0) {
 		I("All Finger leave\n");
-
-	else
+	} else {
 		I("%s : wrong input!\n", __func__);
+	}
 }
 void himax_log_touch_int_devation(int touched)
 {
@@ -962,24 +904,22 @@ void himax_log_touch_int_devation(int touched)
 		/* I(" Irq start time = %ld.%06ld s\n",
 		 * timeStart.tv_sec, timeStart.tv_nsec/1000);
 		 */
-
 	} else if (touched == HX_FINGER_LEAVE) {
 		getnstimeofday(&timeEnd);
 		timeDelta.tv_nsec =
-			(timeEnd.tv_sec * 1000000000 + timeEnd.tv_nsec) -
-			(timeStart.tv_sec * 1000000000 + timeStart.tv_nsec);
+		  (timeEnd.tv_sec * 1000000000 + timeEnd.tv_nsec) -
+		  (timeStart.tv_sec * 1000000000 + timeStart.tv_nsec);
 		/*  I("Irq finish time = %ld.%06ld s\n",
 		 *	timeEnd.tv_sec, timeEnd.tv_nsec/1000);
 		 */
 		I("Touch latency = %ld us\n", timeDelta.tv_nsec / 1000);
 		I("bus_speed = %d kHz\n", private_ts->bus_speed);
-
 		if (g_target_report_data->finger_on == 0
-				&& g_target_report_data->finger_num == 0)
+		&& g_target_report_data->finger_num == 0)
 			I("All Finger leave\n");
-
-	} else
+	} else {
 		I("%s : wrong input!\n", __func__);
+	}
 }
 
 #define RAW_DOWN_STATUS "status: Raw:F:%02d Down, X:%d, Y:%d, W:%d\n"
@@ -992,25 +932,23 @@ void himax_log_touch_event_detail(struct himax_ts_data *ts, int start)
 	if (start == HX_FINGER_LEAVE) {
 		for (i = 0; i < ts->nFinger_support; i++) {
 			if (((ts->old_finger >> i & 1) == 0)
-					&& ((ts->pre_finger_mask >> i & 1) == 1)) {
+			&& ((ts->pre_finger_mask >> i & 1) == 1)) {
 				if (g_target_report_data->p[i].x >= 0
-						&& g_target_report_data->p[i].x
-						<= ts->pdata->abs_x_max
-						&& g_target_report_data->p[i].y >= 0
-						&& g_target_report_data->p[i].y
-						<= ts->pdata->abs_y_max) {
+				&& g_target_report_data->p[i].x
+				<= ts->pdata->abs_x_max
+				&& g_target_report_data->p[i].y >= 0
+				&& g_target_report_data->p[i].y
+				<= ts->pdata->abs_y_max) {
 					I(RAW_DOWN_STATUS, i + 1,
-					  g_target_report_data->p[i].x,
-					  g_target_report_data->p[i].y,
-					  g_target_report_data->p[i].w);
+					g_target_report_data->p[i].x,
+					g_target_report_data->p[i].y,
+					g_target_report_data->p[i].w);
 				}
-
 			} else if ((((ts->old_finger >> i & 1) == 1)
-					&& ((ts->pre_finger_mask >> i & 1) == 0))) {
+			&& ((ts->pre_finger_mask >> i & 1) == 0))) {
 				I(RAW_UP_STATUS, i + 1,
-				  ts->pre_finger_data[i][0],
-				  ts->pre_finger_data[i][1]);
-
+					ts->pre_finger_data[i][0],
+					ts->pre_finger_data[i][1]);
 			} else {
 				/* I("dbg hx_point_num=%d, old_finger=0x%02X,"
 				 * " pre_finger_mask=0x%02X\n",
@@ -1028,50 +966,40 @@ void himax_ts_dbg_func(struct himax_ts_data *ts, int start)
 		/* I("debug level 1\n"); */
 		himax_log_touch_data(start);
 	}
+#if defined(OPLUS_PROC_NODE)	
+	if ((ts->debug_log_level & BIT(1)) 
+		|| (g_oplus_debug_level == 0) 
+		|| (g_oplus_debug_level == 1)
+		|| (g_oplus_debug_level == 2)){
+			if((g_oplus_debug_level == 0) || (g_oplus_debug_level == 1)){
+				if(g_log_pt_cnt < LOG_POINT_CNT_MAX ){
+					g_log_pt_cnt++;
+				}else if(g_log_pt_cnt == LOG_POINT_CNT_MAX ){
+               		     himax_log_touch_event(ts, start);
+                		    g_log_pt_cnt = 0;
+				}
+			}else{
 
-#if defined(OPLUS_PROC_NODE)
-
-	if ((ts->debug_log_level & BIT(1))
-			|| (g_oplus_debug_level == 0)
-			|| (g_oplus_debug_level == 1)
-			|| (g_oplus_debug_level == 2)) {
-		if ((g_oplus_debug_level == 0) || (g_oplus_debug_level == 1)) {
-			if (g_log_pt_cnt < LOG_POINT_CNT_MAX)
-				g_log_pt_cnt++;
-
-			else if (g_log_pt_cnt == LOG_POINT_CNT_MAX) {
+				/* I("debug level 2\n"); */
 				himax_log_touch_event(ts, start);
-				g_log_pt_cnt = 0;
 			}
-
-		} else {
-
-			/* I("debug level 2\n"); */
-			himax_log_touch_event(ts, start);
-		}
 	}
-
 #else
-
 	if (ts->debug_log_level & BIT(1)) {
 		/* I("debug level 2\n"); */
 		himax_log_touch_event(ts, start);
 	}
-
 #endif
 
 	if (ts->debug_log_level & BIT(2)) {
 		/* I("debug level 4\n"); */
 		himax_log_touch_int_devation(start);
 	}
-
-#if defined(OPLUS_PROC_NODE)
-
-	if ((ts->debug_log_level & BIT(3))
-			|| (g_oplus_debug_level == 1)
-			|| (g_oplus_debug_level == 2)) {
+#if defined(OPLUS_PROC_NODE)	
+	if ((ts->debug_log_level & BIT(3)) 
+		||(g_oplus_debug_level == 1)
+		||(g_oplus_debug_level == 2)){
 #else
-
 	if (ts->debug_log_level & BIT(3)) {
 #endif
 		/* I("debug level 8\n"); */
@@ -1087,20 +1015,16 @@ static int himax_change_mode(uint8_t str_pw, uint8_t end_pw)
 	/*sense off*/
 	g_core_fp.fp_sense_off(true);
 	/*mode change*/
-	data[1] = str_pw;
-	data[0] = str_pw;
-
+	data[1] = str_pw; data[0] = str_pw;
 	if (g_core_fp.fp_assign_sorting_mode != NULL)
 		g_core_fp.fp_assign_sorting_mode(data);
 
 	/*sense on*/
 	g_core_fp.fp_sense_on(1);
-
 	/*wait mode change*/
 	do {
 		if (g_core_fp.fp_check_sorting_mode != NULL)
 			g_core_fp.fp_check_sorting_mode(data);
-
 		if ((data[0] == end_pw) && (data[1] == end_pw))
 			return 0;
 
@@ -1129,11 +1053,9 @@ static ssize_t himax_diag_cmd_write(char *buf, size_t len)
 		if (!kstrtoint(buf, 16, &rst)) {
 			ts->diag_cmd = rst;
 			I("%s: dsram_flag = %d\n", __func__, dsram_flag);
-
 			if (dsram_flag) {
 				/*Cancal work queue and return to stack*/
 				process_type = 0;
-
 				while (dsram_flag == true)
 					usleep_range(10000, 11000);
 
@@ -1141,117 +1063,94 @@ static ssize_t himax_diag_cmd_write(char *buf, size_t len)
 				himax_int_enable(1);
 				g_core_fp.fp_return_event_stack();
 			}
-
 			g_core_fp.fp_diag_register_set(ts->diag_cmd, 0, false);
 			I("%s: Set raw out select 0x%X.\n",
-			  __func__, ts->diag_cmd);
+					__func__, ts->diag_cmd);
 		}
-
 		if (!ts->diag_cmd) {
 			if (mode_flag) /*back to normal mode*/
 				himax_change_mode(0x00, 0x99);
 		}
-
 		break;
-
 	case 2:/*data processing + rawout select - diag,XY*/
 		if (!kstrtoint(buf, 16, &rst)) {
 			process_type = (rst >> 4) & 0xF;
 			ts->diag_cmd = rst & 0xF;
 		}
-
 		if (ts->diag_cmd == 0)
 			break;
-
 		else if (process_type > 0 && process_type <= 3) {
 			if (!dsram_flag) {
 				/*Start wrok queue*/
 				himax_int_enable(0);
 				g_core_fp.fp_diag_register_set(ts->diag_cmd,
-							       process_type, false);
+					process_type, false);
 
 				queue_delayed_work(ts->himax_diag_wq,
-						   &ts->himax_diag_delay_work, 2 * HZ / 100);
+				&ts->himax_diag_delay_work, 2 * HZ / 100);
 				dsram_flag = true;
 
 				I("%s: Start get raw data in DSRAM\n",
-				  __func__);
-
+					__func__);
 			} else {
 				g_core_fp.fp_diag_register_set(ts->diag_cmd,
-							       process_type, false);
+					process_type, false);
 			}
 		}
-
 		break;
-
 	case 4:/*data processing + rawout select - diag,XXYY*/
 		/*ex:XXYY=010A=dsram rawdata*/
 		I("%s, now case 4\n", __func__);
-
 		if (!kstrtoint(buf, 16, &rst)) {
 			process_type = (rst >> 8) & 0xFF;
 			ts->diag_cmd = rst & 0xFF;
 			I("%s:process_type=0x%02X, diag_cmd=0x%02X\n",
-			  __func__, process_type, ts->diag_cmd);
+			__func__, process_type, ts->diag_cmd);
 		}
-
 		if (process_type <= 0 || ts->diag_cmd <= 0)
 			break;
-
 		else if (process_type > 0 && process_type <= 3) {
 			if (!dsram_flag) {
 				/*Start wrok queue*/
 				himax_int_enable(0);
 				g_core_fp.fp_diag_register_set(ts->diag_cmd,
-							       process_type, true);
+					process_type, true);
 
 				queue_delayed_work(ts->himax_diag_wq,
-						   &ts->himax_diag_delay_work, 2 * HZ / 100);
+				&ts->himax_diag_delay_work, 2 * HZ / 100);
 				dsram_flag = true;
 
 				I("%s: Start get raw data in DSRAM\n",
-				  __func__);
-
+					__func__);
 			} else {
 				g_core_fp.fp_diag_register_set(ts->diag_cmd,
-							       process_type, true);
+					process_type, true);
 			}
 		}
-
 		break;
-
 	case 9:/*change mode - mode:XXYY(start PW,end PW)*/
 		str_ptr = strnstr(buf, dbg_map_str, len);
-
 		if (str_ptr) {
 			str_len = strlen(dbg_map_str);
-
 			if (!kstrtoint(buf + str_len, 16, &rst)) {
 				str_pw = (rst >> 8) & 0xFF;
 				end_pw = rst & 0xFF;
-
 				if (!himax_change_mode(str_pw, end_pw)) {
 					mode_flag = 1;
 					I(PRT_OK_LOG, __func__,
-					  rst, str_pw, end_pw);
-
+					rst, str_pw, end_pw);
 				} else
 					I(PRT_FAIL_LOG,	__func__,
-					  str_pw, end_pw);
+					str_pw, end_pw);
 			}
-
 		} else {
 			I("%s: Can't find string [%s].\n",
-			  __func__, dbg_map_str);
+					__func__, dbg_map_str);
 		}
-
 		break;
-
 	default:
 		I("%s: Length is not correct.\n", __func__);
 	}
-
 	return len;
 }
 
@@ -1326,18 +1225,17 @@ static void print_state_info(struct seq_file *s)
 }
 
 static void himax_diag_arrange_print(struct seq_file *s, int i, int j,
-				     int transpose)
+				int transpose)
 {
 	if (transpose)
 		seq_printf(s, "%6d", diag_mutual[j + i * ic_data->HX_RX_NUM]);
-
 	else
 		seq_printf(s, "%6d", diag_mutual[i + j * ic_data->HX_RX_NUM]);
 }
 
 /* ready to print second step which is column*/
 static void himax_diag_arrange_inloop(struct seq_file *s, int in_init,
-				      int out_init, bool transpose, int j)
+				int out_init, bool transpose, int j)
 {
 	int x_channel = ic_data->HX_RX_NUM;
 	int y_channel = ic_data->HX_TX_NUM;
@@ -1346,7 +1244,6 @@ static void himax_diag_arrange_inloop(struct seq_file *s, int in_init,
 
 	if (transpose)
 		in_max = y_channel;
-
 	else
 		in_max = x_channel;
 
@@ -1357,12 +1254,10 @@ static void himax_diag_arrange_inloop(struct seq_file *s, int in_init,
 		if (transpose) {
 			if (out_init > 0)
 				seq_printf(s, " %5d\n", diag_self[j]);
-
 			else
 				seq_printf(s, " %5d\n",
-					   diag_self[x_channel - j - 1]);
+					diag_self[x_channel - j - 1]);
 		}
-
 	} else {	/* bit0 = 0 */
 		for (i = 0; i < in_max; i++)
 			himax_diag_arrange_print(s, i, j, transpose);
@@ -1370,8 +1265,7 @@ static void himax_diag_arrange_inloop(struct seq_file *s, int in_init,
 		if (transpose) {
 			if (out_init > 0)
 				seq_printf(s, " %5d\n",
-					   diag_self[x_channel - j - 1]);
-
+					diag_self[x_channel - j - 1]);
 			else
 				seq_printf(s, " %5d\n", diag_self[j]);
 		}
@@ -1380,7 +1274,7 @@ static void himax_diag_arrange_inloop(struct seq_file *s, int in_init,
 
 /* print first step which is row */
 static void himax_diag_arrange_outloop(struct seq_file *s, int transpose,
-				       int out_init, int in_init)
+				int out_init, int in_init)
 {
 	int j;
 	int x_channel = ic_data->HX_RX_NUM;
@@ -1390,7 +1284,6 @@ static void himax_diag_arrange_outloop(struct seq_file *s, int transpose,
 
 	if (transpose)
 		out_max = x_channel;
-
 	else
 		out_max = y_channel;
 
@@ -1400,25 +1293,24 @@ static void himax_diag_arrange_outloop(struct seq_file *s, int transpose,
 		for (j = out_init - 1; j >= 0; j--) {
 			seq_printf(s, "%3c%02d%c", '[', j + 1, ']');
 			himax_diag_arrange_inloop(s, in_init, out_init,
-						  transpose, j);
+					transpose, j);
 
 			if (!transpose) {
 				seq_printf(s, " %5d\n",
-					   diag_self[y_channel + x_channel - self_cnt]);
+				  diag_self[y_channel + x_channel - self_cnt]);
 				self_cnt++;
 			}
 		}
-
 	} else {	/* bit1 = 0 */
 		/* self_cnt = x_channel; */
 		for (j = 0; j < out_max; j++) {
 			seq_printf(s, "%3c%02d%c", '[', j + 1, ']');
 			himax_diag_arrange_inloop(s, in_init, out_init,
-						  transpose, j);
+					transpose, j);
 
 			if (!transpose) {
 				seq_printf(s, " %5d\n",
-					   diag_self[j + x_channel]);
+					diag_self[j + x_channel]);
 			}
 		}
 	}
@@ -1444,32 +1336,29 @@ static void himax_diag_arrange(struct seq_file *s)
 
 		seq_puts(s, "\n");
 		himax_diag_arrange_outloop(s, bit2, bit1 * y_channel,
-					   bit0 * x_channel);
+					bit0 * x_channel);
 		seq_printf(s, "%6c", ' ');
 
 		if (bit0 == 1) {
 			for (i = x_channel - 1; i >= 0; i--)
 				seq_printf(s, "%6d", diag_self[i]);
-
 		} else {
 			for (i = 0; i < x_channel; i++)
 				seq_printf(s, "%6d", diag_self[i]);
 		}
-
 	} else {
 		for (i = 0 ; i <= y_channel; i++)
 			seq_printf(s, "%3c%02d%c", '[', i, ']');
 
 		seq_puts(s, "\n");
 		himax_diag_arrange_outloop(s, bit2, bit1 * x_channel,
-					   bit0 * y_channel);
+					bit0 * y_channel);
 		seq_printf(s, "%6c", ' ');
 
 		if (bit1 == 1) {
 			for (i = x_channel + y_channel - 1; i >= x_channel;
-					i--)
+			  i--)
 				seq_printf(s, "%6d", diag_self[i]);
-
 		} else {
 			for (i = x_channel; i < x_channel + y_channel; i++)
 				seq_printf(s, "%6d", diag_self[i]);
@@ -1482,7 +1371,7 @@ static void *himax_diag_seq_start(struct seq_file *s, loff_t *pos)
 	if (*pos >= 1)
 		return NULL;
 
-	return (void *)((unsigned long) * pos + 1);
+	return (void *)((unsigned long) *pos + 1);
 }
 
 static void *himax_diag_seq_next(struct seq_file *s, void *v, loff_t *pos)
@@ -1519,7 +1408,6 @@ bool himax_ts_diag_func(int dsram_type)
 	}
 
 	info_data = kcalloc(total_size, sizeof(uint8_t), GFP_KERNEL);
-
 	if (info_data == NULL) {
 		E("%s: Failed to allocate memory\n", __func__);
 		return false;
@@ -1532,7 +1420,6 @@ bool himax_ts_diag_func(int dsram_type)
 	if (dsram_type == 1 || dsram_type == 2) {
 		mutual_data = getMutualBuffer();
 		self_data = getSelfBuffer();
-
 	} else if (dsram_type == 3) {
 		mutual_data = getMutualBuffer();
 		mutual_data_new = getMutualNewBuffer();
@@ -1553,16 +1440,14 @@ bool himax_ts_diag_func(int dsram_type)
 	for (i = 0; i < y_channel; i++) { /*mutual data*/
 		for (j = 0; j < x_channel; j++) {
 			new_data = (((int8_t)info_data[index + 1] << 8) |
-				    info_data[index]);
+				info_data[index]);
 
-			if (dsram_type <= 1)
+			if (dsram_type <= 1) {
 				mutual_data[i * x_channel + j] = new_data;
-
-			else if (dsram_type == 2) { /* Keep max data */
+			} else if (dsram_type == 2) { /* Keep max data */
 				if (mutual_data[i * x_channel + j] < new_data)
 					mutual_data[i * x_channel + j] =
 						new_data;
-
 			} else if (dsram_type == 3) {
 				/* Cal data for [N]-[N-1] frame */
 				mutual_data_new[i * x_channel + j] = new_data;
@@ -1570,27 +1455,22 @@ bool himax_ts_diag_func(int dsram_type)
 					mutual_data_new[i * x_channel + j]
 					- mutual_data_old[i * x_channel + j];
 			}
-
 			index += 2;
 		}
 	}
 
 	for (i = 0; i < x_channel + y_channel; i++) { /*self data*/
 		new_data = (((int8_t)info_data[index + 1] << 8) |
-			    info_data[index]);
-
-		if (dsram_type <= 1)
+				info_data[index]);
+		if (dsram_type <= 1) {
 			self_data[i] = new_data;
-
-		else if (dsram_type == 2) { /* Keep max data */
+		} else if (dsram_type == 2) { /* Keep max data */
 			if (self_data[i] < new_data)
 				self_data[i] = new_data;
-
 		} else if (dsram_type == 3) { /* Cal data for [N]-[N-1] frame */
 			self_data_new[i] = new_data;
 			self_data[i] = self_data_new[i] - self_data_old[i];
 		}
-
 		index += 2;
 	}
 
@@ -1598,11 +1478,11 @@ bool himax_ts_diag_func(int dsram_type)
 
 	if (dsram_type == 3) {
 		memcpy(mutual_data_old, mutual_data_new,
-		       x_channel * y_channel * sizeof(int32_t));
-		/* copy N data to N-1 array */
+			x_channel * y_channel * sizeof(int32_t));
+			/* copy N data to N-1 array */
 		memcpy(self_data_old, self_data_new,
-		       (x_channel + y_channel) * sizeof(int32_t));
-		/* copy N data to N-1 array */
+			(x_channel + y_channel) * sizeof(int32_t));
+			/* copy N data to N-1 array */
 	}
 
 	return true;
@@ -1631,9 +1511,9 @@ static int himax_diag_print(struct seq_file *s, void *v)
 	himax_get_mutual_edge();
 	himax_get_self_edge();
 	seq_printf(s, "Mutual Max:%3d, Min:%3d\n", g_max_mutual,
-		   g_min_mutual);
+		g_min_mutual);
 	seq_printf(s, "Self Max:%3d, Min:%3d\n", g_max_self,
-		   g_min_self);
+		g_min_self);
 	/* recovery status after print*/
 	g_max_mutual = 0;
 	g_min_mutual = 0xFFFF;
@@ -1655,7 +1535,6 @@ static int himax_diag_stack_read(struct seq_file *s, void *v)
 
 	if (ts->diag_cmd)
 		himax_diag_print(s, v);
-
 	else
 		seq_puts(s, "Please set raw out select 'echo diag,X > debug'\n\n");
 
@@ -1663,10 +1542,10 @@ static int himax_diag_stack_read(struct seq_file *s, void *v)
 }
 
 static const struct seq_operations himax_diag_stack_ops = {
-	.start = himax_diag_seq_start,
-	.next = himax_diag_seq_next,
-	.stop = himax_diag_seq_stop,
-	.show = himax_diag_stack_read,
+	.start	= himax_diag_seq_start,
+	.next	= himax_diag_seq_next,
+	.stop	= himax_diag_seq_stop,
+	.show	= himax_diag_stack_read,
 };
 
 static int himax_diag_stack_open(struct inode *inode, struct file *file)
@@ -1686,17 +1565,16 @@ static int himax_sram_read(struct seq_file *s, void *v, uint8_t rs)
 	struct himax_ts_data *ts = private_ts;
 	int d_type = 0;
 
-	s->size = 12 * 1024;
+	s->size = 12*1024;
 	s->buf = kcalloc(s->size, sizeof(char), GFP_KERNEL);
-
 	if (s->buf == NULL) {
 		E("%s,%d: Memory allocation falied!\n", __func__, __LINE__);
 		return -ENOMEM;
 	}
 
-	memset(s->buf, 0, s->size * sizeof(char));
+	memset(s->buf, 0, s->size*sizeof(char));
 
-	d_type = (!ts->diag_cmd) ? rs : ts->diag_cmd;
+	d_type = (!ts->diag_cmd)?rs:ts->diag_cmd;
 
 	if (!overflow) {
 		if (!process_type) {
@@ -1706,7 +1584,6 @@ static int himax_sram_read(struct seq_file *s, void *v, uint8_t rs)
 			/* use process type 1 for default */
 			if (!himax_ts_diag_func(1))
 				seq_puts(s, "Get sram data failed.");
-
 			else
 				himax_diag_print(s, v);
 
@@ -1717,9 +1594,9 @@ static int himax_sram_read(struct seq_file *s, void *v, uint8_t rs)
 	}
 
 	if ((process_type <= 3
-			&& ts->diag_cmd
-			&& dsram_flag)
-			|| overflow) {
+	&& ts->diag_cmd
+	&& dsram_flag)
+	|| overflow) {
 		himax_diag_print(s, v);
 		overflow = 0;
 	}
@@ -1733,10 +1610,10 @@ static int himax_diag_delta_read(struct seq_file *s, void *v)
 }
 
 static const struct seq_operations himax_diag_delta_ops = {
-	.start = himax_diag_seq_start,
-	.next = himax_diag_seq_next,
-	.stop = himax_diag_seq_stop,
-	.show = himax_diag_delta_read,
+	.start	= himax_diag_seq_start,
+	.next	= himax_diag_seq_next,
+	.stop	= himax_diag_seq_stop,
+	.show	= himax_diag_delta_read,
 };
 
 static int himax_diag_delta_open(struct inode *inode, struct file *file)
@@ -1757,10 +1634,10 @@ static int himax_diag_dc_read(struct seq_file *s, void *v)
 }
 
 static const struct seq_operations himax_diag_dc_ops = {
-	.start = himax_diag_seq_start,
-	.next = himax_diag_seq_next,
-	.stop = himax_diag_seq_stop,
-	.show = himax_diag_dc_read,
+	.start	= himax_diag_seq_start,
+	.next	= himax_diag_seq_next,
+	.stop	= himax_diag_seq_stop,
+	.show	= himax_diag_dc_read,
 };
 static int himax_diag_dc_open(struct inode *inode, struct file *file)
 {
@@ -1780,10 +1657,10 @@ static int himax_diag_baseline_read(struct seq_file *s, void *v)
 }
 
 static const struct seq_operations himax_diag_baseline_ops = {
-	.start = himax_diag_seq_start,
-	.next = himax_diag_seq_next,
-	.stop = himax_diag_seq_stop,
-	.show = himax_diag_baseline_read,
+	.start	= himax_diag_seq_start,
+	.next	= himax_diag_seq_next,
+	.stop	= himax_diag_seq_stop,
+	.show	= himax_diag_baseline_read,
 };
 static int himax_diag_baseline_open(struct inode *inode, struct file *file)
 {
@@ -1810,6 +1687,7 @@ static void test_rst_pin(void)
 	himax_int_enable(0);
 	g_core_fp.fp_sense_off(true);
 
+
 	usleep_range(20000, 20001);
 	himax_parse_assign_cmd(0x900000F0, tmp_addr, DATA_LEN_4);
 	himax_parse_assign_cmd(0x00000001, tmp_data, DATA_LEN_4);
@@ -1817,29 +1695,25 @@ static void test_rst_pin(void)
 	usleep_range(20000, 20001);
 	g_core_fp.fp_register_read(tmp_addr, DATA_LEN_4, tmp_read, false);
 	I("R%02X%02X%02X%02XH = 0x%02X%02X%02X%02X\n",
-	  tmp_addr[3], tmp_addr[2], tmp_addr[1], tmp_addr[0],
-	  tmp_read[3], tmp_read[2], tmp_read[1], tmp_read[0]);
+		tmp_addr[3], tmp_addr[2], tmp_addr[1], tmp_addr[0],
+		tmp_read[3], tmp_read[2], tmp_read[1], tmp_read[0]);
 	I("trigger Reset Pin\n");
 	g_core_fp.fp_ic_reset(false, false);
 
 	usleep_range(20000, 20001);
-
 	do {
 		himax_parse_assign_cmd(0x900000A8, tmp_addr, DATA_LEN_4);
 		g_core_fp.fp_register_read(tmp_addr,
-					   DATA_LEN_4, tmp_read, false);
+			DATA_LEN_4, tmp_read, false);
 		I("R%02X%02X%02X%02XH = 0x%02X%02X%02X%02X\n",
-		  tmp_addr[3], tmp_addr[2], tmp_addr[1], tmp_addr[0],
-		  tmp_read[3], tmp_read[2], tmp_read[1], tmp_read[0]);
+			tmp_addr[3], tmp_addr[2], tmp_addr[1], tmp_addr[0],
+			tmp_read[3], tmp_read[2], tmp_read[1], tmp_read[0]);
 		rst_sts1 = tmp_read[0];
 		cnt++;
-
 		if (rst_sts1 == 0x05)
 			break;
-
 		if (rst_sts1 == 0x00)
 			cnt += 5;
-
 		if (cnt > 20)
 			goto END_FUNC;
 	} while (rst_sts1 == 0x04);
@@ -1847,21 +1721,18 @@ static void test_rst_pin(void)
 	himax_parse_assign_cmd(0x900000F0, tmp_addr, DATA_LEN_4);
 	g_core_fp.fp_register_read(tmp_addr, DATA_LEN_4, tmp_read, false);
 	I("R%02X%02X%02X%02XH = 0x%02X%02X%02X%02X\n",
-	  tmp_addr[3], tmp_addr[2], tmp_addr[1], tmp_addr[0],
-	  tmp_read[3], tmp_read[2], tmp_read[1], tmp_read[0]);
+		tmp_addr[3], tmp_addr[2], tmp_addr[1], tmp_addr[0],
+		tmp_read[3], tmp_read[2], tmp_read[1], tmp_read[0]);
 	rst_sts2 = tmp_read[0];
 
 END_FUNC:
-
 	if (rst_sts1 == 0x05 && rst_sts2 == 0x00)
 		I("%s: TP Reset test OK!\n", __func__);
-
 	else if (rst_sts1 == 0xFF || rst_sts2 == 0x01)
 		I("%s: TP Reset test Fail!\n", __func__);
-
 	else
 		I("%s, Unknown Fail state1=0x%02X, state2=0x%02X!\n",
-		  __func__, rst_sts1, rst_sts2);
+			__func__, rst_sts1, rst_sts2);
 
 	g_core_fp.fp_sense_on(0x00);
 	himax_int_enable(1);
@@ -1875,27 +1746,21 @@ static ssize_t himax_reset_write(char *buf, size_t len)
 	}
 
 #if defined(HX_RST_PIN_FUNC)
-
 	if (buf[0] == '1')
 		g_core_fp.fp_ic_reset(false, false);
-
 	else if (buf[0] == '2')
 		g_core_fp.fp_ic_reset(false, true);
-
 	/* else if (buf[0] == '5') */
 	/*	ESD_HW_REST(); */
 	else if (buf[0] == 't'
-			&& buf[1] == 'e'
-			&& buf[2] == 's'
-			&& buf[3] == 't')
+		&& buf[1] == 'e'
+		&& buf[2] == 's'
+		&& buf[3] == 't')
 		test_rst_pin();
-
 #endif
 #if defined(HX_ZERO_FLASH)
-
 	if (g_core_fp.fp_0f_reload_to_active)
 		g_core_fp.fp_0f_reload_to_active();
-
 #endif
 	return len;
 }
@@ -1907,17 +1772,17 @@ static ssize_t himax_proc_FW_debug_read(char *buf, size_t len)
 	uint8_t addr[4] = {0};
 	uint8_t data[4] = {0};
 
-	len = (size_t)(sizeof(dbg_reg_ary) / sizeof(uint32_t));
+	len = (size_t)(sizeof(dbg_reg_ary)/sizeof(uint32_t));
 
 	for (i = 0; i < len; i++) {
 		himax_parse_assign_cmd(dbg_reg_ary[i], addr, 4);
 		g_core_fp.fp_register_read(addr, DATA_LEN_4, data, 0);
 
 		ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
-				"reg[0-3] : 0x%08X = 0x%02X, 0x%02X, 0x%02X, 0x%02X\n",
-				dbg_reg_ary[i], data[0], data[1], data[2], data[3]);
+		"reg[0-3] : 0x%08X = 0x%02X, 0x%02X, 0x%02X, 0x%02X\n",
+		dbg_reg_ary[i], data[0], data[1], data[2], data[3]);
 		I("reg[0-3] : 0x%08X = 0x%02X, 0x%02X, 0x%02X, 0x%02X\n",
-		  dbg_reg_ary[i], data[0], data[1], data[2], data[3]);
+		dbg_reg_ary[i], data[0], data[1], data[2], data[3]);
 	}
 
 	return ret;
@@ -1931,26 +1796,25 @@ static ssize_t himax_proc_DD_debug_read(char *buf, size_t len)
 
 	if (mutual_set_flag == 1) {
 		if (g_core_fp.fp_read_DD_status(cmd_set, tmp_data) ==
-				NO_ERR) {
+		  NO_ERR) {
 			for (i = 0; i < cmd_set[0]; i++) {
 				if ((i % 8) == 0)
 					ret += snprintf(buf_tmp + ret,
-							sizeof(buf_tmp) - ret,
-							"0x%02X : ", i);
+						sizeof(buf_tmp) - ret,
+						"0x%02X : ", i);
 
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret, "0x%02X ",
-						tmp_data[i]);
+					sizeof(buf_tmp) - ret, "0x%02X ",
+					tmp_data[i]);
 
 				if ((i % 8) == 7)
 					ret += snprintf(buf_tmp + ret,
-							sizeof(buf_tmp) - ret, "\n");
+					sizeof(buf_tmp) - ret, "\n");
 			}
-
 		} else {
 			ret += snprintf(buf_tmp + ret,
-					sizeof(buf_tmp) - ret,
-					"Get DD status falied!\n");
+				sizeof(buf_tmp) - ret,
+				"Get DD status falied!\n");
 		}
 	}
 
@@ -1983,7 +1847,6 @@ static ssize_t himax_proc_DD_debug_write(char *buf, size_t len)
 
 			if (!kstrtoul(buf_tmp2, 16, &result))
 				cmd_set[cnt] = (uint8_t)result;
-
 			else
 				I(STR_TO_UL_ERR, cnt, buf_tmp2);
 
@@ -1991,10 +1854,10 @@ static ssize_t himax_proc_DD_debug_write(char *buf, size_t len)
 		}
 
 		I("cmd_set[2] = %02X, cmd_set[1] = %02X, cmd_set[0] = %02X\n",
-		  cmd_set[2], cmd_set[1], cmd_set[0]);
-
-	} else
+			cmd_set[2], cmd_set[1], cmd_set[0]);
+	} else {
 		mutual_set_flag = 0;
+	}
 
 	return len;
 }
@@ -2007,10 +1870,8 @@ void setFlashBuffer(void)
 void flash_dump_prog_set(uint8_t prog)
 {
 	g_flash_progress = prog;
-
 	if (prog == ONGOING)
 		debug_data->flash_dump_going = ONGOING;
-
 	else
 		debug_data->flash_dump_going = START;
 }
@@ -2033,20 +1894,16 @@ static int himax_proc_flash_read(struct seq_file *s, void *v)
 
 	if (flash_progress == START)
 		seq_puts(s, "Flash dump - Start\n");
-
 	else if (flash_progress == ONGOING)
 		seq_puts(s, "Flash dump - On-going\n");
-
 	else if (flash_progress == FINISHED)
 		seq_puts(s, "Flash dump - Finished\n");
 
 	/*print flash dump data*/
 	if (flash_cmd == 1 && flash_progress == FINISHED) {
 		seq_puts(s, "Start to print flash dump data\n");
-
 		for (i = 0; i < Flash_Size; i++) {
 			seq_printf(s, "0x%02X,", flash_buffer[i]);
-
 			if (i % 16 == 15)
 				seq_puts(s, "\n");
 		}
@@ -2058,7 +1915,7 @@ static int himax_proc_flash_read(struct seq_file *s, void *v)
 }
 
 static ssize_t himax_proc_flash_write(struct file *filp,
-				      const char __user *buff, size_t len, loff_t *data)
+			const char __user *buff, size_t len, loff_t *data)
 {
 	char buf[80] = {0};
 
@@ -2079,18 +1936,15 @@ static ssize_t himax_proc_flash_write(struct file *filp,
 
 	if ((buf[1] == '_') && (buf[2] == '3') && (buf[3] == '2'))
 		Flash_Size = FW_SIZE_32k;
-
 	else if ((buf[1] == '_') && (buf[2] == '6')) {
 		if (buf[3] == '0')
 			Flash_Size = FW_SIZE_60k;
-
 		else if (buf[3] == '4')
 			Flash_Size = FW_SIZE_64k;
 
 	} else if ((buf[1] == '_') && (buf[2] == '2')) {
 		if (buf[3] == '4')
 			Flash_Size = FW_SIZE_124k;
-
 		else if (buf[3] == '8')
 			Flash_Size = FW_SIZE_128k;
 	}
@@ -2104,7 +1958,6 @@ static ssize_t himax_proc_flash_write(struct file *filp,
 		flash_dump_prog_set(START);
 		g_flash_dump_rst = true;
 		queue_work(private_ts->flash_wq, &private_ts->flash_work);
-
 	} else if (buf[0] == '2') {
 		/*  2_32,2_60,2_64,2_24,2_28 for flash size:
 		 * 32k,60k,64k,124k,128k
@@ -2123,11 +1976,11 @@ static void *himax_flash_dump_seq_start(struct seq_file *s, loff_t *pos)
 	if (*pos >= 1)
 		return NULL;
 
-	return (void *)((unsigned long) * pos + 1);
+	return (void *)((unsigned long) *pos + 1);
 }
 
 static void *himax_flash_dump_seq_next(struct seq_file *s, void *v,
-				       loff_t *pos)
+		loff_t *pos)
 {
 	return NULL;
 }
@@ -2137,13 +1990,13 @@ static void himax_flash_dump_seq_stop(struct seq_file *s, void *v)
 }
 
 static const struct seq_operations himax_flash_dump_seq_ops = {
-	.start = himax_flash_dump_seq_start,
-	.next = himax_flash_dump_seq_next,
-	.stop = himax_flash_dump_seq_stop,
-	.show = himax_proc_flash_read,
+	.start	= himax_flash_dump_seq_start,
+	.next	= himax_flash_dump_seq_next,
+	.stop	= himax_flash_dump_seq_stop,
+	.show	= himax_proc_flash_read,
 };
 static int himax_flash_dump_proc_open(struct inode *inode,
-				      struct file *file)
+		struct file *file)
 {
 	return seq_open(file, &himax_flash_dump_seq_ops);
 };
@@ -2167,14 +2020,16 @@ void himax_ts_flash_func(void)
 
 	if (flash_command == 1 || flash_command == 2) {
 		g_core_fp.fp_flash_dump_func(flash_command, Flash_Size,
-					     flash_buffer);
+		  flash_buffer);
 		g_flash_dump_rst = true;
 	}
 
 	I("Complete~~~~~~~~~~~~~~~~~~~~~~~\n");
-
-	if (flash_command == 2) {
+//for GKI
+#if 0
+if (flash_command == 2) {
 		struct file *fn;
+		
 
 		//vts_name = kp_getname_kernel(FLASH_DUMP_FILE);
 		fn = filp_open(FLASH_DUMP_FILE, O_CREAT | O_WRONLY, 0);
@@ -2182,15 +2037,15 @@ void himax_ts_flash_func(void)
 		if (!IS_ERR(fn)) {
 			I("%s create file and ready to write\n", __func__);
 			fn->f_op->write(fn, flash_buffer,
-					ic_data->flash_size * sizeof(uint8_t), &fn->f_pos);
+			  ic_data->flash_size * sizeof(uint8_t), &fn->f_pos);
 			filp_close(fn, NULL);
-
 		} else {
 			E("%s Open file failed!\n", __func__);
 			g_flash_dump_rst = false;
 		}
 	}
-
+#endif
+	I("for GKI, cancel save to file\n");
 	himax_int_enable(1);
 	flash_dump_prog_set(FINISHED);
 }
@@ -2205,19 +2060,17 @@ static ssize_t himax_sense_on_off_write(char *buf, size_t len)
 	if (buf[0] == '0') {
 		g_core_fp.fp_sense_off(true);
 		I("Sense off\n");
-
 	} else if (buf[0] == '1') {
 		if (buf[1] == 's') {
 			g_core_fp.fp_sense_on(0x00);
 			I("Sense on re-map on, run sram\n");
-
 		} else {
 			g_core_fp.fp_sense_on(0x01);
 			I("Sense on re-map off, run flash\n");
 		}
-
-	} else
+	} else {
 		I("Do nothing\n");
+	}
 
 	return len;
 }
@@ -2229,7 +2082,7 @@ static ssize_t himax_excp_cnt_read(char *buf, size_t len)
 
 	I("%s: enter, %d\n", __func__, __LINE__);
 
-	ret += snprintf(buf_tmp + ret, len - ret,
+		ret += snprintf(buf_tmp + ret, len - ret,
 			"EB_cnt = %d, EC_cnt = %d, ED_cnt = %d\n",
 			hx_EB_event_flag,
 			hx_EC_event_flag,
@@ -2262,7 +2115,7 @@ static ssize_t himax_excp_cnt_write(char *buf, size_t len)
 
 #if defined(HX_TP_PROC_GUEST_INFO)
 static int printMat(char *temp_buf, size_t len, int max_size,
-		    uint8_t *guest_str, int loc)
+		 uint8_t *guest_str, int loc)
 {
 	int ret = loc;
 	int i;
@@ -2272,14 +2125,13 @@ static int printMat(char *temp_buf, size_t len, int max_size,
 			ret += snprintf(temp_buf + ret, len - ret, "\n");
 
 		ret += snprintf(temp_buf + ret, len - ret, "0x%02X\t",
-				guest_str[i]);
+			guest_str[i]);
 	}
-
 	return ret;
 }
 
 static int printUnit(char *temp_buf, size_t len, int max_size,
-		     char *info_item, uint8_t *guest_str, int loc)
+		char *info_item, uint8_t *guest_str, int loc)
 {
 	int ret = loc;
 
@@ -2301,7 +2153,6 @@ static ssize_t himax_proc_guest_info_read(char *buf, size_t len)
 	if (g_core_fp.guest_info_get_status()) {
 		ret += snprintf(buf_tmp + ret, len - ret, "Not Ready\n");
 		goto END_FUNCTION;
-
 	} else {
 		if (info->g_guest_info_type == 1) {
 			for (j = 0; j < 3; j++) {
@@ -2309,9 +2160,8 @@ static ssize_t himax_proc_guest_info_read(char *buf, size_t len)
 						g_guest_info_item[j],
 						info->g_guest_str[j], ret);
 				I("str[%d] %s\n", j,
-				  info->g_guest_str[j]);
+					info->g_guest_str[j]);
 			}
-
 			ret = printUnit(buf_tmp, len, max_size,
 					g_guest_info_item[8],
 					info->g_guest_str[8],
@@ -2326,28 +2176,25 @@ static ssize_t himax_proc_guest_info_read(char *buf, size_t len)
 					ret);
 
 			I("str[9] %s\n", info->g_guest_str[9]);
-
 		} else if (info->g_guest_info_type == 0) {
 			for (j = 0; j < 10; j++) {
 				if (j == 3)
 					j = 8;
 
 				ret += snprintf(buf_tmp + ret,
-						len - ret, "%s:\n",
-						g_guest_info_item[j]);
+					len - ret, "%s:\n",
+					g_guest_info_item[j]);
 
 				if (info->g_guest_data_type[j] == 0) {
 					ret += snprintf(buf_tmp + ret,
-							len - ret, "%s",
-							info->g_guest_str_in_format[j]);
-
+						len - ret, "%s",
+						info->g_guest_str_in_format[j]);
 				} else {
 					ret = printMat(buf_tmp, len,
-						       info->g_guest_data_len[j],
-						       info->g_guest_str_in_format[j],
-						       ret);
+						info->g_guest_data_len[j],
+						info->g_guest_str_in_format[j],
+						ret);
 				}
-
 				ret += snprintf(buf_tmp + ret, len - ret, "\n");
 			}
 		}
@@ -2365,20 +2212,18 @@ static ssize_t himax_proc_guest_info_write(char *buf, size_t len)
 	}
 
 	I("%s: buf = %s\n", __func__, buf);
-
 	if (buf[0] == 'r') {
 		I("%s,Test to get", __func__);
 		queue_work(private_ts->guest_info_wq,
-			   &private_ts->guest_info_work);
+				&private_ts->guest_info_work);
 	}
-
 	return len;
 }
 
 #endif
 
 static ssize_t himax_debug_read(struct file *file, char *buf,
-				size_t len, loff_t *pos)
+		size_t len, loff_t *pos)
 {
 	ssize_t ret = 0;
 	int i = 0;
@@ -2387,11 +2232,9 @@ static ssize_t himax_debug_read(struct file *file, char *buf,
 		I("%s, Enter\n", __func__);
 
 		memset(buf_tmp, 0, sizeof(buf_tmp));
-
 		if (dbg_cmd_flag) {
 			if (dbg_func_ptr_r[dbg_cmd_flag])
 				ret += dbg_func_ptr_r[dbg_cmd_flag](buf, len);
-
 			else
 				goto END_FUNC_R;
 		}
@@ -2400,254 +2243,227 @@ static ssize_t himax_debug_read(struct file *file, char *buf,
 			if (!fw_update_going) {
 				if (fw_update_complete)
 					ret += snprintf(buf_tmp + ret,
-							sizeof(buf_tmp) - ret,
-							"FW Update Complete ");
-
+						sizeof(buf_tmp) - ret,
+						"FW Update Complete ");
 				else
 					ret += snprintf(buf_tmp + ret,
-							sizeof(buf_tmp) - ret,
-							"FW Update Fail ");
-
+						sizeof(buf_tmp) - ret,
+						"FW Update Fail ");
 			} else {
 				ret += snprintf(buf_tmp + ret,
 						sizeof(buf_tmp) - ret,
 						"FW Update Ongoing ");
 			}
-
 		} else if (debug_level_cmd == 'h') {
 			if (handshaking_result == 0)
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"Handshaking Result = %d (MCU Running)\n",
-						handshaking_result);
-
+					sizeof(buf_tmp) - ret,
+					"Handshaking Result = %d (MCU Running)\n",
+					handshaking_result);
 			else if (handshaking_result == 1)
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"Handshaking Result = %d (MCU Stop)\n",
-						handshaking_result);
-
+					sizeof(buf_tmp) - ret,
+					"Handshaking Result = %d (MCU Stop)\n",
+					handshaking_result);
 			else if (handshaking_result == 2)
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"Handshaking Result = %d (I2C Error)\n",
-						handshaking_result);
-
+					sizeof(buf_tmp) - ret,
+					"Handshaking Result = %d (I2C Error)\n",
+					handshaking_result);
 			else
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"Handshaking Result = error\n");
+					sizeof(buf_tmp) - ret,
+					"Handshaking Result = error\n");
 
 		} else if (debug_level_cmd == 'v') {
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
-					"FW_VER = 0x%2.2X\n", ic_data->vendor_fw_ver);
+				"FW_VER = 0x%2.2X\n", ic_data->vendor_fw_ver);
 
 			if (private_ts->chip_cell_type == CHIP_IS_ON_CELL)
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"CONFIG_VER = 0x%2.2X\n",
-						ic_data->vendor_config_ver);
-
+					sizeof(buf_tmp) - ret,
+					"CONFIG_VER = 0x%2.2X\n",
+					ic_data->vendor_config_ver);
 			else {
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"TOUCH_VER = 0x%2.2X\n",
-						ic_data->vendor_touch_cfg_ver);
+					sizeof(buf_tmp) - ret,
+					"TOUCH_VER = 0x%2.2X\n",
+					ic_data->vendor_touch_cfg_ver);
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"DISPLAY_VER = 0x%2.2X\n",
-						ic_data->vendor_display_cfg_ver);
+					sizeof(buf_tmp) - ret,
+					"DISPLAY_VER = 0x%2.2X\n",
+					ic_data->vendor_display_cfg_ver);
 			}
-
 			if (ic_data->vendor_cid_maj_ver < 0
-					&& ic_data->vendor_cid_min_ver < 0)
+			&& ic_data->vendor_cid_min_ver < 0)
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"CID_VER = NULL\n");
-
+					sizeof(buf_tmp) - ret,
+					"CID_VER = NULL\n");
 			else
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"CID_VER = 0x%2.2X\n",
-						(ic_data->vendor_cid_maj_ver << 8 |
-						 ic_data->vendor_cid_min_ver));
+					sizeof(buf_tmp) - ret,
+					"CID_VER = 0x%2.2X\n",
+					(ic_data->vendor_cid_maj_ver << 8 |
+					ic_data->vendor_cid_min_ver));
 
 			if (ic_data->vendor_panel_ver < 0)
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"PANEL_VER = NULL\n");
-
+					sizeof(buf_tmp) - ret,
+					"PANEL_VER = NULL\n");
 			else
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"PANEL_VER = 0x%2.2X\n",
-						ic_data->vendor_panel_ver);
-
+					sizeof(buf_tmp) - ret,
+					"PANEL_VER = 0x%2.2X\n",
+					ic_data->vendor_panel_ver);
 			if (private_ts->chip_cell_type == CHIP_IS_IN_CELL) {
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"Cusomer = %s\n",
-						ic_data->vendor_cus_info);
+					sizeof(buf_tmp) - ret,
+					"Cusomer = %s\n",
+					ic_data->vendor_cus_info);
 
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"Project = %s\n",
-						ic_data->vendor_proj_info);
+					sizeof(buf_tmp) - ret,
+					"Project = %s\n",
+					ic_data->vendor_proj_info);
 			}
-
 			ret += snprintf(buf_tmp + ret,
-					sizeof(buf_tmp) - ret, "\n");
+				sizeof(buf_tmp) - ret, "\n");
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
-					"Himax Touch Driver Version:\n");
+				"Himax Touch Driver Version:\n");
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
-					"%s\n", HIMAX_DRIVER_VER);
-
+				"%s\n", HIMAX_DRIVER_VER);
 		} else if (debug_level_cmd == 'd') {
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
-					"Himax Touch IC Information :\n");
+				"Himax Touch IC Information :\n");
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
-					"%s\n", private_ts->chip_name);
+				"%s\n", private_ts->chip_name);
 
 			switch (IC_CHECKSUM) {
 			case HX_TP_BIN_CHECKSUM_SW:
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"IC Checksum : SW\n");
+					sizeof(buf_tmp) - ret,
+					"IC Checksum : SW\n");
 				break;
 
 			case HX_TP_BIN_CHECKSUM_HW:
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"IC Checksum : HW\n");
+					sizeof(buf_tmp) - ret,
+					"IC Checksum : HW\n");
 				break;
 
 			case HX_TP_BIN_CHECKSUM_CRC:
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"IC Checksum : CRC\n");
+					sizeof(buf_tmp) - ret,
+					"IC Checksum : CRC\n");
 				break;
 
 			default:
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"IC Checksum error.\n");
+					sizeof(buf_tmp) - ret,
+					"IC Checksum error.\n");
 			}
 
 			if (ic_data->HX_INT_IS_EDGE)
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"Driver register Interrupt : EDGE TIRGGER\n");
-
+					sizeof(buf_tmp) - ret,
+					"Driver register Interrupt : EDGE TIRGGER\n");
 			else
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"Driver register Interrupt : LEVEL TRIGGER\n");
+					sizeof(buf_tmp) - ret,
+					"Driver register Interrupt : LEVEL TRIGGER\n");
 
 			if (private_ts->protocol_type == PROTOCOL_TYPE_A)
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"Protocol : TYPE_A\n");
-
+					sizeof(buf_tmp) - ret,
+					"Protocol : TYPE_A\n");
 			else
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"Protocol : TYPE_B\n");
+					sizeof(buf_tmp) - ret,
+					"Protocol : TYPE_B\n");
 
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
-					"RX Num : %d\n", ic_data->HX_RX_NUM);
+				"RX Num : %d\n", ic_data->HX_RX_NUM);
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
-					"TX Num : %d\n", ic_data->HX_TX_NUM);
+				"TX Num : %d\n", ic_data->HX_TX_NUM);
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
-					"BT Num : %d\n", ic_data->HX_BT_NUM);
+				"BT Num : %d\n", ic_data->HX_BT_NUM);
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
-					"X Resolution : %d\n", ic_data->HX_X_RES);
+				"X Resolution : %d\n", ic_data->HX_X_RES);
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
-					"Y Resolution : %d\n", ic_data->HX_Y_RES);
+				"Y Resolution : %d\n", ic_data->HX_Y_RES);
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
-					"Max Point : %d\n", ic_data->HX_MAX_PT);
+				"Max Point : %d\n", ic_data->HX_MAX_PT);
 #if defined(HX_TP_PROC_2T2R)
-
 			if (Is_2T2R) {
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"2T2R panel\n");
+					sizeof(buf_tmp) - ret,
+					"2T2R panel\n");
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"RX Num_2 : %d\n", HX_RX_NUM_2);
+					sizeof(buf_tmp) - ret,
+					"RX Num_2 : %d\n", HX_RX_NUM_2);
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"TX Num_2 : %d\n", HX_TX_NUM_2);
+					sizeof(buf_tmp) - ret,
+					"TX Num_2 : %d\n", HX_TX_NUM_2);
 			}
-
 #endif
-
 		} else if (debug_level_cmd == 'i') {
 			if (g_core_fp.fp_read_i2c_status())
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"I2C communication is bad.\n");
-
+					sizeof(buf_tmp) - ret,
+					"I2C communication is bad.\n");
 			else
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"I2C communication is good.\n");
-
+					sizeof(buf_tmp) - ret,
+					"I2C communication is good.\n");
 		} else if (debug_level_cmd == 'n') {
 			/* Edgd = 1, Level = 0 */
 			if (g_core_fp.fp_read_ic_trigger_type() == 1)
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"IC Interrupt type is edge trigger.\n");
-
+					sizeof(buf_tmp) - ret,
+					"IC Interrupt type is edge trigger.\n");
 			else if (g_core_fp.fp_read_ic_trigger_type() == 0)
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"IC Interrupt type is level trigger.\n");
-
+					sizeof(buf_tmp) - ret,
+					"IC Interrupt type is level trigger.\n");
 			else
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"Unkown IC trigger type.\n");
+					sizeof(buf_tmp) - ret,
+					"Unkown IC trigger type.\n");
 
 			if (ic_data->HX_INT_IS_EDGE)
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"Driver register Interrupt : EDGE TIRGGER\n");
-
+					sizeof(buf_tmp) - ret,
+					"Driver register Interrupt : EDGE TIRGGER\n");
 			else
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"Driver register Interrupt : LEVEL TRIGGER\n");
-
+					sizeof(buf_tmp) - ret,
+					"Driver register Interrupt : LEVEL TRIGGER\n");
 		} else if (debug_level_cmd == 'l') {
 			ret += snprintf(buf_tmp + ret, sizeof(buf_tmp) - ret,
-					"LotID : ");
-
+				 "LotID : ");
 			for (i = 0; i < 13; i++) {
 				ret += snprintf(buf_tmp + ret,
-						sizeof(buf_tmp) - ret,
-						"%02X", ic_data->vendor_ic_id[i]);
+					sizeof(buf_tmp) - ret,
+					"%02X", ic_data->vendor_ic_id[i]);
 			}
-
 			ret += snprintf(buf_tmp + ret,
 					sizeof(buf_tmp) - ret, "\n");
 		}
 
-	END_FUNC_R:
-
-		if (copy_to_user(buf, buf_tmp, (len > BUF_SIZE) ? BUF_SIZE : len))
+END_FUNC_R:
+		if (copy_to_user(buf, buf_tmp, (len > BUF_SIZE)?BUF_SIZE:len))
 			I("%s,here:%d\n", __func__, __LINE__);
 
 		HX_PROC_SEND_FLAG = 1;
-
-	} else
+	} else {
 		HX_PROC_SEND_FLAG = 0;
+	}
 
 	return ret;
 }
 
 static ssize_t himax_debug_write(struct file *file, const char *buff,
-				 size_t len, loff_t *pos)
+		size_t len, loff_t *pos)
 {
 	char fileName[128];
 	char buf[80] = "\0";
@@ -2674,19 +2490,16 @@ static ssize_t himax_debug_write(struct file *file, const char *buff,
 
 	while (dbg_cmd_str[i]) {
 		str_ptr = strnstr(buf, dbg_cmd_str[i], len);
-
 		if (str_ptr) {
 			str_len = strlen(dbg_cmd_str[i]);
 			dbg_cmd_flag = i + 1;
 			debug_level_cmd = 0;
 			I("Cmd is correct :%s, dbg_cmd = %d\n",
-			  str_ptr, dbg_cmd_flag);
+					str_ptr, dbg_cmd_flag);
 			break;
 		}
-
 		i++;
 	}
-
 	if (!str_ptr) {
 		I("Cmd is not correct\n");
 		dbg_cmd_flag = 0;
@@ -2694,17 +2507,16 @@ static ssize_t himax_debug_write(struct file *file, const char *buff,
 
 	if (buf[str_len] == ',') {
 		dbg_cmd_par = buf + str_len + 1;
-
 		if (dbg_func_ptr_w[dbg_cmd_flag])
 			/* 2 => '/n' + ','*/
 			dbg_func_ptr_w[dbg_cmd_flag](dbg_cmd_par,
-						     len - str_len - 2);
+					len - str_len - 2);
 
 		I("string of paremeter is %s, dbg_cmd_par = %s\n",
-		  buf + str_len + 1, dbg_cmd_par);
-
-	} else
+				buf + str_len + 1, dbg_cmd_par);
+	} else {
 		I("No paremeter of this cmd\n");
+	}
 
 	if (dbg_cmd_flag)
 		return len;
@@ -2713,30 +2525,25 @@ static ssize_t himax_debug_write(struct file *file, const char *buff,
 		debug_level_cmd = buf[0];
 		g_core_fp.fp_read_FW_ver();
 		return len;
-
 	} else if (buf[0] == 'd') { /* ic information */
 		debug_level_cmd = buf[0];
 		return len;
-
 	} else if (buf[0] == 't') {
 		if (buf[1] == 's'
-				&& buf[2] == 'd'
-				&& buf[3] == 'b'
-				&& buf[4] == 'g') {
+		&& buf[2] == 'd'
+		&& buf[3] == 'b'
+		&& buf[4] == 'g') {
 			if (buf[5] == '1') {
 				I("Open Ts Debug!\n");
 				g_ts_dbg = 1;
-
 			} else if (buf[5] == '0') {
 				I("Close Ts Debug!\n");
 				g_ts_dbg = 0;
-
-			} else
+			} else {
 				E("Parameter fault for ts debug\n");
-
+			}
 			goto ENDFUCTION;
 		}
-
 		debug_level_cmd = buf[0];
 		fw_update_complete = false;
 		fw_update_going = true;
@@ -2747,15 +2554,14 @@ static ssize_t himax_debug_write(struct file *file, const char *buff,
 		I("%s: upgrade from file(%s) start!\n", __func__, fileName);
 		/* manual upgrade will not use embedded firmware */
 		result = request_firmware(&fw, fileName, private_ts->dev);
-
 		if (result < 0) {
 			E("request FW %s failed(%d)\n", fileName, result);
 			return result;
 		}
 
 		I("%s: FW image: %02X, %02X, %02X, %02X\n", __func__,
-		  fw->data[0], fw->data[1],
-		  fw->data[2], fw->data[3]);
+				fw->data[0], fw->data[1],
+				fw->data[2], fw->data[3]);
 
 		himax_int_enable(0);
 
@@ -2766,16 +2572,13 @@ static ssize_t himax_debug_write(struct file *file, const char *buff,
 		g_core_fp.fp_bin_desc_get((unsigned char *)fw->data, HX1K);
 
 		result = g_core_fp.fp_firmware_update_0f(fw);
-
 		if (result) {
 			fw_update_complete = false;
 			I("Zero flash update fail!\n");
-
 		} else {
 			fw_update_complete = true;
 			I("Zero flash update complete!\n");
 		}
-
 #else
 		I("NOW Running common flow update!\n");
 
@@ -2785,77 +2588,67 @@ static ssize_t himax_debug_write(struct file *file, const char *buff,
 		switch (fw_type) {
 		case 32:
 			if (g_core_fp.fp_fts_ctpm_fw_upgrade_with_sys_fs_32k(
-						(unsigned char *)fw->data, fw->size, false) == 0) {
+			(unsigned char *)fw->data, fw->size, false) == 0) {
 				E("%s: TP upgrade error, line: %d\n",
-				  __func__, __LINE__);
+						__func__, __LINE__);
 				fw_update_complete = false;
-
 			} else {
 				I("%s: TP upgrade OK, line: %d\n",
-				  __func__, __LINE__);
+						__func__, __LINE__);
 				fw_update_complete = true;
 			}
-
 			break;
 
 		case 60:
 			if (g_core_fp.fp_fts_ctpm_fw_upgrade_with_sys_fs_60k(
-						(unsigned char *)fw->data, fw->size, false) == 0) {
+			(unsigned char *)fw->data, fw->size, false) == 0) {
 				E("%s: TP upgrade error, line: %d\n",
-				  __func__, __LINE__);
+						__func__, __LINE__);
 				fw_update_complete = false;
-
 			} else {
 				I("%s: TP upgrade OK, line: %d\n",
-				  __func__, __LINE__);
+						__func__, __LINE__);
 				fw_update_complete = true;
 			}
-
 			break;
 
 		case 64:
 			if (g_core_fp.fp_fts_ctpm_fw_upgrade_with_sys_fs_64k(
-						(unsigned char *)fw->data, fw->size, false) == 0) {
+			(unsigned char *)fw->data, fw->size, false) == 0) {
 				E("%s: TP upgrade error, line: %d\n",
-				  __func__, __LINE__);
+						__func__, __LINE__);
 				fw_update_complete = false;
-
 			} else {
 				I("%s: TP upgrade OK, line: %d\n",
-				  __func__, __LINE__);
+						__func__, __LINE__);
 				fw_update_complete = true;
 			}
-
 			break;
 
 		case 124:
 			if (g_core_fp.fp_fts_ctpm_fw_upgrade_with_sys_fs_124k(
-						(unsigned char *)fw->data, fw->size, false) == 0) {
+			  (unsigned char *)fw->data, fw->size, false) == 0) {
 				E("%s: TP upgrade error, line: %d\n",
-				  __func__, __LINE__);
+						__func__, __LINE__);
 				fw_update_complete = false;
-
 			} else {
 				I("%s: TP upgrade OK, line: %d\n",
-				  __func__, __LINE__);
+						__func__, __LINE__);
 				fw_update_complete = true;
 			}
-
 			break;
 
 		case 128:
 			if (g_core_fp.fp_fts_ctpm_fw_upgrade_with_sys_fs_128k(
-						(unsigned char *)fw->data, fw->size, false) == 0) {
+			  (unsigned char *)fw->data, fw->size, false) == 0) {
 				E("%s: TP upgrade error, line: %d\n",
-				  __func__, __LINE__);
+						__func__, __LINE__);
 				fw_update_complete = false;
-
 			} else {
 				I("%s: TP upgrade OK, line: %d\n",
-				  __func__, __LINE__);
+						__func__, __LINE__);
 				fw_update_complete = true;
 			}
-
 			break;
 
 		default:
@@ -2863,34 +2656,28 @@ static ssize_t himax_debug_write(struct file *file, const char *buff,
 			fw_update_complete = false;
 			break;
 		}
-
 #endif
 		release_firmware(fw);
 		goto firmware_upgrade_done;
-
 	} else if (buf[0] == 'i' && buf[1] == '2' && buf[2] == 'c') {
 		/* i2c communication */
 		debug_level_cmd = 'i';
 		return len;
-
 	} else if (buf[0] == 'i' && buf[1] == 'n' && buf[2] == 't') {
 		/* INT trigger */
 		debug_level_cmd = 'n';
 		return len;
-
 	} else if (buf[0] == 'l' && buf[1] == 'o' && buf[2] == 't') {
 		debug_level_cmd = buf[0];
 		g_core_fp.fp_sense_off(true);
 		g_core_fp.fp_ic_id_read();
 		g_core_fp.fp_sense_on(0x01);
 		return len;
-
 	} else if (buf[0] == 'c' && buf[1] == 't' && buf[2] == 'i') {
 		/* Compare Touch Information */
 		g_core_fp.fp_tp_info_check();
 		goto ENDFUCTION;
 	}
-
 	/* others,do nothing */
 	debug_level_cmd = 0;
 	return len;
@@ -2943,10 +2730,10 @@ static void himax_ts_diag_work_func(struct work_struct *work)
 
 	if (process_type != 0) {
 		queue_delayed_work(private_ts->himax_diag_wq,
-				   &private_ts->himax_diag_delay_work, 1 / 10 * HZ);
-
-	} else
+			&private_ts->himax_diag_delay_work, 1 / 10 * HZ);
+	} else {
 		dsram_flag = false;
+	}
 }
 
 void dbg_func_ptr_init(void)
@@ -2982,7 +2769,7 @@ void dbg_func_ptr_init(void)
 int himax_touch_proc_init(void)
 {
 	himax_proc_diag_dir = proc_mkdir(HIMAX_PROC_DIAG_FOLDER,
-					 himax_touch_proc_dir);
+			himax_touch_proc_dir);
 
 	if (himax_proc_diag_dir == NULL) {
 		E(" %s: himax_proc_diag_dir file create failed!\n", __func__);
@@ -2990,52 +2777,45 @@ int himax_touch_proc_init(void)
 	}
 
 	himax_proc_stack_file = proc_create(HIMAX_PROC_STACK_FILE, 0444,
-					    himax_proc_diag_dir, &himax_proc_stack_ops);
-
+	  himax_proc_diag_dir, &himax_proc_stack_ops);
 	if (himax_proc_stack_file == NULL) {
 		E(" %s: proc stack file create failed!\n", __func__);
 		goto fail_2_1;
 	}
 
 	himax_proc_delta_file = proc_create(HIMAX_PROC_DELTA_FILE, 0444,
-					    himax_proc_diag_dir, &himax_proc_delta_ops);
-
+	  himax_proc_diag_dir, &himax_proc_delta_ops);
 	if (himax_proc_delta_file == NULL) {
 		E(" %s: proc delta file create failed!\n", __func__);
 		goto fail_2_2;
 	}
 
 	himax_proc_dc_file = proc_create(HIMAX_PROC_DC_FILE, 0444,
-					 himax_proc_diag_dir, &himax_proc_dc_ops);
-
+	  himax_proc_diag_dir, &himax_proc_dc_ops);
 	if (himax_proc_dc_file == NULL) {
 		E(" %s: proc dc file create failed!\n", __func__);
 		goto fail_2_3;
 	}
 
 	himax_proc_baseline_file = proc_create(HIMAX_PROC_BASELINE_FILE, 0444,
-					       himax_proc_diag_dir, &himax_proc_baseline_ops);
-
+	  himax_proc_diag_dir, &himax_proc_baseline_ops);
 	if (himax_proc_baseline_file == NULL) {
 		E(" %s: proc baseline file create failed!\n", __func__);
 		goto fail_2_4;
 	}
 
 	himax_proc_debug_file = proc_create(HIMAX_PROC_DEBUG_FILE,
-					    0644, himax_touch_proc_dir,
-					    &himax_proc_debug_ops);
-
+				0644, himax_touch_proc_dir,
+				&himax_proc_debug_ops);
 	if (himax_proc_debug_file == NULL) {
 		E(" %s: proc debug file create failed!\n", __func__);
 		goto fail_3;
 	}
-
 	dbg_func_ptr_init();
 
 	himax_proc_flash_dump_file = proc_create(HIMAX_PROC_FLASH_DUMP_FILE,
-				     0644, himax_touch_proc_dir,
-				     &himax_proc_flash_ops);
-
+				0644, himax_touch_proc_dir,
+				&himax_proc_flash_ops);
 	if (himax_proc_flash_dump_file == NULL) {
 		E(" %s: proc flash dump file create failed!\n", __func__);
 		goto fail_4;
@@ -3043,16 +2823,11 @@ int himax_touch_proc_init(void)
 
 	return 0;
 
-fail_4:
-	remove_proc_entry(HIMAX_PROC_DEBUG_FILE, himax_touch_proc_dir);
-fail_3:
-	remove_proc_entry(HIMAX_PROC_BASELINE_FILE, himax_proc_diag_dir);
-fail_2_4:
-	remove_proc_entry(HIMAX_PROC_DC_FILE, himax_proc_diag_dir);
-fail_2_3:
-	remove_proc_entry(HIMAX_PROC_DELTA_FILE, himax_proc_diag_dir);
-fail_2_2:
-	remove_proc_entry(HIMAX_PROC_STACK_FILE, himax_proc_diag_dir);
+fail_4: remove_proc_entry(HIMAX_PROC_DEBUG_FILE, himax_touch_proc_dir);
+fail_3:	remove_proc_entry(HIMAX_PROC_BASELINE_FILE, himax_proc_diag_dir);
+fail_2_4: remove_proc_entry(HIMAX_PROC_DC_FILE, himax_proc_diag_dir);
+fail_2_3: remove_proc_entry(HIMAX_PROC_DELTA_FILE, himax_proc_diag_dir);
+fail_2_2: remove_proc_entry(HIMAX_PROC_STACK_FILE, himax_proc_diag_dir);
 fail_2_1:
 	return -ENOMEM;
 }
@@ -3080,14 +2855,12 @@ int himax_debug_init(void)
 	}
 
 	reg_read_data = kzalloc(128 * sizeof(uint8_t), GFP_KERNEL);
-
 	if (reg_read_data == NULL) {
 		E("%s: reg_read_data allocate failed\n", __func__);
 		goto err_alloc_reg_read_data_fail;
 	}
 
 	debug_data = kzalloc(sizeof(struct himax_debug), GFP_KERNEL);
-
 	if (debug_data == NULL) { /*Allocate debug data space*/
 		E("%s: debug_data allocate failed\n", __func__);
 		goto err_alloc_debug_data_fail;
@@ -3096,110 +2869,91 @@ int himax_debug_init(void)
 	himax_himax_data_init();
 
 	setFlashBuffer();
-
 	if (flash_buffer == NULL) {
 		E("%s: flash buffer allocate fail failed\n", __func__);
 		goto err_flash_buf_alloc_failed;
 	}
 
 	ts->flash_wq = create_singlethread_workqueue("himax_flash_wq");
-
 	if (!ts->flash_wq) {
 		E("%s: create flash workqueue failed\n", __func__);
 		goto err_create_flash_dump_wq_failed;
 	}
-
 	INIT_WORK(&ts->flash_work, himax_ts_flash_work_func);
 	g_flash_progress = START;
 
 #if defined(HX_TP_PROC_GUEST_INFO)
-
 	if (g_guest_info_data == NULL) {
 		g_guest_info_data = kzalloc(sizeof(struct hx_guest_info),
-					    GFP_KERNEL);
-
+				GFP_KERNEL);
 		if (g_guest_info_data == NULL) {
 			E("%s: flash buffer allocate fail failed\n", __func__);
 			goto err_guest_info_alloc_failed;
 		}
-
 		g_guest_info_data->g_guest_info_ongoing = 0;
 		g_guest_info_data->g_guest_info_type = 0;
 	}
 
 	ts->guest_info_wq =
 		create_singlethread_workqueue("himax_guest_info_wq");
-
 	if (!ts->guest_info_wq) {
 		E("%s: create guest info workqueue failed\n", __func__);
 		goto err_create_guest_info_wq_failed;
 	}
-
 	INIT_WORK(&ts->guest_info_work, himax_ts_guest_info_work_func);
 #endif
 
 	setSelfBuffer(ic_data->HX_RX_NUM, ic_data->HX_TX_NUM);
-
 	if (getSelfBuffer() == NULL) {
 		E("%s: self buffer allocate failed\n", __func__);
 		goto err_self_buf_alloc_failed;
 	}
 
 	setSelfNewBuffer(ic_data->HX_RX_NUM, ic_data->HX_TX_NUM);
-
 	if (getSelfNewBuffer() == NULL) {
 		E("%s: self new buffer allocate failed\n", __func__);
 		goto err_self_new_alloc_failed;
 	}
 
 	setSelfOldBuffer(ic_data->HX_RX_NUM, ic_data->HX_TX_NUM);
-
 	if (getSelfOldBuffer() == NULL) {
 		E("%s: self old buffer allocate failed\n", __func__);
 		goto err_self_old_alloc_failed;
 	}
 
 	setMutualBuffer(ic_data->HX_RX_NUM, ic_data->HX_TX_NUM);
-
 	if (getMutualBuffer() == NULL) {
 		E("%s: mutual buffer allocate failed\n", __func__);
 		goto err_mut_buf_alloc_failed;
 	}
 
 	setMutualNewBuffer(ic_data->HX_RX_NUM, ic_data->HX_TX_NUM);
-
 	if (getMutualNewBuffer() == NULL) {
 		E("%s: mutual new buffer allocate failed\n", __func__);
 		goto err_mut_new_alloc_failed;
 	}
 
 	setMutualOldBuffer(ic_data->HX_RX_NUM, ic_data->HX_TX_NUM);
-
 	if (getMutualOldBuffer() == NULL) {
 		E("%s: mutual old buffer allocate failed\n", __func__);
 		goto err_mut_old_alloc_failed;
 	}
 
 #if defined(HX_TP_PROC_2T2R)
-
 	if (Is_2T2R) {
 		setMutualBuffer_2(ic_data->HX_RX_NUM_2, ic_data->HX_TX_NUM_2);
-
 		if (getMutualBuffer_2() == NULL) {
 			E("%s: mutual buffer 2 allocate failed\n", __func__);
 			goto err_mut_buf2_alloc_failed;
 		}
 	}
-
 #endif
 
 	ts->himax_diag_wq = create_singlethread_workqueue("himax_diag");
-
 	if (!ts->himax_diag_wq) {
 		E("%s: create diag workqueue failed\n", __func__);
 		goto err_create_diag_wq_failed;
 	}
-
 	INIT_DELAYED_WORK(&ts->himax_diag_delay_work, himax_ts_diag_work_func);
 
 	if (himax_touch_proc_init())
@@ -3238,12 +2992,10 @@ err_self_buf_alloc_failed:
 	cancel_work_sync(&ts->guest_info_work);
 	destroy_workqueue(ts->guest_info_wq);
 err_create_guest_info_wq_failed:
-
 	if (g_guest_info_data != NULL) {
 		kfree(g_guest_info_data);
 		g_guest_info_data = NULL;
 	}
-
 err_guest_info_alloc_failed:
 #endif
 	cancel_work_sync(&ts->flash_work);
@@ -3296,12 +3048,10 @@ int himax_debug_remove(void)
 #if defined(HX_TP_PROC_GUEST_INFO)
 	cancel_work_sync(&ts->guest_info_work);
 	destroy_workqueue(ts->guest_info_wq);
-
 	if (g_guest_info_data != NULL) {
 		kfree(g_guest_info_data);
 		g_guest_info_data = NULL;
 	}
-
 #endif
 
 	cancel_work_sync(&ts->flash_work);
@@ -3319,7 +3069,7 @@ int himax_debug_remove(void)
 	return 0;
 }
 EXPORT_SYMBOL(himax_debug_remove);
-#if defined(OPLUS_PROC_NODE)
+#if defined(OPLUS_PROC_NODE)	
 static void himax_oplus_raw_data_read(int ts_diag_cmd)
 {
 	struct himax_ts_data *ts = private_ts;
@@ -3337,14 +3087,14 @@ static void himax_oplus_raw_data_read(int ts_diag_cmd)
 	g_core_fp.fp_diag_register_set(diag_cmd, 0, false);
 }
 
-int oplus_baseline_read(struct seq_file *s)
+int oplus_baseline_read( struct seq_file *s )
 {
 	int x_channel = ic_data->HX_RX_NUM;
 	int y_channel = ic_data->HX_TX_NUM;
-	himax_oplus_raw_data_read(52); /*sram type = 5 for oppo test*/
+	himax_oplus_raw_data_read(52); /*sram type = 5 for oplus test*/
 
 	/* start to show out the raw data in adb shell */
-	seq_printf(s, "ChannelStart: %4d, %4d\n\n", x_channel, y_channel);
+	seq_printf(s, "ChannelStart: %4d, %4d\n\n", x_channel, y_channel );
 	himax_diag_arrange(s);
 	seq_printf(s, "\n");
 	seq_printf(s, "ChannelEnd");
@@ -3361,14 +3111,14 @@ int oplus_baseline_read(struct seq_file *s)
 	g_max_self = 0;
 	g_min_self = 0xFFFF;
 	return 0;
-
+	
 }
 
-int oplus_delta_read_sub(struct seq_file *s)
+int oplus_delta_read_sub( struct seq_file *s )
 {
 	int x_channel = ic_data->HX_RX_NUM;
 	int y_channel = ic_data->HX_TX_NUM;
-	himax_oplus_raw_data_read(51); /*sram type = 5 for oppo test*/
+	himax_oplus_raw_data_read(51); /*sram type = 5 for oplus test*/
 
 	/* start to show out the raw data in adb shell */
 	seq_printf(s, "ChannelStart: %4d, %4d\n\n", x_channel,  y_channel);

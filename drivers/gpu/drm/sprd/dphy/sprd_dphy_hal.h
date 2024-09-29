@@ -1,8 +1,14 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (C) 2020 Unisoc Inc.
+ */
+
+#ifndef _SPRD_DPHY_HAL_H_
+#define _SPRD_DPHY_HAL_H_
 
 #include "sprd_dphy.h"
 
-
-/**
+/*
  * Reset D-PHY module
  * @param dphy: pointer to structure
  *  which holds information about the d-dphy module
@@ -10,14 +16,14 @@
  */
 static inline void dphy_hal_rstz(struct sprd_dphy *dphy, int level)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (ppi->rstz)
 		ppi->rstz(ctx, level);
 }
 
-/**
+/*
  * Power up/down D-PHY module
  * @param dphy: pointer to structure
  *  which holds information about the d-dphy module
@@ -25,14 +31,14 @@ static inline void dphy_hal_rstz(struct sprd_dphy *dphy, int level)
  */
 static inline void dphy_hal_shutdownz(struct sprd_dphy *dphy, int level)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (ppi->shutdownz)
 		ppi->shutdownz(ctx, level);
 }
 
-/**
+/*
  * Force D-PHY PLL to stay on while in ULPS
  * @param dphy: pointer to structure
  *  which holds information about the d-dphy module
@@ -41,7 +47,7 @@ static inline void dphy_hal_shutdownz(struct sprd_dphy *dphy, int level)
  */
 static inline void dphy_hal_force_pll(struct sprd_dphy *dphy, int en)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (ppi->force_pll)
@@ -50,7 +56,7 @@ static inline void dphy_hal_force_pll(struct sprd_dphy *dphy, int en)
 
 static inline void dphy_hal_clklane_ulps_rqst(struct sprd_dphy *dphy, int en)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (ppi->clklane_ulps_rqst)
@@ -59,7 +65,7 @@ static inline void dphy_hal_clklane_ulps_rqst(struct sprd_dphy *dphy, int en)
 
 static inline void dphy_hal_clklane_ulps_exit(struct sprd_dphy *dphy, int en)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (ppi->clklane_ulps_exit)
@@ -68,7 +74,7 @@ static inline void dphy_hal_clklane_ulps_exit(struct sprd_dphy *dphy, int en)
 
 static inline void dphy_hal_datalane_ulps_rqst(struct sprd_dphy *dphy, int en)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (ppi->datalane_ulps_rqst)
@@ -77,14 +83,14 @@ static inline void dphy_hal_datalane_ulps_rqst(struct sprd_dphy *dphy, int en)
 
 static inline void dphy_hal_datalane_ulps_exit(struct sprd_dphy *dphy, int en)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (ppi->datalane_ulps_exit)
 		ppi->datalane_ulps_exit(ctx, en);
 }
 
-/**
+/*
  * Configure minimum wait period for HS transmission request after a stop state
  * @param dphy pointer to structure which holds information about the d-dphy
  * module
@@ -92,14 +98,14 @@ static inline void dphy_hal_datalane_ulps_exit(struct sprd_dphy *dphy, int en)
  */
 static inline void dphy_hal_stop_wait_time(struct sprd_dphy *dphy, u8 cycles)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (ppi->stop_wait_time)
 		ppi->stop_wait_time(ctx, cycles);
 }
 
-/**
+/*
  * Set number of active lanes
  * @param dphy: pointer to structure
  *  which holds information about the d-dphy module
@@ -107,14 +113,14 @@ static inline void dphy_hal_stop_wait_time(struct sprd_dphy *dphy, u8 cycles)
  */
 static inline void dphy_hal_datalane_en(struct sprd_dphy *dphy)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (ppi->datalane_en)
 		ppi->datalane_en(ctx);
 }
 
-/**
+/*
  * Enable clock lane module
  * @param dphy pointer to structure
  *  which holds information about the d-dphy module
@@ -122,14 +128,14 @@ static inline void dphy_hal_datalane_en(struct sprd_dphy *dphy)
  */
 static inline void dphy_hal_clklane_en(struct sprd_dphy *dphy, int en)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (ppi->clklane_en)
 		ppi->clklane_en(ctx, en);
 }
 
-/**
+/*
  * Request the PHY module to start transmission of high speed clock.
  * This causes the clock lane to start transmitting DDR clock on the
  * lane interconnect.
@@ -141,14 +147,14 @@ static inline void dphy_hal_clklane_en(struct sprd_dphy *dphy, int en)
  */
 static inline void dphy_hal_clk_hs_rqst(struct sprd_dphy *dphy, int en)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (ppi->clk_hs_rqst)
 		ppi->clk_hs_rqst(ctx, en);
 }
 
-/**
+/*
  * Get D-PHY PPI status
  * @param dphy pointer to structure which holds information about the d-dphy
  * module
@@ -157,7 +163,7 @@ static inline void dphy_hal_clk_hs_rqst(struct sprd_dphy *dphy, int en)
  */
 static inline u8 dphy_hal_is_pll_locked(struct sprd_dphy *dphy)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (!ppi->is_pll_locked)
@@ -168,7 +174,7 @@ static inline u8 dphy_hal_is_pll_locked(struct sprd_dphy *dphy)
 
 static inline u8 dphy_hal_is_rx_direction(struct sprd_dphy *dphy)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (!ppi->is_rx_direction)
@@ -179,7 +185,7 @@ static inline u8 dphy_hal_is_rx_direction(struct sprd_dphy *dphy)
 
 static inline u8 dphy_hal_is_rx_ulps_esc_lane0(struct sprd_dphy *dphy)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (!ppi->is_rx_ulps_esc_lane0)
@@ -190,7 +196,7 @@ static inline u8 dphy_hal_is_rx_ulps_esc_lane0(struct sprd_dphy *dphy)
 
 static inline u8 dphy_hal_is_stop_state_clklane(struct sprd_dphy *dphy)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (!ppi->is_stop_state_clklane)
@@ -201,7 +207,7 @@ static inline u8 dphy_hal_is_stop_state_clklane(struct sprd_dphy *dphy)
 
 static inline u8 dphy_hal_is_stop_state_datalane(struct sprd_dphy *dphy)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (!ppi->is_stop_state_datalane)
@@ -212,7 +218,7 @@ static inline u8 dphy_hal_is_stop_state_datalane(struct sprd_dphy *dphy)
 
 static inline u8 dphy_hal_is_ulps_active_clklane(struct sprd_dphy *dphy)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (!ppi->is_ulps_active_clklane)
@@ -223,7 +229,7 @@ static inline u8 dphy_hal_is_ulps_active_clklane(struct sprd_dphy *dphy)
 
 static inline u8 dphy_hal_is_ulps_active_datalane(struct sprd_dphy *dphy)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (!ppi->is_ulps_active_datalane)
@@ -232,55 +238,55 @@ static inline u8 dphy_hal_is_ulps_active_datalane(struct sprd_dphy *dphy)
 	return ppi->is_ulps_active_datalane(ctx);
 }
 
-/**
+/*
  * @param dphy pointer to structure which holds information about the d-dphy
  * module
  * @param value
  */
 static inline void dphy_hal_test_clk(struct sprd_dphy *dphy, u8 level)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (ppi->tst_clk)
 		ppi->tst_clk(ctx, level);
 }
 
-/**
+/*
  * @param dphy pointer to structure which holds information about the d-dphy
  * module
  * @param value
  */
 static inline void dphy_hal_test_clr(struct sprd_dphy *dphy, u8 level)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (ppi->tst_clr)
 		ppi->tst_clr(ctx, level);
 }
 
-/**
+/*
  * @param dphy pointer to structure which holds information about the d-dphy
  * module
  * @param on_falling_edge
  */
 static inline void dphy_hal_test_en(struct sprd_dphy *dphy, u8 level)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (ppi->tst_en)
 		ppi->tst_en(ctx, level);
 }
 
-/**
+/*
  * @param dphy pointer to structure which holds information about the d-dphy
  * module
  */
 static inline u8 dphy_hal_test_dout(struct sprd_dphy *dphy)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (ppi->tst_dout)
@@ -289,14 +295,14 @@ static inline u8 dphy_hal_test_dout(struct sprd_dphy *dphy)
 	return 0;
 }
 
-/**
+/*
  * @param dphy pointer to structure which holds information about the d-dphy
  * module
  * @param test_data
  */
 static inline void dphy_hal_test_din(struct sprd_dphy *dphy, u8 data)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (ppi->tst_din)
@@ -305,7 +311,7 @@ static inline void dphy_hal_test_din(struct sprd_dphy *dphy, u8 data)
 
 static inline void dphy_hal_bist_en(struct sprd_dphy *dphy, int en)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (ppi->bist_en)
@@ -314,7 +320,7 @@ static inline void dphy_hal_bist_en(struct sprd_dphy *dphy, int en)
 
 static inline u8 dphy_hal_is_bist_ok(struct sprd_dphy *dphy)
 {
-	struct dphy_ppi_ops *ppi = dphy->ppi;
+	const struct dphy_ppi_ops *ppi = dphy->ppi;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (!ppi->is_bist_ok)
@@ -323,3 +329,4 @@ static inline u8 dphy_hal_is_bist_ok(struct sprd_dphy *dphy)
 	return ppi->is_bist_ok(ctx);
 }
 
+#endif /* _SPRD_DPHY_HAL_H_ */

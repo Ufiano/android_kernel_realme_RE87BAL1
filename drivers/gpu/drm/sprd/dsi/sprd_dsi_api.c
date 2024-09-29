@@ -1,19 +1,53 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/delay.h>
 
 #include "sprd_dsi_hal.h"
+
+static int dsi_wait_tx_payload_fifo_empty(struct sprd_dsi *dsi)
+{
+	int timeout;
+
+	for (timeout = 0; timeout < 20000; timeout++) {
+		if (dsi_hal_is_tx_payload_fifo_empty(dsi))
+			return 0;
+		udelay(1);
+	}
+
+	pr_err("tx payload fifo is not empty\n");
+	return -ETIMEDOUT;
+}
+
+static int dsi_wait_tx_cmd_fifo_empty(struct sprd_dsi *dsi)
+{
+	int timeout;
+
+	for (timeout = 0; timeout < 20000; timeout++) {
+		if (dsi_hal_is_tx_cmd_fifo_empty(dsi))
+			return 0;
+		udelay(1);
+	}
+
+	pr_err("tx cmd fifo is not empty\n");
+	return -ETIMEDOUT;
+}
+
+static int dsi_wait_rd_resp_completed(struct sprd_dsi *dsi)
+{
+	int timeout;
+
+	for (timeout = 0; timeout < 10000; timeout++) {
+		udelay(10);
+		if (dsi_hal_is_bta_returned(dsi))
+			return 0;
+	}
+
+	pr_err("wait read response time out\n");
+	return -ETIMEDOUT;
+}
 
 static u16 calc_bytes_per_pixel_x100(int coding)
 {
@@ -128,7 +162,7 @@ static u32 fmt_to_coding(u32 fmt)
 #define ns_to_cycle(ns, byte_clk) \
 	DIV_ROUND_UP((ns) * (byte_clk), 1000000)
 
-int sprd_dsi_init(struct sprd_dsi *dsi)
+void sprd_dsi_init(struct sprd_dsi *dsi)
 {
 	int div;
 	struct dsi_context *ctx = &dsi->ctx;
@@ -165,26 +199,22 @@ int sprd_dsi_init(struct sprd_dsi *dsi)
 	dsi_hal_clklane_lp2hs_config(dsi, clk_lp2hs);
 
 	dsi_hal_power_en(dsi, 1);
-
-	return 0;
 }
 
-/**
+/*
  * Close DSI Host driver
  * - Free up resources and shutdown host controller and PHY
  * @param dsi pointer to structure holding the DSI Host core information
  * @return int
  */
-int sprd_dsi_uninit(struct sprd_dsi *dsi)
+void sprd_dsi_fini(struct sprd_dsi *dsi)
 {
 	dsi_hal_int0_mask(dsi, 0xffffffff);
 	dsi_hal_int1_mask(dsi, 0xffffffff);
 	dsi_hal_power_en(dsi, 0);
-
-	return 0;
 }
 
-/**
+/*
  * Configure DPI video interface
  * - If not in burst mode, it will compute the video and null packet sizes
  * according to necessity
@@ -212,18 +242,10 @@ int sprd_dsi_dpi_video(struct sprd_dsi *dsi)
 	int div;
 	u16 hline;
 	struct dsi_context *ctx = &dsi->ctx;
-	struct videomode *vm;
-
-	if (dsi->dsi_master)
-		vm = &dsi->dsi_master->ctx.vm;
-	else
-		vm = &dsi->ctx.vm;
+	struct videomode *vm = &dsi->ctx.vm;
 
 	coding = fmt_to_coding(ctx->format);
 	video_size = round_video_size(coding, vm->hactive);
-	if (dsi->dsi_master || dsi->dsi_slave)
-		video_size = video_size >> 1;
-
 	Bpp_x100 = calc_bytes_per_pixel_x100(coding);
 	video_size_step = calc_video_size_step(coding);
 	ratio_x1000 = ctx->byte_clk * 1000 / (vm->pixelclock / 1000);
@@ -234,18 +256,10 @@ int sprd_dsi_dpi_video(struct sprd_dsi *dsi)
 	dsi_hal_dpi_frame_ack_en(dsi, ctx->frame_ack_en);
 	dsi_hal_dpi_color_coding(dsi, coding);
 	dsi_hal_dpi_video_burst_mode(dsi, ctx->burst_mode);
-	if (dsi->dsi_master || dsi->dsi_slave) {
-		dsi_hal_dpi_sig_delay(dsi, 95 * hline * ratio_x1000 / 200000);
-		dsi_hal_dpi_hline_time(dsi, hline * ratio_x1000 / 2000);
-		dsi_hal_dpi_hsync_time(dsi, vm->hsync_len * ratio_x1000 / 2000);
-		dsi_hal_dpi_hbp_time(dsi, vm->hback_porch * ratio_x1000 / 2000);
-
-	} else {
-		dsi_hal_dpi_sig_delay(dsi, 95 * hline * ratio_x1000 / 100000);
-		dsi_hal_dpi_hline_time(dsi, hline * ratio_x1000 / 1000);
-		dsi_hal_dpi_hsync_time(dsi, vm->hsync_len * ratio_x1000 / 1000);
-		dsi_hal_dpi_hbp_time(dsi, vm->hback_porch * ratio_x1000 / 1000);
-	}
+	dsi_hal_dpi_sig_delay(dsi, 95 * hline * ratio_x1000 / 100000);
+	dsi_hal_dpi_hline_time(dsi, hline * ratio_x1000 / 1000);
+	dsi_hal_dpi_hsync_time(dsi, vm->hsync_len * ratio_x1000 / 1000);
+	dsi_hal_dpi_hbp_time(dsi, vm->hback_porch * ratio_x1000 / 1000);
 	dsi_hal_dpi_vact(dsi, vm->vactive);
 	dsi_hal_dpi_vfp(dsi, vm->vfront_porch);
 	dsi_hal_dpi_vbp(dsi, vm->vback_porch);
@@ -281,27 +295,14 @@ int sprd_dsi_dpi_video(struct sprd_dsi *dsi)
 		/* bytes to be sent - first as one chunk */
 		bytes_per_chunk = vm->hactive * Bpp_x100 / 100 + pkt_header;
 
-		/*
-		 * FIXME:
-		 * dpu transfer time per hline :
-		 *       (param->hline - param->hsync - param->hbp) / param->pixel_clk
-		 * dsi transfer time per hline :
-		 *       total_bytes / param->lanes * param->byte_clk
-		 * Dsi transfer time should be less than dpu time.
-		 * So total_bytes limit = (param->hline - param->hsync - param->hbp) *
-		 *                       ratio_x1000 * param->lanes / 1000
-		 * However, dphy may enter LP11 state after per line.
-		 * We should consider some margin, now is 1.2.
-		 */
-
 		/* hline total bytes from the DPI interface */
 		total_bytes = (vm->hactive + vm->hfront_porch) *
-				ratio_x1000 * ctx->lanes / 1000 * 100 / 120;
+				ratio_x1000 / ctx->lanes / 1000;
 
 		/* check if the pixels actually fit on the DSI link */
 		if (total_bytes < bytes_per_chunk) {
 			pr_err("current resolution can not be set\n");
-			return -1;
+			return -EINVAL;
 		}
 
 		chunk_overhead = total_bytes - bytes_per_chunk;
@@ -360,7 +361,7 @@ int sprd_dsi_dpi_video(struct sprd_dsi *dsi)
 	return 0;
 }
 
-int sprd_dsi_edpi_video(struct sprd_dsi *dsi)
+void sprd_dsi_edpi_video(struct sprd_dsi *dsi)
 {
 	const u32 fifo_depth = 1096;
 	const u32 word_length = 4;
@@ -386,11 +387,9 @@ int sprd_dsi_edpi_video(struct sprd_dsi *dsi)
 	dsi_hal_int0_mask(dsi, ctx->int0_mask);
 	dsi_hal_int1_mask(dsi, ctx->int1_mask);
 	dsi_hal_power_en(dsi, 1);
-
-	return 0;
 }
 
-/**
+/*
  * Send a packet on the generic interface
  * @param dsi pointer to structure holding the DSI Host core information
  * @param vc destination virtual channel
@@ -408,17 +407,17 @@ int sprd_dsi_edpi_video(struct sprd_dsi *dsi)
 int sprd_dsi_wr_pkt(struct sprd_dsi *dsi, u8 vc, u8 type,
 			const u8 *param, u16 len)
 {
-	int i = 0;
-	int j = 0;
 	u32 payload;
 	u8 wc_lsbyte, wc_msbyte;
+	int i, j, ret;
 
 	if (vc > 3)
 		return -EINVAL;
 
 	/* 1st: for long packet, must config payload first */
-	if (!dsi_hal_wait_tx_payload_fifo_empty(dsi))
-		return -1;
+	ret = dsi_wait_tx_payload_fifo_empty(dsi);
+	if (ret)
+		return ret;
 
 	if (len > 2) {
 		for (i = 0; i < len; i += j) {
@@ -436,8 +435,9 @@ int sprd_dsi_wr_pkt(struct sprd_dsi *dsi, u8 vc, u8 type,
 	}
 
 	/* 2nd: then set packet header */
-	if (!dsi_hal_wait_tx_cmd_fifo_empty(dsi))
-		return -EINVAL;
+	ret = dsi_wait_tx_cmd_fifo_empty(dsi);
+	if (ret)
+		return ret;
 
 	dsi_hal_set_packet_header(dsi, vc, type, wc_lsbyte, wc_msbyte);
 
@@ -445,7 +445,7 @@ int sprd_dsi_wr_pkt(struct sprd_dsi *dsi, u8 vc, u8 type,
 }
 
 
-/**
+/*
  * Send READ packet to peripheral using the generic interface
  * This will force command mode and stop video mode (because of BTA)
  * @param dsi pointer to structure holding the DSI Host core information
@@ -465,7 +465,7 @@ int sprd_dsi_rd_pkt(struct sprd_dsi *dsi, u8 vc, u8 type,
 			u8 msb_byte, u8 lsb_byte,
 			u8 *buffer, u8 bytes_to_read)
 {
-	int i;
+	int i, ret;
 	int count = 0;
 	u32 temp;
 
@@ -473,13 +473,14 @@ int sprd_dsi_rd_pkt(struct sprd_dsi *dsi, u8 vc, u8 type,
 		return -EINVAL;
 
 	/* 1st: send read command to peripheral */
-	if (!dsi_hal_wait_tx_cmd_fifo_empty(dsi))
-		return -EINVAL;
+	ret = dsi_wait_tx_cmd_fifo_empty(dsi);
+	if (ret)
+		return ret;
 
 	dsi_hal_set_packet_header(dsi, vc, type, lsb_byte, msb_byte);
 
 	/* 2nd: wait peripheral response completed */
-	dsi_hal_wait_rd_resp_completed(dsi);
+	dsi_wait_rd_resp_completed(dsi);
 
 	/* 3rd: get data from rx payload fifo */
 	if (dsi_hal_is_rx_payload_fifo_empty(dsi)) {

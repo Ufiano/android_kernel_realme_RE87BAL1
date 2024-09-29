@@ -13,12 +13,17 @@
 		cooling-device0 = &cluster0_cooling;
 		cooling-device1 = &cluster1_cooling;
 		gpu-cooling0 = &gpu_cooling0;
+		thm-sensor0 = &virtual_sensor;
 	};
 
 	display-subsystem {
 		compatible = "sprd,display-subsystem";
 		ports = <&dpu_port>;
 		gsp = <&gsp>;
+	};
+
+	audcp_iram_reserved: audcp-iram@65009400 {
+		reg = <0x0 0x65009400 0x0 0x1000>;
 	};
 
 	audio-mem-mgr {
@@ -38,14 +43,8 @@
 			reg = <0x0 0x80001000 0x0 0x00001000>;
 		};
 
-		rebootescrow@0x853f0000 {
-			no-map;
-			reg = <0x0 0x853f0000 0x0 0x00010000>; /* 64K */
-		};
-
-		/* must be 64M aligned */
-		smem_reserved: sipc-mem@87800000{
-			reg = <0x0 0x87800000 0x0 0x00800000>;
+		wcn_reserved: wcn-mem@87000000 {
+			reg = <0x0 0x87000000 0x0 0x00800000>;
 		};
 
 		sp_ddr_reserved: sp-ddr-mem@88000000 {
@@ -60,6 +59,11 @@
 			reg = <0x0 0x89600000 0x0 0x04900000>;
 		};
 
+		/* must be 64M aligned */
+		smem_reserved: sipc-mem@8e000000{
+			reg = <0x0 0x8e000000 0x0 0x00900000>;
+		};
+
 		/* Only used for iq, will be removed in normal mode by uboot */
 		iq_reserved: iq-mem@90000000{
 			compatible = "sprd,iq-mem";
@@ -70,6 +74,12 @@
 			reg = <0x0 0x94100000 0x0 0x00300000>;
 		};
 
+		/* The uboot_log_reserved node is added in uboot. base:0x9de8 0000, size:0x80000 */
+		uboot_log_reserved: uboot_log-mem {
+			reg = <0x0 0x9de80000 0x0 0x00080000>;
+		};
+
+		/* Only for userdebug, will be removed in user mode by uboot */
 		uboot_reserved: sysdump-uboot@9f000000 {
 			reg = <0x0 0x9f000000 0x0 0x01000000>;
 		};
@@ -83,11 +93,23 @@
 		tos_reserved: tos-mem@b0040000 {
 		/* the reg valus may be not accurate,
 		   they have been fixed in uboot !!! */
-			reg = <0x0 0xb0040000 0x0 0x05fc0000>;
+			reg = <0x0 0xb0040000 0x0 0x01fc0000>;
 		};
 
 		tos_shm_reserved: sh-mem@b6000000{
 			reg = <0x0 0xb6000000 0x0 0x00100000>;
+		};
+
+		cma_reserved: cma_share@f00000000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0xf0000000 0x0 0x03000000>;
+			reusable;
+			linux,cma-default;
+		};
+
+		rebootescrow@0xfff70000 {
+			no-map;
+			reg = <0x0 0xfff70000 0x0 0x00010000>; /* 64K */
 		};
 
 		pstore_reserved: ramoops@fff80000 {
@@ -96,10 +118,6 @@
 			record-size = <0x8000>;
 			console-size = <0x8000>;
 			pmsg-size = <0x8000>;
-		};
-
-		debug_reserved: debug-mem@100000000 {
-			reg = <0x1 0x00000000 0x0 0x00001000>;
 		};
 	};
 
@@ -208,52 +226,45 @@
 			sprd,topdvfs_controller = <&topdvfs_controller>;
 	};
 
-	ipi: interrupt-controller {
-		compatible = "android,CustomIPI";
-		#interrupt-cells = <1>;
-		interrupt-controller;
-	};
-
 	firmware {
 		android {
 			compatible = "android,firmware";
 			vbmeta {
 				compatible = "android,vbmeta";
-				parts = "vbmeta,socko,odmko,boot,dtbo,l_modem,pm_sys,l_ldsp,l_gdsp,l_agdsp";
+				parts = "vbmeta,boot,vendor_boot,dtbo,l_modem,pm_sys,l_ldsp,l_gdsp,l_agdsp";
 			};
 		};
 	};
 
 	trusty {
-		compatible = "android,trusty-smc-v1";
+		compatible = "sprd,trusty-smc-v1";
 		irq {
-			compatible = "android,trusty-irq-v1";
-			interrupt-templates = <&ipi 0>,
-						<&gic 1 GIC_PPI 0>,
-						<&gic 1 GIC_SPI 0>;
+			compatible = "sprd,trusty-irq-v1";
+			interrupt-templates = <&gic 0 0 IRQ_TYPE_NONE>,
+						<&gic 1 GIC_PPI IRQ_TYPE_LEVEL_LOW>,
+						<&gic 1 GIC_SPI IRQ_TYPE_LEVEL_HIGH>;
 				interrupt-ranges = < 0  15 0>,
 						<16  31 1>,
 						<32 223 2>;
 		};
 
 		virtio {
-			compatible = "android,trusty-virtio-v1";
+			compatible = "sprd,trusty-virtio-v1";
 		};
 
 		log {
-			compatible = "android,trusty-log-v1";
+			compatible = "sprd,trusty-log-v1";
 		};
 
 		sprd-tshm {
 			compatible = "sprd,tshm";
 			memory-region = <&tos_shm_reserved>;
 		};
-
 	};
 
 	rebootescrow@0 {
 		compatible = "pmem-region";
-		reg = <0x0 0x853f0000 0x0 0x00010000>;
+		reg = <0x0 0xfff70000 0x0 0x00010000>;
 	};
 
 	extcon_gpio: extcon-gpio {
@@ -266,7 +277,7 @@
 	};
 
 	sprd-map-user {
-		compatible = "sprd,map-user";
+		compatible = "unisoc,map-user";
 	};
 
 	thm_zone: thermal-zones {
@@ -274,7 +285,7 @@
 			polling-delay-passive = <100>;
 			polling-delay = <1000>;
 			sustainable-power = <4500>;
-			thermal-sensors = <&soc_sensor  17>;
+			thermal-sensors = <&virtual_sensor  0>;
 			trips {
 				soc_threshold: trip-point@0 {
 					temperature = <70000>;
@@ -297,17 +308,31 @@
 					trip = <&soc_target>;
 					contribution = <1024>;
 					cooling-device =
-					<&cluster0_cooling THERMAL_NO_LIMIT \
+					<&CPU0 THERMAL_NO_LIMIT \
 					THERMAL_NO_LIMIT>;
 				};
 				map1 {
 					trip = <&soc_target>;
-					contribution = <788>;
+					contribution = <410>;
+					cooling-device =
+					<&CPU6 THERMAL_NO_LIMIT \
+					THERMAL_NO_LIMIT>;
+				};
+				map2 {
+					trip = <&soc_target>;
+					contribution = <2048>;
+					cooling-device =
+					<&cluster0_cooling THERMAL_NO_LIMIT \
+					THERMAL_NO_LIMIT>;
+				};
+				map3 {
+					trip = <&soc_target>;
+					contribution = <1024>;
 					cooling-device =
 					<&cluster1_cooling THERMAL_NO_LIMIT \
 					THERMAL_NO_LIMIT>;
 				};
-				map2 {
+				map4 {
 					trip = <&soc_target>;
 					contribution = <1024>;
 					cooling-device =
@@ -383,20 +408,6 @@
 			thermal-sensors = <&ap_thm2 4>;
 		};
 
-		cluster0_thmzone: cluster0-thmzone {
-			polling-delay-passive = <0>;
-			polling-delay = <0>;
-			sustainable-power = <2000>;
-			thermal-sensors = <&cluster0_sensor  15>;
-		};
-
-		cluster1_thmzone: cluster1-thmzone {
-			polling-delay-passive = <0>;
-			polling-delay = <0>;
-			sustainable-power = <2000>;
-			thermal-sensors = <&cluster1_sensor  16>;
-		};
-
 		osctsen_thmzone: osctsen-thmzone {
 			 polling-delay-passive = <0>;
 			 polling-delay = <0>;
@@ -410,10 +421,19 @@
 		 };
 	};
 
+	virtual_sensor: virtual-sensor@0 {
+		compatible = "virtual-thermal";
+		#thermal-sensor-cells = <1>;
+		thmzone-cells = <&ank0_tzone1>, <&ank1_thmzone>,
+			<&ank2_thmzone>, <&ank3_thmzone>, <&ank4_thmzone>,
+			<&ank5_thmzone>, <&prometheus6_thmzone>,
+			<&prometheus7_thmzone>, <&gpu_thmzone>;
+	};
+
 	cooling-devices {
 		cluster0_cooling: cluster0-cooling {
 			compatible = "sprd,cluster-cooling";
-			#cooling-cells = <2>; /* min followesd by max */
+			#cooling-cells = <2>; /* min followed by max */
 			sprd,efuse-block7 = <7>;
 			sprd,efuse-block15 = <15>;
 			/* core_leak =                             */
@@ -441,7 +461,8 @@
 			sprd,efuse-switch = <0>;
 			sprd,hotplug-period = <10>;
 			sprd,min-cpufreq = <614400>;
-			sprd,min-cpunum = <1>;
+			sprd,min-cpunum = <6>;
+			sprd,max-temp = <90000>;
 			sprd,core-base = <4075>;
 			sprd,cluster-base = <3891>;
 			sprd,dynamic-core =
@@ -483,6 +504,7 @@
 			sprd,hotplug-period = <10>;
 			sprd,min-cpufreq = <1228800>;
 			sprd,min-cpunum = <0>;
+			sprd,max-temp = <85000>;
 			sprd,core-base = <11051>;
 			sprd,cluster-base = <3891>;
 			sprd,dynamic-core =
@@ -543,10 +565,10 @@
 };
 
 &sdio0 {
-	sprd,sdr104-dly = <0x7f 0x73 0x72 0x72>;
-	sprd,sdr50-dly = <0x6e 0x7f 0x01 0x01>;
-	sprd,sdhs-dly = <0x7f 0x1a 0x9a 0x9a>;
-	sprd,legacy-dly = <0x7f 0x1a 0x9a 0x9a>;
+	sprd,phy-delay-sd-uhs-sdr104 = <0x7f 0x73 0x72 0x72>;
+	sprd,phy-delay-sd-uhs-sdr50 = <0x6e 0x7f 0x01 0x01>;
+	sprd,phy-delay-sd-highspeed = <0x7f 0x1a 0x9a 0x9a>;
+	sprd,phy-delay-legacy = <0x7f 0x1a 0x9a 0x9a>;
 	vmmc-supply = <&vddsdcore>;
 	vqmmc-supply = <&vddsdio>;
 	voltage-ranges = <3000 3000>;
@@ -561,11 +583,11 @@
 };
 
 &sdio3 {
-	sprd,hs400es-dly = <0x40 0x80 0x3d 0x3d>;
-	sprd,hs400-dly = <0x3f 0xb5 0x3d 0x3d>;
-	sprd,hs200-dly = <0x7f 0xb5 0xb5 0xb5>;
-	sprd,ddr52-dly = <0x3e 0x6a 0x48 0x48>;
-	sprd,mmchs-dly = <0x60 0x2e 0x2c 0x2c>;
+	sprd,phy-delay-mmc-hs400es = <0x40 0x80 0x3d 0x3d>;
+	sprd,phy-delay-mmc-hs400 = <0x3f 0xb5 0x3d 0x3d>;
+	sprd,phy-delay-mmc-hs200 = <0x7f 0xb5 0xb5 0xb5>;
+	sprd,phy-delay-mmc-ddr52 = <0x3e 0x6a 0x48 0x48>;
+	sprd,phy-delay-mmc-highspeed = <0x60 0x2e 0x2c 0x2c>;
 	bus-width = <8>;
 	non-removable;
 	cap-mmc-hw-reset;

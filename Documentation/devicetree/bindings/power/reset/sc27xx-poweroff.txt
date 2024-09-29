@@ -1,6 +1,6 @@
 UNISOC Poweroff Driver
 
-This IP block in ths unisoc SoC that only deals with different ways to power the system down.
+This IP block in the unisoc SoC that only deals with different ways to power the system down.
 
 Required properties:
 - compatible:
@@ -12,6 +12,6 @@ Required properties:
 
 Example:
 poweroff@1820 {
-	compatible = "sprd,sc27xx-poweroff", "sprd,sc2730-poweroff";
+	compatible = "sprd,sc2730-poweroff";
 	reg = <0x1820>;
 };

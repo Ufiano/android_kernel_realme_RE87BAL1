@@ -9,16 +9,15 @@
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
-#include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 
 /* PMIC global registers definition */
-#define SC2731_MODULE_EN		0xc08
+#define SC27XX_MODULE_EN		0xc08
 #define SC2730_MODULE_EN		0x1808
 #define UMP9620_MODULE_EN		0x2008
 #define SC27XX_MODULE_ADC_EN		BIT(5)
+#define SC27XX_ARM_CLK_EN		0xc10
 #define SC2721_ARM_CLK_EN		0xc0c
-#define SC2731_ARM_CLK_EN		0xc10
 #define SC2730_ARM_CLK_EN		0x180c
 #define UMP9620_ARM_CLK_EN		0x200c
 #define UMP9620_XTL_WAIT_CTRL0		0x2378
@@ -45,8 +44,8 @@
 /* Bits and mask definition for SC27XX_ADC_CH_CFG register */
 #define SC27XX_ADC_CHN_ID_MASK		GENMASK(4, 0)
 #define SC27XX_ADC_SCALE_MASK		GENMASK(10, 9)
-#define SC2721_ADC_SCALE_MASK		BIT(5)
 #define SC27XX_ADC_SCALE_SHIFT		9
+#define SC2721_ADC_SCALE_MASK		BIT(5)
 #define SC2721_ADC_SCALE_SHIFT		5
 
 /* Bits definitions for SC27XX_ADC_INT_EN registers */
@@ -64,12 +63,12 @@
 /* Timeout (ms) for the trylock of hardware spinlocks */
 #define SC27XX_ADC_HWLOCK_TIMEOUT	5000
 
+/* Timeout (us) for ADC data conversion according to ADC datasheet */
+#define SC27XX_ADC_RDY_TIMEOUT		1000000
+#define SC27XX_ADC_POLL_RAW_STATUS	500
+
 /* Maximum ADC channel number */
 #define SC27XX_ADC_CHANNEL_MAX		32
-
-/* Timeout (us) for ADC data conversion according to ADC datasheet */
-#define SC27XX_ADC_RDY_TIMEOUT	1000000
-#define SC27XX_ADC_POLL_RAW_STATUS	500
 
 /* ADC voltage ratio definition */
 #define SC27XX_VOLT_RATIO(n, d)		\
@@ -77,15 +76,8 @@
 #define SC27XX_RATIO_NUMERATOR_OFFSET	16
 #define SC27XX_RATIO_DENOMINATOR_MASK	GENMASK(15, 0)
 
-/* ADC specific channel reference voltage 3.5V */
-#define SC27XX_ADC_REFVOL_VDD35		3500000
-
-/* ADC default channel reference voltage is 2.8V */
-#define SC27XX_ADC_REFVOL_VDD28		2800000
-
 enum sc27xx_pmic_type {
 	SC27XX_ADC,
-	SC2721_ADC,
 	UMP9620_ADC,
 };
 
@@ -97,7 +89,6 @@ enum ump96xx_scale_cal {
 
 struct sc27xx_adc_data {
 	struct device *dev;
-	struct regulator *volref;
 	struct regmap *regmap;
 	/*
 	 * One hardware spinlock to synchronize between the multiple
@@ -150,11 +141,6 @@ static struct sc27xx_adc_linear_graph small_scale_graph = {
 	100, 341,
 };
 
-static struct sc27xx_adc_linear_graph ump9620_bat_det_graph = {
-	1400, 3482,
-	200, 476,
-};
-
 static const struct sc27xx_adc_linear_graph sc2721_big_scale_graph_calib = {
 	4200, 850,
 	3600, 728,
@@ -173,6 +159,11 @@ static const struct sc27xx_adc_linear_graph big_scale_graph_calib = {
 static const struct sc27xx_adc_linear_graph small_scale_graph_calib = {
 	1000, 833,
 	100, 80,
+};
+
+static struct sc27xx_adc_linear_graph ump9620_bat_det_graph = {
+	1400, 3482,
+	200, 476,
 };
 
 static int sc27xx_adc_get_calib_data(u32 calib_data, int calib_adc)
@@ -297,6 +288,58 @@ static int ump96xx_adc_scale_cal(struct sc27xx_adc_data *data,
 	graph->adc1 = (adc_calib_data2 & 0xfff0) >> 4;
 
 	return 0;
+}
+
+static int sc27xx_adc_get_ratio(int channel, int scale)
+{
+	switch (channel) {
+	case 1:
+	case 2:
+	case 3:
+	case 4:
+		return scale ? SC27XX_VOLT_RATIO(400, 1025) :
+			SC27XX_VOLT_RATIO(1, 1);
+	case 5:
+		return SC27XX_VOLT_RATIO(7, 29);
+	case 6:
+		return SC27XX_VOLT_RATIO(375, 9000);
+	case 7:
+	case 8:
+		return scale ? SC27XX_VOLT_RATIO(100, 125) :
+			SC27XX_VOLT_RATIO(1, 1);
+	case 19:
+		return SC27XX_VOLT_RATIO(1, 3);
+	default:
+		return SC27XX_VOLT_RATIO(1, 1);
+	}
+	return SC27XX_VOLT_RATIO(1, 1);
+}
+
+static int sc2721_adc_get_ratio(int channel, int scale)
+{
+	switch (channel) {
+	case 1:
+	case 2:
+	case 3:
+	case 4:
+		return scale ? SC27XX_VOLT_RATIO(400, 1025) :
+			SC27XX_VOLT_RATIO(1, 1);
+	case 5:
+		return SC27XX_VOLT_RATIO(7, 29);
+	case 7:
+	case 9:
+		return scale ? SC27XX_VOLT_RATIO(100, 125) :
+			SC27XX_VOLT_RATIO(1, 1);
+	case 14:
+		return SC27XX_VOLT_RATIO(68, 900);
+	case 16:
+		return SC27XX_VOLT_RATIO(48, 100);
+	case 19:
+		return SC27XX_VOLT_RATIO(1, 3);
+	default:
+		return SC27XX_VOLT_RATIO(1, 1);
+	}
+	return SC27XX_VOLT_RATIO(1, 1);
 }
 
 static int sc2720_adc_get_ratio(int channel, int scale)
@@ -434,58 +477,6 @@ static int sc2730_adc_get_ratio(int channel, int scale)
 	return SC27XX_VOLT_RATIO(1, 1);
 }
 
-static int sc2721_adc_get_ratio(int channel, int scale)
-{
-	switch (channel) {
-	case 1:
-	case 2:
-	case 3:
-	case 4:
-		return scale ? SC27XX_VOLT_RATIO(400, 1025) :
-			SC27XX_VOLT_RATIO(1, 1);
-	case 5:
-		return SC27XX_VOLT_RATIO(7, 29);
-	case 7:
-	case 9:
-		return scale ? SC27XX_VOLT_RATIO(100, 125) :
-			SC27XX_VOLT_RATIO(1, 1);
-	case 14:
-		return SC27XX_VOLT_RATIO(68, 900);
-	case 16:
-		return SC27XX_VOLT_RATIO(48, 100);
-	case 19:
-		return SC27XX_VOLT_RATIO(1, 3);
-	default:
-		return SC27XX_VOLT_RATIO(1, 1);
-	}
-	return SC27XX_VOLT_RATIO(1, 1);
-}
-
-static int sc2731_adc_get_ratio(int channel, int scale)
-{
-	switch (channel) {
-	case 1:
-	case 2:
-	case 3:
-	case 4:
-		return scale ? SC27XX_VOLT_RATIO(400, 1025) :
-			SC27XX_VOLT_RATIO(1, 1);
-	case 5:
-		return SC27XX_VOLT_RATIO(7, 29);
-	case 6:
-		return SC27XX_VOLT_RATIO(375, 9000);
-	case 7:
-	case 8:
-		return scale ? SC27XX_VOLT_RATIO(100, 125) :
-			SC27XX_VOLT_RATIO(1, 1);
-	case 19:
-		return SC27XX_VOLT_RATIO(1, 3);
-	default:
-		return SC27XX_VOLT_RATIO(1, 1);
-	}
-	return SC27XX_VOLT_RATIO(1, 1);
-}
-
 static int ump9620_adc_get_ratio(int channel, int scale)
 {
 	switch (channel) {
@@ -600,7 +591,7 @@ static void ump9620_adc_scale_init(struct sc27xx_adc_data *data)
 			data->channel_scale[i] = 3;
 		else if (i == 7 || i == 9)
 			data->channel_scale[i] = 2;
-		else if (i == 0 || i == 13)
+		else if (i == 13)
 			data->channel_scale[i] = 1;
 		else
 			data->channel_scale[i] = 0;
@@ -611,30 +602,12 @@ static int sc27xx_adc_read(struct sc27xx_adc_data *data, int channel,
 			   int scale, int *val)
 {
 	int ret;
-	u32 rawdata, tmp, status;
+	u32 tmp, value, status;
 
 	ret = hwspin_lock_timeout_raw(data->hwlock, SC27XX_ADC_HWLOCK_TIMEOUT);
 	if (ret) {
 		dev_err(data->dev, "timeout to get the hwspinlock\n");
 		return ret;
-	}
-
-	/*
-	 * According to the sc2721 chip data sheet, the reference voltage of
-	 * specific channel 30 and channel 31 in ADC module needs to be set from
-	 * the default 2.8v to 3.5v.
-	 */
-	if (data->var_data->pmic_type == SC2721_ADC) {
-		if ((channel == 30) || (channel == 31)) {
-			ret = regulator_set_voltage(data->volref,
-						SC27XX_ADC_REFVOL_VDD35,
-						SC27XX_ADC_REFVOL_VDD35);
-			if (ret) {
-				dev_err(data->dev, "failed to set the volref 3.5V\n");
-				hwspin_unlock_raw(data->hwlock);
-				return ret;
-			}
-		}
 	}
 
 	ret = regmap_update_bits(data->regmap, data->base + SC27XX_ADC_CTL,
@@ -677,32 +650,24 @@ static int sc27xx_adc_read(struct sc27xx_adc_data *data, int channel,
 				       SC27XX_ADC_POLL_RAW_STATUS,
 				       SC27XX_ADC_RDY_TIMEOUT);
 	if (ret) {
-		dev_err(data->dev, "read adc timeout 0x%x\n", status);
+		dev_err(data->dev, "read adc timeout, status = 0x%x\n", status);
 		goto disable_adc;
 	}
 
-	ret = regmap_read(data->regmap, data->base + SC27XX_ADC_DATA,
-			  &rawdata);
-	rawdata &= SC27XX_ADC_DATA_MASK;
+	ret = regmap_read(data->regmap, data->base + SC27XX_ADC_DATA, &value);
+	if (ret)
+		goto disable_adc;
+
+	value &= SC27XX_ADC_DATA_MASK;
 
 disable_adc:
 	regmap_update_bits(data->regmap, data->base + SC27XX_ADC_CTL,
 			   SC27XX_ADC_EN, 0);
 unlock_adc:
-	if (data->var_data->pmic_type == SC2721_ADC) {
-		if ((channel == 30) || (channel == 31)) {
-			ret = regulator_set_voltage(data->volref,
-						    SC27XX_ADC_REFVOL_VDD28,
-						    SC27XX_ADC_REFVOL_VDD28);
-			if (ret)
-				dev_err(data->dev, "failed to set the volref 2.8V\n");
-		}
-	}
-
 	hwspin_unlock_raw(data->hwlock);
 
 	if (!ret)
-		*val = rawdata;
+		*val = value;
 
 	return ret;
 }
@@ -711,9 +676,8 @@ static void sc27xx_adc_volt_ratio(struct sc27xx_adc_data *data,
 				  int channel, int scale,
 				  u32 *div_numerator, u32 *div_denominator)
 {
-	u32 ratio;
+	u32 ratio = data->var_data->get_ratio(channel, scale);
 
-	ratio = data->var_data->get_ratio(channel, scale);
 	*div_numerator = ratio >> SC27XX_RATIO_NUMERATOR_OFFSET;
 	*div_denominator = ratio & SC27XX_RATIO_DENOMINATOR_MASK;
 }
@@ -755,17 +719,14 @@ static int ump96xx_adc_convert_volt(struct sc27xx_adc_data *data, int channel,
 
 	switch (channel) {
 	case 0:
-		if (scale == 1)
-			return sc27xx_adc_to_volt(&ump9620_bat_det_graph, raw_adc);
-		else
-			volt = ump96xx_adc_to_volt(&small_scale_graph, scale, raw_adc);
+		volt = sc27xx_adc_to_volt(&ump9620_bat_det_graph, raw_adc);
 		break;
 	case 11:
 		volt = sc27xx_adc_to_volt(&big_scale_graph, raw_adc);
 		break;
 	default:
 		if (scale == 1)
-			volt = sc27xx_adc_to_volt(&ump9620_bat_det_graph, raw_adc);
+			volt = ump96xx_adc_to_volt(&ump9620_bat_det_graph, scale, raw_adc);
 		else
 			volt = ump96xx_adc_to_volt(&small_scale_graph, scale, raw_adc);
 		break;
@@ -979,7 +940,6 @@ static int sc27xx_adc_enable(struct sc27xx_adc_data *data)
 disable_clk:
 	regmap_update_bits(data->regmap, data->var_data->clk_en,
 			   SC27XX_CLK_ADC_EN | SC27XX_CLK_ADC_CLK_EN, 0);
-
 disable_adc:
 	regmap_update_bits(data->regmap, data->var_data->module_en,
 			   SC27XX_MODULE_ADC_EN, 0);
@@ -1008,19 +968,19 @@ static void sc27xx_adc_free_hwlock(void *_data)
 
 static const struct sc27xx_adc_variant_data sc2731_data = {
 	.pmic_type = SC27XX_ADC,
-	.module_en = SC2731_MODULE_EN,
-	.clk_en = SC2731_ARM_CLK_EN,
+	.module_en = SC27XX_MODULE_EN,
+	.clk_en = SC27XX_ARM_CLK_EN,
 	.scale_shift = SC2721_ADC_SCALE_SHIFT,
 	.scale_mask = SC2721_ADC_SCALE_MASK,
 	.bscale_cal = &sc2721_big_scale_graph_calib,
 	.sscale_cal = &sc2721_small_scale_graph_calib,
 	.init_scale = sc2731_adc_scale_init,
-	.get_ratio = sc2731_adc_get_ratio,
+	.get_ratio = sc27xx_adc_get_ratio,
 };
 
 static const struct sc27xx_adc_variant_data sc2721_data = {
-	.pmic_type = SC2721_ADC,
-	.module_en = SC2731_MODULE_EN,
+	.pmic_type = SC27XX_ADC,
+	.module_en = SC27XX_MODULE_EN,
 	.clk_en = SC2721_ARM_CLK_EN,
 	.scale_shift = SC2721_ADC_SCALE_SHIFT,
 	.scale_mask = SC2721_ADC_SCALE_MASK,
@@ -1044,7 +1004,7 @@ static const struct sc27xx_adc_variant_data sc2730_data = {
 
 static const struct sc27xx_adc_variant_data sc2720_data = {
 	.pmic_type = SC27XX_ADC,
-	.module_en = SC2731_MODULE_EN,
+	.module_en = SC27XX_MODULE_EN,
 	.clk_en = SC2721_ARM_CLK_EN,
 	.scale_shift = SC27XX_ADC_SCALE_SHIFT,
 	.scale_mask = SC27XX_ADC_SCALE_MASK,
@@ -1068,7 +1028,8 @@ static const struct sc27xx_adc_variant_data ump9620_data = {
 
 static int sc27xx_adc_probe(struct platform_device *pdev)
 {
-	struct device_node *np = pdev->dev.of_node;
+	struct device *dev = &pdev->dev;
+	struct device_node *np = dev->of_node;
 	struct sc27xx_adc_data *sc27xx_data;
 	const struct sc27xx_adc_variant_data *pdata;
 	struct iio_dev *indio_dev;
@@ -1080,93 +1041,82 @@ static int sc27xx_adc_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	indio_dev = devm_iio_device_alloc(&pdev->dev, sizeof(*sc27xx_data));
+	indio_dev = devm_iio_device_alloc(dev, sizeof(*sc27xx_data));
 	if (!indio_dev)
 		return -ENOMEM;
 
 	sc27xx_data = iio_priv(indio_dev);
 
-	sc27xx_data->regmap = dev_get_regmap(pdev->dev.parent, NULL);
+	sc27xx_data->regmap = dev_get_regmap(dev->parent, NULL);
 	if (!sc27xx_data->regmap) {
-		dev_err(&pdev->dev, "failed to get ADC regmap\n");
+		dev_err(dev, "failed to get ADC regmap\n");
 		return -ENODEV;
 	}
 
 	ret = of_property_read_u32(np, "reg", &sc27xx_data->base);
 	if (ret) {
-		dev_err(&pdev->dev, "failed to get ADC base address\n");
+		dev_err(dev, "failed to get ADC base address\n");
 		return ret;
 	}
 
 	sc27xx_data->irq = platform_get_irq(pdev, 0);
 	if (sc27xx_data->irq < 0) {
-		dev_err(&pdev->dev, "failed to get ADC irq number\n");
+		dev_err(dev, "failed to get ADC irq number\n");
 		return sc27xx_data->irq;
 	}
 
 	ret = of_hwspin_lock_get_id(np, 0);
 	if (ret < 0) {
-		dev_err(&pdev->dev, "failed to get hwspinlock id\n");
+		dev_err(dev, "failed to get hwspinlock id\n");
 		return ret;
 	}
 
 	sc27xx_data->hwlock = hwspin_lock_request_specific(ret);
 	if (!sc27xx_data->hwlock) {
-		dev_err(&pdev->dev, "failed to request hwspinlock\n");
+		dev_err(dev, "failed to request hwspinlock\n");
 		return -ENXIO;
 	}
 
-	ret = devm_add_action(&pdev->dev, sc27xx_adc_free_hwlock,
+	ret = devm_add_action_or_reset(dev, sc27xx_adc_free_hwlock,
 			      sc27xx_data->hwlock);
 	if (ret) {
-		sc27xx_adc_free_hwlock(sc27xx_data->hwlock);
-		dev_err(&pdev->dev, "failed to add hwspinlock action\n");
+		dev_err(dev, "failed to add hwspinlock action\n");
 		return ret;
 	}
 
-	if (pdata->pmic_type == SC2721_ADC) {
-		sc27xx_data->volref = devm_regulator_get_optional(&pdev->dev, "vref");
-		if (IS_ERR_OR_NULL(sc27xx_data->volref)) {
-			ret = PTR_ERR(sc27xx_data->volref);
-			dev_err(&pdev->dev, "err! ADC volref, err: %d\n", ret);
-			return ret;
-		}
-	}
-
-	sc27xx_data->dev = &pdev->dev;
+	sc27xx_data->dev = dev;
 	sc27xx_data->var_data = pdata;
 
 	sc27xx_data->var_data->init_scale(sc27xx_data);
 	ret = sc27xx_adc_enable(sc27xx_data);
 	if (ret) {
-		dev_err(&pdev->dev, "failed to enable ADC module\n");
+		dev_err(dev, "failed to enable ADC module\n");
 		return ret;
 	}
 
-	ret = devm_add_action(&pdev->dev, sc27xx_adc_disable, sc27xx_data);
+	ret = devm_add_action_or_reset(dev, sc27xx_adc_disable, sc27xx_data);
 	if (ret) {
-		sc27xx_adc_disable(sc27xx_data);
-		dev_err(&pdev->dev, "failed to add ADC disable action\n");
+		dev_err(dev, "failed to add ADC disable action\n");
 		return ret;
 	}
 
-	indio_dev->dev.parent = &pdev->dev;
-	indio_dev->name = dev_name(&pdev->dev);
+	indio_dev->dev.parent = dev;
+	indio_dev->name = dev_name(dev);
 	indio_dev->modes = INDIO_DIRECT_MODE;
 	indio_dev->info = &sc27xx_info;
 	indio_dev->channels = sc27xx_channels;
 	indio_dev->num_channels = ARRAY_SIZE(sc27xx_channels);
-	ret = devm_iio_device_register(&pdev->dev, indio_dev);
+	ret = devm_iio_device_register(dev, indio_dev);
 	if (ret)
-		dev_err(&pdev->dev, "could not register iio (ADC)");
+		dev_err(dev, "could not register iio (ADC)");
 
 	return ret;
 }
 
 static const struct of_device_id sc27xx_adc_of_match[] = {
 	{ .compatible = "sprd,sc2731-adc", .data = &sc2731_data},
-	{ .compatible = "sprd,sc2730-adc", .data = &sc2730_data},
 	{ .compatible = "sprd,sc2721-adc", .data = &sc2721_data},
+	{ .compatible = "sprd,sc2730-adc", .data = &sc2730_data},
 	{ .compatible = "sprd,sc2720-adc", .data = &sc2720_data},
 	{ .compatible = "sprd,ump9620-adc", .data = &ump9620_data},
 	{ }

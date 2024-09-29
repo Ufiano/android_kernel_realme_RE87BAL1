@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/clk.h>
@@ -33,11 +25,6 @@ static struct dpu_clk_context {
 	struct clk *clk_dpu_dpi;
 } dpu_clk_ctx;
 
-static struct qos_thres {
-	u8 awqos_thres;
-	u8 arqos_thres;
-} qos_cfg;
-
 static const u32 dpu_core_clk[] = {
 	153600000,
 	192000000,
@@ -57,7 +44,7 @@ static struct dpu_glb_context {
 	unsigned int mask_bit;
 
 	struct regmap *regmap;
-} ctx_reset, ctx_qos;
+} ctx_reset;
 
 static struct clk *val_to_clk(struct dpu_clk_context *ctx, u32 val)
 {
@@ -242,21 +229,15 @@ static int dpu_glb_parse_dt(struct dpu_context *ctx,
 				struct device_node *np)
 {
 	unsigned int syscon_args[2];
-	struct device_node *qos_np = NULL;
-	int ret;
 
-	ctx_reset.regmap = syscon_regmap_lookup_by_name(np, "reset");
+	ctx_reset.regmap = syscon_regmap_lookup_by_phandle_args(np,
+			"reset-syscon", 2, syscon_args);
 	if (IS_ERR(ctx_reset.regmap)) {
-		pr_warn("failed to map dpu glb reg: reset\n");
+		pr_warn("failed to get reset syscon\n");
 		return PTR_ERR(ctx_reset.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "reset", 2, syscon_args);
-	if (ret == 2) {
+	} else {
 		ctx_reset.enable_reg = syscon_args[0];
 		ctx_reset.mask_bit = syscon_args[1];
-	} else {
-		pr_warn("failed to parse dpu glb reg: reset\n");
 	}
 
 	clk_ap_ahb_disp_eb =
@@ -265,34 +246,6 @@ static int dpu_glb_parse_dt(struct dpu_context *ctx,
 		pr_warn("read clk_ap_ahb_disp_eb failed\n");
 		clk_ap_ahb_disp_eb = NULL;
 	}
-
-	ctx_qos.regmap = syscon_regmap_lookup_by_name(np, "qos");
-	if (IS_ERR(ctx_qos.regmap)) {
-		pr_warn("failed to map dpu glb reg: qos\n");
-		return PTR_ERR(ctx_qos.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "qos", 2, syscon_args);
-	if (ret == 2) {
-		ctx_qos.enable_reg = syscon_args[0];
-		ctx_qos.mask_bit = syscon_args[1];
-	} else {
-		pr_warn("failed to parse dpu glb reg: qos\n");
-	}
-
-	qos_np = of_parse_phandle(np, "sprd,qos", 0);
-	if (!qos_np)
-		pr_warn("can't find dpu qos cfg node\n");
-
-	ret = of_property_read_u8(qos_np, "awqos-threshold",
-					&qos_cfg.awqos_thres);
-	if (ret)
-		pr_warn("read awqos-threshold failed, use default\n");
-
-	ret = of_property_read_u8(qos_np, "arqos-threshold",
-					&qos_cfg.arqos_thres);
-	if (ret)
-		pr_warn("read arqos-threshold failed, use default\n");
 
 	return 0;
 }
@@ -303,7 +256,7 @@ static void dpu_glb_enable(struct dpu_context *ctx)
 
 	ret = clk_prepare_enable(clk_ap_ahb_disp_eb);
 	if (ret) {
-		pr_err("enable clk_aon_apb_disp_eb failed!\n");
+		pr_err("enable clk_ap_ahb_disp_eb failed!\n");
 		return;
 	}
 }
@@ -328,22 +281,17 @@ static void dpu_reset(struct dpu_context *ctx)
 
 static void dpu_power_domain(struct dpu_context *ctx, int enable)
 {
-	if (enable)
-		regmap_update_bits(ctx_qos.regmap,
-			    ctx_qos.enable_reg,
-			    ctx_qos.mask_bit,
-			    qos_cfg.awqos_thres |
-			    qos_cfg.arqos_thres << 4);
+
 }
 
-static struct dpu_clk_ops dpu_clk_ops = {
+const struct dpu_clk_ops sharkl5_dpu_clk_ops = {
 	.parse_dt = dpu_clk_parse_dt,
 	.init = dpu_clk_init,
 	.enable = dpu_clk_enable,
 	.disable = dpu_clk_disable,
 };
 
-static struct dpu_glb_ops dpu_glb_ops = {
+const struct dpu_glb_ops sharkl5_dpu_glb_ops = {
 	.parse_dt = dpu_glb_parse_dt,
 	.reset = dpu_reset,
 	.enable = dpu_glb_enable,
@@ -351,25 +299,6 @@ static struct dpu_glb_ops dpu_glb_ops = {
 	.power = dpu_power_domain,
 };
 
-static struct ops_entry clk_entry = {
-	.ver = "sharkl5",
-	.ops = &dpu_clk_ops,
-};
-
-static struct ops_entry glb_entry = {
-	.ver = "sharkl5",
-	.ops = &dpu_glb_ops,
-};
-
-static int __init dpu_glb_register(void)
-{
-	dpu_clk_ops_register(&clk_entry);
-	dpu_glb_ops_register(&glb_entry);
-	return 0;
-}
-
-subsys_initcall(dpu_glb_register);
-
+MODULE_AUTHOR("kevin tang <kevin.tang@unisoc.com>");
+MODULE_DESCRIPTION("Unisoc SharkL5 DPU global and clk regs config");
 MODULE_LICENSE("GPL v2");
-MODULE_AUTHOR("kevin.tang@unisoc.com");
-MODULE_DESCRIPTION("sprd sharkl5 dpu global and clk regs config");

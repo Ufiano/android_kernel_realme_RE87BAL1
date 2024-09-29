@@ -70,6 +70,6 @@ Console initialized on /dev/tty0
 console [tty0] enabled
 console [mc-1] enabled
 List of all partitions:
-No filesystem could mount root, tried: 
+No filesystem could mount root, tried:
 
 Kernel panic - not syncing: VFS: Unable to mount root fs on unknown-block(98,0)

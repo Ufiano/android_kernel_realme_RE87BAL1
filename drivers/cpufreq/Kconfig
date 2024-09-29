@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 menu "CPU Frequency scaling"
 
 config CPU_FREQ
@@ -25,10 +26,6 @@ config CPU_FREQ_GOV_COMMON
 	select CPU_FREQ_GOV_ATTR_SET
 	select IRQ_WORK
 	bool
-
-config CPU_FREQ_BOOST_SW
-	bool
-	depends on THERMAL
 
 config CPU_FREQ_STAT
 	bool "CPU frequency transition statistics"
@@ -102,14 +99,14 @@ config CPU_FREQ_DEFAULT_GOV_CONSERVATIVE
 	  driver. Fallback governor will be the performance governor.
 
 config CPU_FREQ_DEFAULT_GOV_INTERACTIVE
-	bool "interactive"
-	select CPU_FREQ_GOV_INTERACTIVE
-	select CPU_FREQ_GOV_PERFORMANCE
-	help
-	  Use the CPUFreq governor 'interactive' as default. This allows
-	  you to get a full dynamic cpu frequency capable system by simply
-	  loading your cpufreq low-level hardware driver, using the
-	  'interactive' governor for latency-sensitive workloads.
+        bool "interactive"
+        select CPU_FREQ_GOV_INTERACTIVE
+        select CPU_FREQ_GOV_PERFORMANCE
+        help
+          Use the CPUFreq governor 'interactive' as default. This allows
+          you to get a full dynamic cpu frequency capable system by simply
+          loading your cpufreq low-level hardware driver, using the
+          'interactive' governor for latency-sensitive workloads.
 
 config CPU_FREQ_DEFAULT_GOV_SCHEDUTIL
 	bool "schedutil"
@@ -203,32 +200,24 @@ config CPU_FREQ_GOV_CONSERVATIVE
 	  If in doubt, say N.
 
 config CPU_FREQ_GOV_INTERACTIVE
-	tristate "'interactive' cpufreq policy governor"
-	depends on CPU_FREQ
-	select CPU_FREQ_GOV_ATTR_SET
-	select IRQ_WORK
-	help
-	  'interactive' - This driver adds a dynamic cpufreq policy governor
-	  designed for latency-sensitive workloads.
+        tristate "'interactive' cpufreq policy governor"
+        depends on CPU_FREQ
+        select CPU_FREQ_GOV_ATTR_SET
+        select IRQ_WORK
+        help
+          'interactive' - This driver adds a dynamic cpufreq policy governor
+          designed for latency-sensitive workloads.
 
-	  This governor attempts to reduce the latency of clock
-	  increases so that the system is more responsive to
-	  interactive workloads.
+          This governor attempts to reduce the latency of clock
+          increases so that the system is more responsive to
+          interactive workloads.
 
-	  To compile this driver as a module, choose M here: the
-	  module will be called cpufreq_interactive.
+          To compile this driver as a module, choose M here: the
+          module will be called cpufreq_interactive.
 
-	  For details, take a look at linux/Documentation/cpu-freq.
+          For details, take a look at linux/Documentation/cpu-freq.
 
-	  If in doubt, say N.
-
-config INTERACTIVE_TIMER_MODE
-	tristate "enable 'interactive' cpufreq policy governor with timer mode"
-	depends on CPU_FREQ_GOV_INTERACTIVE
-	default n
-	help
-	  enable 'interactive' cpufreq policy governor with timer mode.
-	  If in doubt, say N.
+          If in doubt, say N.
 
 config CPU_FREQ_GOV_SCHEDUTIL
 	bool "'schedutil' cpufreq policy governor"
@@ -252,8 +241,6 @@ comment "CPU frequency scaling drivers"
 config CPUFREQ_DT
 	tristate "Generic DT based cpufreq driver"
 	depends on HAVE_CLK && OF
-	# if CPU_THERMAL is on and THERMAL=m, CPUFREQ_DT cannot be =y:
-	depends on !CPU_THERMAL || THERMAL
 	select CPUFREQ_DT_PLATDEV
 	select PM_OPP
 	help
@@ -291,16 +278,6 @@ endif
 
 if PPC32 || PPC64
 source "drivers/cpufreq/Kconfig.powerpc"
-endif
-
-if AVR32
-config AVR32_AT32AP_CPUFREQ
-	bool "CPU frequency driver for AT32AP"
-	depends on PLATFORM_AT32AP
-	default n
-	help
-	  This enables the CPU frequency driver for AT32AP processors.
-	  If in doubt, say N.
 endif
 
 if IA64
@@ -391,16 +368,10 @@ endif
 config QORIQ_CPUFREQ
 	tristate "CPU frequency scaling driver for Freescale QorIQ SoCs"
 	depends on OF && COMMON_CLK && (PPC_E500MC || ARM || ARM64)
-	depends on !CPU_THERMAL || THERMAL
 	select CLK_QORIQ
 	help
 	  This adds the CPUFreq driver support for Freescale QorIQ SoCs
 	  which are capable of changing the CPU's frequency dynamically.
 
-config SPRD_CPUDVFS_GCOV
-	bool "open gcov for cpudvfs"
-	depends on GCOV_PROFILE_MODULES
-	help
-	  Say Y here to enable gcov in cpudvfs.
 endif
 endmenu

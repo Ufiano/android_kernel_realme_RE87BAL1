@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0+ OR MIT
 /*
- * Spreadtrum sc2730 global register file
+ * UNISOC sc2730 global register file
  *
- * Copyright C 2019, Spreadtrum Communications Inc.
+ * Copyright C 2020, UNISOC Communications Inc.
  */
 
 #ifndef __DT_BINDINGS_SPRD_SC2730_REGS_H

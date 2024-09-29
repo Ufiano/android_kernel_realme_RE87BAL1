@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0
 #
 # Generic HWSPINLOCK framework
 #
@@ -8,7 +9,7 @@ menuconfig HWSPINLOCK
 config HWSPINLOCK_OMAP
 	tristate "OMAP Hardware Spinlock device"
 	depends on HWSPINLOCK
-	depends on ARCH_OMAP4 || SOC_OMAP5 || SOC_DRA7XX || SOC_AM33XX || SOC_AM43XX
+	depends on ARCH_OMAP4 || SOC_OMAP5 || SOC_DRA7XX || SOC_AM33XX || SOC_AM43XX || ARCH_K3
 	help
 	  Say y here to support the OMAP Hardware Spinlock device (firstly
 	  introduced in OMAP4).
@@ -48,6 +49,15 @@ config HWSPINLOCK_SPRD
 
 	  If unsure, say N.
 
+config HWSPINLOCK_STM32
+	tristate "STM32 Hardware Spinlock device"
+	depends on MACH_STM32MP157
+	depends on HWSPINLOCK
+	help
+	  Say y here to support the STM32 Hardware Spinlock device.
+
+	  If unsure, say N.
+
 config HSEM_U8500
 	tristate "STE Hardware Semaphore functionality"
 	depends on HWSPINLOCK
@@ -58,9 +68,3 @@ config HSEM_U8500
 	  SoC.
 
 	  If unsure, say N.
-
-config SPRD_HWSPINLOCK_GCOV
-	bool "open gcov for hwspinlock"
-	depends on GCOV_PROFILE_MODULES
-	help
-	  Say Y here to enable gcov in hwspinlock.

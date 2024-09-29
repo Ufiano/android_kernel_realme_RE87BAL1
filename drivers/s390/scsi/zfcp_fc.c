@@ -111,11 +111,10 @@ void zfcp_fc_post_event(struct work_struct *work)
 
 	list_for_each_entry_safe(event, tmp, &tmp_lh, list) {
 		fc_host_post_event(adapter->scsi_host, fc_get_event_number(),
-				event->code, event->data);
+				   event->code, event->data);
 		list_del(&event->list);
 		kfree(event);
 	}
-
 }
 
 /**
@@ -126,7 +125,7 @@ void zfcp_fc_post_event(struct work_struct *work)
  * @event_data: The event data (e.g. n_port page in case of els)
  */
 void zfcp_fc_enqueue_event(struct zfcp_adapter *adapter,
-			enum fc_host_event_code event_code, u32 event_data)
+			   enum fc_host_event_code event_code, u32 event_data)
 {
 	struct zfcp_fc_event *event;
 
@@ -326,7 +325,7 @@ static void zfcp_fc_incoming_logo(struct zfcp_fsf_req *req)
 
 /**
  * zfcp_fc_incoming_els - handle incoming ELS
- * @fsf_req - request which contains incoming ELS
+ * @fsf_req: request which contains incoming ELS
  */
 void zfcp_fc_incoming_els(struct zfcp_fsf_req *fsf_req)
 {
@@ -438,6 +437,7 @@ void zfcp_fc_port_did_lookup(struct work_struct *work)
 	struct zfcp_port *port = container_of(work, struct zfcp_port,
 					      gid_pn_work);
 
+	set_worker_desc("zgidpn%16llx", port->wwpn); /* < WORKER_DESC_LEN=24 */
 	ret = zfcp_fc_ns_gid_pn(port);
 	if (ret) {
 		/* could not issue gid_pn for some reason */
@@ -572,6 +572,7 @@ void zfcp_fc_link_test_work(struct work_struct *work)
 		container_of(work, struct zfcp_port, test_link_work);
 	int retval;
 
+	set_worker_desc("zadisc%16llx", port->wwpn); /* < WORKER_DESC_LEN=24 */
 	get_device(&port->dev);
 	port->rport_task = RPORT_DEL;
 	zfcp_scsi_rport_work(&port->rport_work);
@@ -609,7 +610,49 @@ void zfcp_fc_test_link(struct zfcp_port *port)
 		put_device(&port->dev);
 }
 
-static struct zfcp_fc_req *zfcp_alloc_sg_env(int buf_num)
+/**
+ * zfcp_fc_sg_free_table - free memory used by scatterlists
+ * @sg: pointer to scatterlist
+ * @count: number of scatterlist which are to be free'ed
+ * the scatterlist are expected to reference pages always
+ */
+static void zfcp_fc_sg_free_table(struct scatterlist *sg, int count)
+{
+	int i;
+
+	for (i = 0; i < count; i++, sg = sg_next(sg))
+		if (sg)
+			free_page((unsigned long) sg_virt(sg));
+		else
+			break;
+}
+
+/**
+ * zfcp_fc_sg_setup_table - init scatterlist and allocate, assign buffers
+ * @sg: pointer to struct scatterlist
+ * @count: number of scatterlists which should be assigned with buffers
+ * of size page
+ *
+ * Returns: 0 on success, -ENOMEM otherwise
+ */
+static int zfcp_fc_sg_setup_table(struct scatterlist *sg, int count)
+{
+	void *addr;
+	int i;
+
+	sg_init_table(sg, count);
+	for (i = 0; i < count; i++, sg = sg_next(sg)) {
+		addr = (void *) get_zeroed_page(GFP_KERNEL);
+		if (!addr) {
+			zfcp_fc_sg_free_table(sg, i);
+			return -ENOMEM;
+		}
+		sg_set_buf(sg, addr, PAGE_SIZE);
+	}
+	return 0;
+}
+
+static struct zfcp_fc_req *zfcp_fc_alloc_sg_env(int buf_num)
 {
 	struct zfcp_fc_req *fc_req;
 
@@ -617,7 +660,7 @@ static struct zfcp_fc_req *zfcp_alloc_sg_env(int buf_num)
 	if (!fc_req)
 		return NULL;
 
-	if (zfcp_sg_setup_table(&fc_req->sg_rsp, buf_num)) {
+	if (zfcp_fc_sg_setup_table(&fc_req->sg_rsp, buf_num)) {
 		kmem_cache_free(zfcp_fc_req_cache, fc_req);
 		return NULL;
 	}
@@ -761,7 +804,7 @@ void zfcp_fc_scan_ports(struct work_struct *work)
 	if (zfcp_fc_wka_port_get(&adapter->gs->ds))
 		return;
 
-	fc_req = zfcp_alloc_sg_env(buf_num);
+	fc_req = zfcp_fc_alloc_sg_env(buf_num);
 	if (!fc_req)
 		goto out;
 
@@ -775,7 +818,7 @@ void zfcp_fc_scan_ports(struct work_struct *work)
 				break;
 		}
 	}
-	zfcp_sg_free_table(&fc_req->sg_rsp, buf_num);
+	zfcp_fc_sg_free_table(&fc_req->sg_rsp, buf_num);
 	kmem_cache_free(zfcp_fc_req_cache, fc_req);
 out:
 	zfcp_fc_wka_port_put(&adapter->gs->ds);
@@ -974,7 +1017,7 @@ static int zfcp_fc_exec_els_job(struct bsg_job *job,
 		d_id = ntoh24(bsg_request->rqst_data.h_els.port_id);
 
 	els->handler = zfcp_fc_ct_els_job_handler;
-	return zfcp_fsf_send_els(adapter, d_id, els, job->req->timeout / HZ);
+	return zfcp_fsf_send_els(adapter, d_id, els, job->timeout / HZ);
 }
 
 static int zfcp_fc_exec_ct_job(struct bsg_job *job,
@@ -993,7 +1036,7 @@ static int zfcp_fc_exec_ct_job(struct bsg_job *job,
 		return ret;
 
 	ct->handler = zfcp_fc_ct_job_handler;
-	ret = zfcp_fsf_send_ct(wka_port, ct, NULL, job->req->timeout / HZ);
+	ret = zfcp_fsf_send_ct(wka_port, ct, NULL, job->timeout / HZ);
 	if (ret)
 		zfcp_fc_wka_port_put(wka_port);
 

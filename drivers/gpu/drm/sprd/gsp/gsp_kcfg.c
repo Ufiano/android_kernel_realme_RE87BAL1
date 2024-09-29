@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/dma-buf.h>
@@ -73,14 +65,12 @@ int gsp_kcfg_verify(struct gsp_kcfg *kcfg)
 
 	core = gsp_kcfg_to_core(kcfg);
 	if (gsp_core_verify(core)) {
-		GSP_ERR("kcfg[%d] parent core error\n",
-			gsp_kcfg_to_tag(kcfg));
+		GSP_ERR("kcfg[%d] parent core error\n", gsp_kcfg_to_tag(kcfg));
 		return ret;
 	}
 
 	if (kcfg->tag < 0) {
-		GSP_ERR("kcfg[%d] tag less than zero\n",
-			gsp_kcfg_to_tag(kcfg));
+		GSP_ERR("kcfg[%d] tag less than zero\n", gsp_kcfg_to_tag(kcfg));
 		return ret;
 	}
 
@@ -118,8 +108,7 @@ void gsp_kcfg_put_dmabuf(struct gsp_kcfg *kcfg)
 {
 	struct gsp_layer *layer = NULL;
 
-	if (IS_ERR_OR_NULL(kcfg)
-		|| IS_ERR_OR_NULL(kcfg->cfg))
+	if (IS_ERR_OR_NULL(kcfg) || IS_ERR_OR_NULL(kcfg->cfg))
 		return;
 
 	for_each_gsp_layer(layer, kcfg) {
@@ -133,8 +122,8 @@ void gsp_kcfg_put_dmabuf(struct gsp_kcfg *kcfg)
 }
 
 void gsp_kcfg_init(struct gsp_kcfg *kcfg,
-		     struct gsp_core *core,
-		     struct gsp_workqueue *wq)
+		struct gsp_core *core,
+		struct gsp_workqueue *wq)
 {
 	if (IS_ERR_OR_NULL(kcfg)
 	    || IS_ERR_OR_NULL(core)
@@ -184,8 +173,7 @@ struct gsp_kcfg *gsp_kcfg_acquire(struct gsp_workqueue *wq)
 	return kcfg;
 }
 
-void gsp_kcfg_list_add(struct gsp_kcfg *kcfg,
-		       struct gsp_kcfg_list *kl)
+void gsp_kcfg_list_add(struct gsp_kcfg *kcfg, struct gsp_kcfg_list *kl)
 {
 	list_add_tail(&kcfg->link, &kl->head);
 }
@@ -206,8 +194,7 @@ void gsp_kcfg_list_init(struct gsp_kcfg_list *kl, bool async,
 }
 
 int gsp_kcfg_list_acquire(struct gsp_dev *gsp,
-			  struct gsp_kcfg_list *kl,
-			  int num)
+			struct gsp_kcfg_list *kl, int num)
 {
 	struct gsp_core *core = NULL;
 	struct gsp_kcfg *kcfg = NULL;
@@ -283,8 +270,7 @@ static int gsp_kcfg_fill(struct gsp_kcfg *kcfg, void *arg, int index,
 	int ret = -1;
 	struct gsp_core *core = NULL;
 
-	GSP_DEBUG("kcfg: %p, arg: %p, index: %d\n",
-		 kcfg, arg, index);
+	GSP_DEBUG("kcfg: %p, arg: %p, index: %d\n", kcfg, arg, index);
 	if (gsp_kcfg_verify(kcfg)) {
 		GSP_ERR("fill error kcfg\n");
 		goto exit;
@@ -335,8 +321,8 @@ exit:
 	return ret;
 }
 
-int __user *
-gsp_kcfg_ufd_intercept(struct gsp_kcfg *kcfg, void __user *arg, int index)
+int __user *gsp_kcfg_ufd_intercept(struct gsp_kcfg *kcfg,
+				void __user *arg, int index)
 {
 	int __user *ufd = NULL;
 	struct gsp_core *core = NULL;
@@ -359,8 +345,7 @@ int gsp_kcfg_list_fill(struct gsp_kcfg_list *kl, void __user *arg)
 	void *cfg_arg = NULL;
 	int __user *ufd = NULL;
 
-	if (IS_ERR_OR_NULL(kl)
-	    || IS_ERR_OR_NULL(arg)) {
+	if (IS_ERR_OR_NULL(kl) || IS_ERR_OR_NULL(arg)) {
 		GSP_ERR("kcfg list fill params error\n");
 		goto exit;
 	}
@@ -374,7 +359,7 @@ int gsp_kcfg_list_fill(struct gsp_kcfg_list *kl, void __user *arg)
 	ret = copy_from_user((void *)cfg_arg, arg, kl->size);
 	if (ret) {
 		GSP_ERR("copy from user failed\n");
-		goto exit;
+		goto free_cfg;
 	}
 
 	for_each_kcfg_from_kl(kcfg, kl) {
@@ -390,21 +375,20 @@ int gsp_kcfg_list_fill(struct gsp_kcfg_list *kl, void __user *arg)
 		ret = gsp_kcfg_fill(kcfg, cfg_arg, index, kl->async, last, ufd);
 		if (ret)
 			break;
-		GSP_DEBUG("fill kcfg[%d] success\n",
-			  gsp_kcfg_to_tag(kcfg));
+		GSP_DEBUG("fill kcfg[%d] success\n", gsp_kcfg_to_tag(kcfg));
 		index++;
 	}
 
+free_cfg:
+	kfree(cfg_arg);
 exit:
 	if (ret)
 		gsp_kcfg_list_release(kl);
 
-	kfree(cfg_arg);
 	return ret;
 }
 
-struct gsp_workqueue *
-gsp_kcfg_to_workqueue(struct gsp_kcfg *kcfg)
+struct gsp_workqueue *gsp_kcfg_to_workqueue(struct gsp_kcfg *kcfg)
 {
 	if (gsp_kcfg_verify(kcfg)) {
 		GSP_ERR("kcfg to workqueue params error\n");
@@ -414,8 +398,7 @@ gsp_kcfg_to_workqueue(struct gsp_kcfg *kcfg)
 	return kcfg->bind_core->wq;
 }
 
-struct gsp_core *const
-gsp_kcfg_to_bind_core(struct gsp_kcfg *kcfg)
+struct gsp_core *const gsp_kcfg_to_bind_core(struct gsp_kcfg *kcfg)
 {
 	if (gsp_kcfg_verify(kcfg)) {
 		GSP_ERR("kcfg to bind core params error\n");
@@ -559,7 +542,7 @@ void gsp_kcfg_list_put(struct gsp_kcfg_list *kl)
 
 	for_each_kcfg_from_kl_safe(kcfg, tmp, kl) {
 		GSP_DEBUG("kcfg list put back kcfg[%d] to workqueue\n",
-			  gsp_kcfg_to_tag(kcfg));
+			gsp_kcfg_to_tag(kcfg));
 		gsp_kcfg_cancel(kcfg);
 		gsp_kcfg_list_del(kcfg);
 	}
@@ -650,7 +633,7 @@ int gsp_kcfg_iommu_map(struct gsp_kcfg *kcfg)
 	for_each_gsp_layer(layer, kcfg) {
 		if (!need && !gsp_layer_need_iommu(layer)) {
 			GSP_DEBUG("layer[%d] no need to iommu map\n",
-				  gsp_layer_to_type(layer));
+				gsp_layer_to_type(layer));
 			continue;
 		}
 
@@ -683,7 +666,7 @@ void gsp_kcfg_iommu_unmap(struct gsp_kcfg *kcfg)
 	for_each_gsp_layer(layer, kcfg) {
 		if (!need && !gsp_layer_need_iommu(layer)) {
 			GSP_DEBUG("layer[%d] no need to iommu unmap\n",
-				  gsp_layer_to_type(layer));
+				gsp_layer_to_type(layer));
 			continue;
 		}
 

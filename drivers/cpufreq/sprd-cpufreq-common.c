@@ -10,7 +10,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-#define pr_fmt(fmt) "sprd-cpufreq-common: " fmt
+#define pr_fmt(fmt)  "sprd_cpufreq: " fmt
 
 #include <linux/cpu.h>
 #include <linux/cpufreq.h>
@@ -21,6 +21,7 @@
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/pm_opp.h>
+#include <linux/regulator/consumer.h>
 #include <linux/slab.h>
 #include <linux/types.h>
 #include <linux/of_platform.h>
@@ -28,39 +29,42 @@
 #include "sprd-cpufreq-common.h"
 #include "sprd-cpufreqhw.h"
 
+char global_opp_string[30] = "operating-points-v0";
 struct sprd_cpufreq_driver_data *cpufreq_datas[SPRD_CPUFREQ_MAX_MODULE];
+EXPORT_SYMBOL_GPL(cpufreq_datas);
 
 __weak struct sprd_cpudvfs_device *sprd_hardware_dvfs_device_get(void)
 {
+	pr_debug("use weak sprd hardware dvfs device get\n");
 	return NULL;
 }
 
-static int sprd_cpufreq_read_soc_version(char *p_version)
+int sprd_cpufreq_read_soc_version_opp_string(char *opp_string)
 {
-	char version_default[10] = "-1";
+	struct device_node *hwf;
+	char ver_str[30] = "-";
+	const char *value;
 
-	sprd_kproperty_get("auto/efuse", p_version, version_default);
-	if (!strcmp(p_version, "T610") || !strcmp(p_version, "T618") ||
-	    !strcmp(p_version, "T606") || !strcmp(p_version, "T616") ||
-	    !strcmp(p_version, "T612") || !strcmp(p_version, "T700"))
-		return 0;
-	pr_err("the cpu version is error(%s)\n", p_version);
-	return -EINVAL;
-}
-
-static void sprd_cpufreq_read_soc_version_opp_string(char *opp_string)
-{
-	char ver_str[30] = "-", version[20] = "", tmp_version[64] = "";
-	int ret, len;
-
-	len = sizeof(version);
-	ret = sprd_cpufreq_read_soc_version(tmp_version);
-	if (!ret) {
-		strncpy(version, tmp_version, len);
-		strcat(ver_str, version);
-		strcat(opp_string, ver_str);
+	hwf = of_find_node_by_path("/hwfeature/auto");
+	if (IS_ERR_OR_NULL(hwf)) {
+		pr_err("NO hwfeature/auto node found\n");
+		return PTR_ERR(hwf);
 	}
+
+	value = of_get_property(hwf, "efuse", NULL);
+	if (strcmp(value, "SC9863A") && strcmp(value, "SC9863A1")) {
+		pr_err("the soc version is invalid, string is %s\n", value);
+		return -EINVAL;
+	}
+
+	strcat(ver_str, value);
+	strcat(opp_string, ver_str);
+
+	pr_info("the cpu version: %s\n", opp_string);
+
+	return 0;
 }
+EXPORT_SYMBOL(sprd_cpufreq_read_soc_version_opp_string);
 
 static int sprd_cpufreq_bin_read(struct device_node *np,
 				 const char *cell_id,
@@ -201,16 +205,17 @@ int dev_pm_opp_of_add_table_binning(int cluster,
 				    struct device_node *np_cpufreq_in,
 				    struct sprd_cpufreq_driver_data *cdata)
 {
-	struct device_node *np_cpufreq, *np_cpu = NULL;
+	struct device_node *np_cpufreq, *np_cpu;
 	const struct property *prop = NULL;
 	struct sprd_cpudvfs_device *pdevice;
 	struct sprd_cpudvfs_ops *driver;
-	char opp_string[64] = "operating-points";
+	char opp_string[30] = "operating-points";
 	char buf[30] = "";
 	int count = 0, ret = 0, index = 0;
 	u32 binning = 0, binning_low_volt = 0;
 	const __be32 *val;
 	int nr;
+	bool ver_judge;
 
 	if ((!dev && !np_cpufreq_in) || !cdata) {
 		pr_err("empty input parameter\n");
@@ -236,12 +241,16 @@ int dev_pm_opp_of_add_table_binning(int cluster,
 		np_cpufreq = np_cpufreq_in;
 	}
 
-	cdata->version_judge = of_property_read_bool(np_cpufreq, "sprd,multi-version");
-	if (cdata->version_judge) {
-		pr_debug("dts node need to distinguish version\n");
-		sprd_cpufreq_read_soc_version_opp_string(opp_string);
+	ver_judge = of_property_read_bool(np_cpufreq, "sprd,multi-version");
+	if (ver_judge) {
+		pr_info("dts node need to distinguish version\n");
+		cdata->version_judge = ver_judge;
+		if (cdata->version_judge) {
+			ret = sprd_cpufreq_read_soc_version_opp_string(opp_string);
+			if (ret)
+				pr_err("can't read soc version, opp_string:%s\n", opp_string);
+		}
 	}
-
 	index = strlen(opp_string);
 	ret = sprd_cpufreq_bin_main(np_cpufreq, &binning);
 	if (ret == -EPROBE_DEFER)
@@ -269,7 +278,7 @@ int dev_pm_opp_of_add_table_binning(int cluster,
 	}
 	/* TODO: else get dvfs table by wafer id */
 
-	pr_debug("opp_string[%s]\n", opp_string);
+	pr_err("opp_string[%s]\n", opp_string);
 
 	prop = of_find_property(np_cpufreq, opp_string, NULL);
 	if (!prop || !prop->value) {
@@ -382,6 +391,7 @@ exit:
 	pr_debug("%s: exit %d\n", __func__, ret);
 	return ret;
 }
+EXPORT_SYMBOL_GPL(dev_pm_opp_of_add_table_binning);
 
 static int dev_pm_opp_of_add_table_binning_slave(
 	struct sprd_cpufreq_driver_data *c_host,
@@ -455,7 +465,7 @@ free_np:
 }
 
 /**
- * sprd_cpufreq_update_opp() - returns the max freq of a cpu
+ * sprd_cpufreq_update_opp_common() - returns the max freq of a cpu
  * and update dvfs table by temp_now
  * @cpu: which cpu you want to update dvfs table
  * @temp_now: current temperature on this cpu, mini-degree.
@@ -465,7 +475,7 @@ free_np:
  * 2.succeed to update dvfs table
  * then return max freq(KHZ) of this cluster
  */
-unsigned int sprd_cpufreq_update_opp(int cpu, int temp_now)
+unsigned int sprd_cpufreq_update_opp_common(int cpu, int temp_now)
 {
 	struct sprd_cpufreq_driver_data *data;
 	unsigned int max_freq = 0;
@@ -480,7 +490,7 @@ unsigned int sprd_cpufreq_update_opp(int cpu, int temp_now)
 	if (cluster > SPRD_CPUFREQ_MAX_CLUSTER) {
 		pr_err("cpu%d is overflowd %d\n", cpu,
 		       SPRD_CPUFREQ_MAX_CLUSTER);
-		return 0;
+		return -EINVAL;
 	}
 
 	data = cpufreq_datas[cluster];
@@ -518,11 +528,10 @@ unsigned int sprd_cpufreq_update_opp(int cpu, int temp_now)
 
 	return max_freq;
 }
-EXPORT_SYMBOL_GPL(sprd_cpufreq_update_opp);
 
 static int sprd_cpufreq_cpuhp_online(unsigned int cpu)
 {
-	unsigned int olcpu, cluster_id;
+	int olcpu, cluster_id;
 	struct sprd_cpufreq_driver_data *c;
 
 	if (cpu >= nr_cpu_ids || !cpu_possible(cpu)) {
@@ -535,7 +544,7 @@ static int sprd_cpufreq_cpuhp_online(unsigned int cpu)
 		return NOTIFY_DONE;
 
 	for_each_online_cpu(olcpu) {
-		if (olcpu >= NR_CPUS || !cpu_possible(olcpu))
+		if (!cpu_possible(olcpu))
 			return NOTIFY_DONE;
 		cluster_id = topology_physical_package_id(olcpu);
 		if (cluster_id)
@@ -552,7 +561,7 @@ static int sprd_cpufreq_cpuhp_online(unsigned int cpu)
 
 static int sprd_cpufreq_cpuhp_offline(unsigned int cpu)
 {
-	unsigned int olcpu, cluster_id;
+	int olcpu, cluster_id;
 	struct sprd_cpufreq_driver_data *c;
 
 	if (cpu >= nr_cpu_ids || !cpu_possible(cpu)) {
@@ -565,7 +574,7 @@ static int sprd_cpufreq_cpuhp_offline(unsigned int cpu)
 		return NOTIFY_DONE;
 
 	for_each_online_cpu(olcpu) {
-		if (olcpu >= NR_CPUS || !cpu_possible(olcpu))
+		if (!cpu_possible(olcpu))
 			return NOTIFY_DONE;
 		cluster_id = topology_physical_package_id(olcpu);
 		if (cluster_id)
@@ -589,3 +598,5 @@ int sprd_cpufreq_cpuhp_setup(void)
 				sprd_cpufreq_cpuhp_online,
 				sprd_cpufreq_cpuhp_offline);
 }
+EXPORT_SYMBOL_GPL(sprd_cpufreq_cpuhp_setup);
+MODULE_LICENSE("GPL v2");

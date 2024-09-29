@@ -1,44 +1,96 @@
-ccflags-y += -Iinclude/drm
-subdir-ccflags-y += -Idrivers/staging/android/ion/
-subdir-ccflags-y += -Idrivers/devfreq/apsys/
-subdir-ccflags-y += -I$(src)
+# SPDX-License-Identifier: GPL-2.0
 
-obj-y := sprd_drm.o \
+ccflags-y := -I $(srctree)/$(src)
+
+# sprd-drm-$(CONFIG_DRM_SPRD_OPLUS_DISPLAY_PRIVATE_API) += oplus_display_private_api/
+
+sprd-drm-y := \
+	sprd_drm.o \
 	sprd_gem.o \
+	sprd_crtc.o \
+	sprd_plane.o \
+	disp_lib.o \
+	oplus_display_private_api.o \
+	sprd_drm_notifier.o
+
+sprd-drm-$(CONFIG_TRUSTY_VIRTIO_IPC) += disp_trusty.o
+
+sprd-drm-$(CONFIG_DRM_SPRD_DUMMY) += \
+	dummy/dummy_crtc.o \
+	dummy/dummy_connector.o
+
+sprd-drm-$(CONFIG_DRM_SPRD_DPU0) += \
 	sprd_dpu.o \
+	sprd_bl.o \
+	sprd_corner.o \
+	dpu/dpu_lite_r1p0.o \
+	dpu/dpu_lite_r2p0.o \
+	dpu/dpu_r2p0.o \
+	dpu/dpu_r4p0.o \
+	dpu/dpu_r5p0.o \
+	dpu/dpu_r6p0.o
+
+sprd-drm-$(CONFIG_DRM_SPRD_DP) += \
+	dp/dp_api.o \
+	dp/dp_aux.o \
+	dp/dp_core.o \
+	dp/dp_link.o \
+	dp/dp_test.o \
+	dp/dp_video.o \
+	dp/dw_dptx.o
+	#dp/dp_audio.o \
+	#dp/dp_hdcp.o
+
+sprd-drm-$(CONFIG_DRM_SPRD_DPU1) += \
+	sprd_dp.o \
 	sprd_dpu1.o \
+	dpu/dpu_lite_r3p0.o \
+	qogirn6pro/global_dpu1.o \
+	qogirn6pro/global_dp.o
+
+sprd-drm-$(CONFIG_DRM_SPRD_DSI) += \
 	sprd_dsi.o \
 	sprd_dphy.o \
-	sprd_panel.o \
-	sprd_dp.o \
-	oplus_display_private_api.o
+	sprd_dsi_panel.o \
+	dsi/sprd_dsi_api.o \
+	dsi/core/dsi_ctrl_r1p0.o \
+	dsi/core/dsi_ctrl_r1p0_ppi.o \
+	dphy/sprd_dphy_api.o \
+	dphy/pll/megacores_sharkle.o \
+	dphy/pll/megacores_sharkl5.o
 
-obj-y += dummy/dummy_crtc.o
-obj-y += dummy/dummy_connector.o
+sprd-drm-y += \
+	pike2/global_dpu.o \
+	pike2/global_dsi.o \
+	pike2/global_dphy.o \
+	sharkl5/global_dispc.o \
+	sharkl5/global_dsi.o \
+	sharkl5/global_dphy.o \
+	sharkle/global_dpu.o \
+	sharkle/global_dsi.o \
+	sharkle/global_dphy.o \
+	sharkl3/global_dispc.o \
+	sharkl3/global_dsi.o \
+	sharkl3/global_dphy.o \
+	sharkl5pro/global_dpu.o \
+	sharkl5pro/global_dsi.o \
+	sharkl5pro/global_dphy.o \
+	qogirl6/global_dpu.o \
+	qogirl6/global_dsi.o \
+	qogirl6/global_dphy.o \
+	qogirn6pro/global_dpu.o \
+	qogirn6pro/global_dsi.o \
+	qogirn6pro/global_dphy.o
 
-obj-y += disp_lib.o sprd_corner.o disp_trusty.o
+sprd-drm-y += \
+	sysfs/sysfs_class.o \
+	sysfs/sysfs_dpu.o \
+	sysfs/sysfs_dphy.o \
+	sysfs/sysfs_dsi.o \
+	sysfs/sysfs_panel.o
 
-#obj-y += sprd_hdcp.o
-obj-y += sprd_drm_notifier.o
-obj-y += sprd_bl.o
-
-obj-y += dpu/
-obj-y += dsi/
-obj-y += dphy/
-obj-y += dp/
-obj-y += sysfs/
-
-obj-y += sharkle/
-obj-y += pike2/
-obj-y += sharkl3/
-obj-y += sharkl5/
-obj-y += sharkl5Pro/
-obj-y += roc1/
-obj-y += qogirl6/
-obj-y += qogirn6pro/
+obj-$(CONFIG_DRM_SPRD) += sprd-drm.o
 
 obj-$(CONFIG_DRM_SPRD_GSP) += gsp/
 
-obj-$(CONFIG_COMPAT) += sprd_ioc32.o
-
-obj-$(CONFIG_DRM_SPRD_HDMI) += lt9611_i2c.o
+sprd-drm-$(CONFIG_COMPAT) += sprd_ioc32.o

@@ -26,12 +26,13 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <drm/drmP.h>
-#include "virtgpu_drv.h"
-#include "virtgpu_trace.h"
+#include <linux/dma-mapping.h>
 #include <linux/virtio.h>
 #include <linux/virtio_config.h>
 #include <linux/virtio_ring.h>
+
+#include "virtgpu_drv.h"
+#include "virtgpu_trace.h"
 
 #define MAX_INLINE_CMD_SIZE   96
 #define MAX_INLINE_RESP_SIZE  24
@@ -571,9 +572,13 @@ static void virtio_gpu_cmd_get_capset_info_cb(struct virtio_gpu_device *vgdev,
 	int i = le32_to_cpu(cmd->capset_index);
 
 	spin_lock(&vgdev->display_info_lock);
-	vgdev->capsets[i].id = le32_to_cpu(resp->capset_id);
-	vgdev->capsets[i].max_version = le32_to_cpu(resp->capset_max_version);
-	vgdev->capsets[i].max_size = le32_to_cpu(resp->capset_max_size);
+	if (vgdev->capsets) {
+		vgdev->capsets[i].id = le32_to_cpu(resp->capset_id);
+		vgdev->capsets[i].max_version = le32_to_cpu(resp->capset_max_version);
+		vgdev->capsets[i].max_size = le32_to_cpu(resp->capset_max_size);
+	} else {
+		DRM_ERROR("invalid capset memory.");
+	}
 	spin_unlock(&vgdev->display_info_lock);
 	wake_up(&vgdev->resp_wq);
 }
@@ -631,7 +636,7 @@ static void virtio_gpu_cmd_get_edid_cb(struct virtio_gpu_device *vgdev,
 	output = vgdev->outputs + scanout;
 
 	new_edid = drm_do_get_edid(&output->conn, virtio_get_edid_block, resp);
-	drm_mode_connector_update_edid_property(&output->conn, new_edid);
+	drm_connector_update_edid_property(&output->conn, new_edid);
 
 	spin_lock(&vgdev->display_info_lock);
 	old_edid = output->edid;
@@ -856,45 +861,7 @@ void virtio_gpu_cmd_context_detach_resource(struct virtio_gpu_device *vgdev,
 	virtio_gpu_queue_ctrl_buffer(vgdev, vbuf);
 }
 
-static void virtio_gpu_cmd_resource_create_cb(struct virtio_gpu_device *vgdev,
-					      struct virtio_gpu_vbuffer *vbuf)
-{
-	struct virtio_gpu_resp_resource_plane_info *resp =
-		(struct virtio_gpu_resp_resource_plane_info *)vbuf->resp_buf;
-	struct virtio_gpu_object *obj =
-		(struct virtio_gpu_object *)vbuf->data_buf;
-	uint32_t resp_type = le32_to_cpu(resp->hdr.type);
-	int i;
-
-	/*
-	 * Keeps the data_buf, which points to this virtio_gpu_object, from
-	 * getting kfree'd after this cb returns.
-	 */
-	vbuf->data_buf = NULL;
-
-	switch (resp_type) {
-	case VIRTIO_GPU_RESP_OK_RESOURCE_PLANE_INFO:
-	case VIRTIO_GPU_RESP_OK_RESOURCE_PLANE_INFO_LEGACY:
-		break;
-	default:
-		goto finish_pending;
-	}
-
-	obj->num_planes = le32_to_cpu(resp->num_planes);
-	obj->format_modifier = le64_to_cpu(resp->format_modifier);
-
-	for (i = 0; i < obj->num_planes; i++) {
-		obj->strides[i] = le32_to_cpu(resp->strides[i]);
-		obj->offsets[i] = le32_to_cpu(resp->offsets[i]);
-	}
-
-finish_pending:
-	obj->create_callback_done = true;
-	drm_gem_object_put_unlocked(&obj->gem_base);
-	wake_up_all(&vgdev->resp_wq);
-}
-
-int
+void
 virtio_gpu_cmd_resource_create_3d(struct virtio_gpu_device *vgdev,
 				  struct virtio_gpu_object *bo,
 				  struct virtio_gpu_object_params *params,
@@ -902,15 +869,8 @@ virtio_gpu_cmd_resource_create_3d(struct virtio_gpu_device *vgdev,
 {
 	struct virtio_gpu_resource_create_3d *cmd_p;
 	struct virtio_gpu_vbuffer *vbuf;
-	struct virtio_gpu_resp_resource_plane_info *resp_buf;
 
-	resp_buf = kzalloc(sizeof(*resp_buf), GFP_KERNEL);
-	if (!resp_buf)
-		return -ENOMEM;
-
-	cmd_p = virtio_gpu_alloc_cmd_resp(vgdev,
-		virtio_gpu_cmd_resource_create_cb, &vbuf, sizeof(*cmd_p),
-		sizeof(struct virtio_gpu_resp_resource_plane_info), resp_buf);
+	cmd_p = virtio_gpu_alloc_cmd(vgdev, &vbuf, sizeof(*cmd_p));
 	memset(cmd_p, 0, sizeof(*cmd_p));
 
 	cmd_p->hdr.type = cpu_to_le32(VIRTIO_GPU_CMD_RESOURCE_CREATE_3D);
@@ -927,15 +887,8 @@ virtio_gpu_cmd_resource_create_3d(struct virtio_gpu_device *vgdev,
 	cmd_p->nr_samples = cpu_to_le32(params->nr_samples);
 	cmd_p->flags = cpu_to_le32(params->flags);
 
-	/* Reuse the data_buf pointer for the object pointer. */
-	vbuf->data_buf = bo;
-	bo->create_callback_done = false;
-	drm_gem_object_get(&bo->gem_base);
-
 	virtio_gpu_queue_fenced_ctrl_buffer(vgdev, vbuf, &cmd_p->hdr, fence);
 	bo->created = true;
-
-	return 0;
 }
 
 void virtio_gpu_cmd_transfer_to_host_3d(struct virtio_gpu_device *vgdev,
@@ -1018,9 +971,6 @@ int virtio_gpu_object_attach(struct virtio_gpu_device *vgdev,
 	struct scatterlist *sg;
 	int si, nents;
 
-	if (obj->blob)
-		return 0;
-
 	if (WARN_ON_ONCE(!obj->created))
 		return -EINVAL;
 
@@ -1042,8 +992,9 @@ int virtio_gpu_object_attach(struct virtio_gpu_device *vgdev,
 	}
 
 	/* gets freed when the ring has consumed it */
-	ents = kmalloc_array(nents, sizeof(struct virtio_gpu_mem_entry),
-			     GFP_KERNEL);
+	ents = kvmalloc_array(nents,
+			      sizeof(struct virtio_gpu_mem_entry),
+			      GFP_KERNEL);
 	if (!ents) {
 		DRM_ERROR("failed to allocate ent list\n");
 		return -ENOMEM;
@@ -1095,84 +1046,4 @@ void virtio_gpu_cursor_ping(struct virtio_gpu_device *vgdev,
 	cur_p = virtio_gpu_alloc_cursor(vgdev, &vbuf);
 	memcpy(cur_p, &output->cursor, sizeof(output->cursor));
 	virtio_gpu_queue_cursor(vgdev, vbuf);
-}
-
-static void virtio_gpu_cmd_resource_map_cb(struct virtio_gpu_device *vgdev,
-					   struct virtio_gpu_vbuffer *vbuf)
-{
-	/*
-	 * No-op for v5.4.
-	 */
-}
-
-void virtio_gpu_cmd_map(struct virtio_gpu_device *vgdev,
-			struct virtio_gpu_object *bo,
-			uint64_t offset,
-			struct virtio_gpu_fence *fence)
-{
-	struct virtio_gpu_resource_map *cmd_p;
-	struct virtio_gpu_vbuffer *vbuf;
-	struct virtio_gpu_resp_map_info *resp_buf;
-
-	resp_buf = kzalloc(sizeof(*resp_buf), GFP_KERNEL);
-	if (!resp_buf) {
-		DRM_ERROR("allocation failure\n");
-		return;
-	}
-
-	cmd_p = virtio_gpu_alloc_cmd_resp(vgdev,
-		virtio_gpu_cmd_resource_map_cb, &vbuf, sizeof(*cmd_p),
-		sizeof(struct virtio_gpu_resp_map_info), resp_buf);
-	memset(cmd_p, 0, sizeof(*cmd_p));
-
-	cmd_p->hdr.type = cpu_to_le32(VIRTIO_GPU_CMD_RESOURCE_MAP);
-	cmd_p->resource_id = cpu_to_le32(bo->hw_res_handle);
-	cmd_p->offset = offset;
-
-	virtio_gpu_queue_fenced_ctrl_buffer(vgdev, vbuf, &cmd_p->hdr, fence);
-}
-
-void virtio_gpu_cmd_unmap(struct virtio_gpu_device *vgdev,
-			  uint32_t resource_id)
-{
-	struct virtio_gpu_resource_unmap *cmd_p;
-	struct virtio_gpu_vbuffer *vbuf;
-
-	cmd_p = virtio_gpu_alloc_cmd(vgdev, &vbuf, sizeof(*cmd_p));
-	memset(cmd_p, 0, sizeof(*cmd_p));
-
-	cmd_p->hdr.type = cpu_to_le32(VIRTIO_GPU_CMD_RESOURCE_UNMAP);
-	cmd_p->resource_id = cpu_to_le32(resource_id);
-
-	virtio_gpu_queue_ctrl_buffer(vgdev, vbuf);
-}
-
-void
-virtio_gpu_cmd_resource_create_blob(struct virtio_gpu_device *vgdev,
-				    struct virtio_gpu_object *bo,
-				    uint32_t ctx_id, uint32_t blob_mem,
-				    uint32_t blob_flags, uint64_t blob_id,
-				    uint64_t size, uint32_t nents,
-				    struct virtio_gpu_mem_entry *ents)
-{
-	struct virtio_gpu_resource_create_blob *cmd_p;
-	struct virtio_gpu_vbuffer *vbuf;
-
-	cmd_p = virtio_gpu_alloc_cmd(vgdev, &vbuf, sizeof(*cmd_p));
-	memset(cmd_p, 0, sizeof(*cmd_p));
-
-	cmd_p->hdr.type = cpu_to_le32(VIRTIO_GPU_CMD_RESOURCE_CREATE_BLOB);
-	cmd_p->hdr.ctx_id = cpu_to_le32(ctx_id);
-	cmd_p->resource_id = cpu_to_le32(bo->hw_res_handle);
-	cmd_p->blob_mem = cpu_to_le32(blob_mem);
-	cmd_p->blob_flags = cpu_to_le32(blob_flags);
-	cmd_p->blob_id = cpu_to_le64(blob_id);
-	cmd_p->size = cpu_to_le64(size);
-	cmd_p->nr_entries = cpu_to_le32(nents);
-
-	vbuf->data_buf = ents;
-	vbuf->data_size = sizeof(*ents) * nents;
-
-	virtio_gpu_queue_ctrl_buffer(vgdev, vbuf);
-	bo->created = true;
 }

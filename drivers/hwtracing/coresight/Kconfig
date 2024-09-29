@@ -1,8 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0-only
 #
 # Coresight configuration
 #
 menuconfig CORESIGHT
 	bool "CoreSight Tracing Support"
+	depends on OF || ACPI
 	select ARM_AMBA
 	select PERF_EVENTS
 	help
@@ -90,14 +92,6 @@ config CORESIGHT_APETB
 	  This driver provides support for ylog control APETB function, will automatic
 	  call enable_sink and enable_source.
 
-config CORESIGHT_DYNAMIC_REPLICATOR
-	bool "CoreSight Programmable Replicator driver"
-	depends on CORESIGHT_LINKS_AND_SINKS
-	help
-	  This enables support for dynamic CoreSight replicator link driver.
-	  The programmable ATB replicator allows independent filtering of the
-	  trace data based on the traceid.
-
 config CORESIGHT_STM
 	bool "CoreSight System Trace Macrocell driver"
 	depends on (ARM && !(CPU_32v3 || CPU_32v4 || CPU_32v4T)) || ARM64
@@ -120,21 +114,7 @@ config CORESIGHT_CPU_DEBUG
 	  can quickly get to know program counter (PC), secure state,
 	  exception level, etc. Before use debugging functionality, platform
 	  needs to ensure the clock domain and power domain are enabled
-	  properly, please refer Documentation/trace/coresight-cpu-debug.txt
+	  properly, please refer Documentation/trace/coresight-cpu-debug.rst
 	  for detailed description and the example for usage.
-
-config SPRD_CORESIGHT_GCOV
-	bool "open gcov for coresight"
-	depends on GCOV_PROFILE_MODULES
-	help
-	  Say Y here to enable gcov in coresight.
-
-config CORESIGHT_TMC_GROUP
-	bool "CoreSight tmc group drivers"
-	help
-	  This enables support for CoreSight tmc group drivers that are
-	  responsible for dump several tmc data.
-
-source "drivers/hwtracing/coresight/phy/Kconfig"
 
 endif

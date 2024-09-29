@@ -1,19 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #ifndef __SPRD_DVFS_VDSP_H__
 #define __SPRD_DVFS_VDSP_H__
 
+#include <linux/apsys_dvfs.h>
 #include <linux/device.h>
 #include <linux/kernel.h>
 #include <linux/list.h>
@@ -83,7 +76,9 @@ struct vdsp_dvfs {
 
 	struct ip_dvfs_coffe dvfs_coffe;
 	struct ip_dvfs_status dvfs_status;
-	struct vdsp_dvfs_ops *dvfs_ops;
+	const struct vdsp_dvfs_ops *dvfs_ops;
+
+	struct apsys_dev *apsys;
 };
 
 struct vdsp_dvfs_ops {
@@ -91,51 +86,40 @@ struct vdsp_dvfs_ops {
 	int (*parse_dt)(struct vdsp_dvfs *vdsp, struct device_node *np);
 	int (*parse_pll)(struct vdsp_dvfs *vdsp, struct device *dev);
 	int (*dvfs_init)(struct vdsp_dvfs *vdsp);
-	void (*hw_dfs_en)(bool dfs_en);
+	void (*hw_dfs_en)(struct vdsp_dvfs *vdsp, bool dfs_en);
 
 	/* work-idle dvfs index ops */
-	int  (*set_work_index)(int index);
-	int  (*get_work_index)(void);
-	void  (*set_idle_index)(int index);
-	int  (*get_idle_index)(void);
+	int  (*set_work_index)(struct vdsp_dvfs *vdsp, int index);
+	int  (*get_work_index)(struct vdsp_dvfs *vdsp);
+	void  (*set_idle_index)(struct vdsp_dvfs *vdsp, int index);
+	int  (*get_idle_index)(struct vdsp_dvfs *vdsp);
 
 	/* work-idle dvfs freq ops */
-	int (*set_work_freq)(u32 freq);
-	u32 (*get_work_freq)(void);
-	void (*set_idle_freq)(u32 freq);
-	u32 (*get_idle_freq)(void);
+	int (*set_work_freq)(struct vdsp_dvfs *vdsp, u32 freq);
+	u32 (*get_work_freq)(struct vdsp_dvfs *vdsp);
+	void (*set_idle_freq)(struct vdsp_dvfs *vdsp, u32 freq);
+	u32 (*get_idle_freq)(struct vdsp_dvfs *vdsp);
 
 	/* work-idle dvfs map ops */
 	int  (*get_dvfs_table)(struct ip_dvfs_map_cfg *dvfs_table);
 	void (*set_dvfs_table)(struct ip_dvfs_map_cfg *dvfs_table);
 	void (*get_dvfs_coffe)(struct ip_dvfs_coffe *dvfs_coffe);
 	void (*set_dvfs_coffe)(struct ip_dvfs_coffe *dvfs_coffe);
-	void (*get_dvfs_status)(struct ip_dvfs_status *dvfs_status);
+	void (*get_dvfs_status)(struct vdsp_dvfs *vdsp, struct ip_dvfs_status *dvfs_status);
 
 	/* coffe setting ops */
-	void (*set_gfree_wait_delay)(u32 para);
-	void (*set_freq_upd_en_byp)(bool enable);
-	void (*set_freq_upd_delay_en)(bool enable);
-	void (*set_freq_upd_hdsk_en)(bool enable);
-	void (*set_dvfs_swtrig_en)(bool enable);
+	void (*set_gfree_wait_delay)(struct vdsp_dvfs *vdsp, u32 para);
+	void (*set_freq_upd_en_byp)(struct vdsp_dvfs *vdsp, bool enable);
+	void (*set_freq_upd_delay_en)(struct vdsp_dvfs *vdsp, bool enable);
+	void (*set_freq_upd_hdsk_en)(struct vdsp_dvfs *vdsp, bool enable);
+	void (*set_dvfs_swtrig_en)(struct vdsp_dvfs *vdsp, bool enable);
 };
 
-extern struct list_head vdsp_dvfs_head;
-extern struct blocking_notifier_head vdsp_dvfs_chain;
+struct sprd_vdsp_dvfs_ops {
+	const struct vdsp_dvfs_ops *dvfs_ops;
+};
 
-#if IS_ENABLED(CONFIG_SPRD_APSYS_DVFS_DEVFREQ)
-int vdsp_dvfs_notifier_call_chain(void *data);
-#else
-static inline int vdsp_dvfs_notifier_call_chain(void *data)
-{
-	return 0;
-}
-#endif
-
-#define vdsp_dvfs_ops_register(entry) \
-	dvfs_ops_register(entry, &vdsp_dvfs_head)
-
-#define vdsp_dvfs_ops_attach(str) \
-	dvfs_ops_attach(str, &vdsp_dvfs_head)
+extern const struct vdsp_dvfs_ops roc1_vdsp_dvfs_ops;
+extern const struct vdsp_dvfs_ops sharkl5pro_vdsp_dvfs_ops;
 
 #endif /* __SPRD_DVFS_VDSP_H__ */

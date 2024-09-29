@@ -59,7 +59,7 @@ struct sprd_pmic_eic {
 	struct irq_chip intc;
 	struct regmap *map;
 	u32 offset;
-	u8 reg[CACHE_NR_REGS];
+	u8 reg[SPRD_PMIC_EIC_NR][CACHE_NR_REGS];
 	struct mutex buslock;
 	int irq;
 };
@@ -151,18 +151,20 @@ static void sprd_pmic_eic_irq_mask(struct irq_data *data)
 {
 	struct gpio_chip *chip = irq_data_get_irq_chip_data(data);
 	struct sprd_pmic_eic *pmic_eic = gpiochip_get_data(chip);
+	u32 offset = irqd_to_hwirq(data);
 
-	pmic_eic->reg[REG_IE] = 0;
-	pmic_eic->reg[REG_TRIG] = 0;
+	pmic_eic->reg[offset][REG_IE] = 0;
+	pmic_eic->reg[offset][REG_TRIG] = 0;
 }
 
 static void sprd_pmic_eic_irq_unmask(struct irq_data *data)
 {
 	struct gpio_chip *chip = irq_data_get_irq_chip_data(data);
 	struct sprd_pmic_eic *pmic_eic = gpiochip_get_data(chip);
+	u32 offset = irqd_to_hwirq(data);
 
-	pmic_eic->reg[REG_IE] = 1;
-	pmic_eic->reg[REG_TRIG] = 1;
+	pmic_eic->reg[offset][REG_IE] = 1;
+	pmic_eic->reg[offset][REG_TRIG] = 1;
 }
 
 static int sprd_pmic_eic_irq_set_type(struct irq_data *data,
@@ -170,13 +172,14 @@ static int sprd_pmic_eic_irq_set_type(struct irq_data *data,
 {
 	struct gpio_chip *chip = irq_data_get_irq_chip_data(data);
 	struct sprd_pmic_eic *pmic_eic = gpiochip_get_data(chip);
+	u32 offset = irqd_to_hwirq(data);
 
 	switch (flow_type) {
 	case IRQ_TYPE_LEVEL_HIGH:
-		pmic_eic->reg[REG_IEV] = 1;
+		pmic_eic->reg[offset][REG_IEV] = 1;
 		break;
 	case IRQ_TYPE_LEVEL_LOW:
-		pmic_eic->reg[REG_IEV] = 0;
+		pmic_eic->reg[offset][REG_IEV] = 0;
 		break;
 	case IRQ_TYPE_EDGE_RISING:
 	case IRQ_TYPE_EDGE_FALLING:
@@ -218,15 +221,15 @@ static void sprd_pmic_eic_bus_sync_unlock(struct irq_data *data)
 			sprd_pmic_eic_update(chip, offset, SPRD_PMIC_EIC_IEV, 1);
 	} else {
 		sprd_pmic_eic_update(chip, offset, SPRD_PMIC_EIC_IEV,
-				     pmic_eic->reg[REG_IEV]);
+				     pmic_eic->reg[offset][REG_IEV]);
 	}
 
-	/* Set irq unmask */
+	/* Set irq mask/unmask */
 	sprd_pmic_eic_update(chip, offset, SPRD_PMIC_EIC_IE,
-			     pmic_eic->reg[REG_IE]);
+			     pmic_eic->reg[offset][REG_IE]);
 	/* Generate trigger start pulse for debounce EIC */
 	sprd_pmic_eic_update(chip, offset, SPRD_PMIC_EIC_TRIG,
-			     pmic_eic->reg[REG_TRIG]);
+			     pmic_eic->reg[offset][REG_TRIG]);
 
 	mutex_unlock(&pmic_eic->buslock);
 }
@@ -305,10 +308,8 @@ static int sprd_pmic_eic_probe(struct platform_device *pdev)
 	mutex_init(&pmic_eic->buslock);
 
 	pmic_eic->irq = platform_get_irq(pdev, 0);
-	if (pmic_eic->irq < 0) {
-		dev_err(&pdev->dev, "Failed to get PMIC EIC interrupt.\n");
+	if (pmic_eic->irq < 0)
 		return pmic_eic->irq;
-	}
 
 	pmic_eic->map = dev_get_regmap(pdev->dev.parent, NULL);
 	if (!pmic_eic->map)
@@ -365,7 +366,7 @@ static int sprd_pmic_eic_probe(struct platform_device *pdev)
 }
 
 static const struct of_device_id sprd_pmic_eic_of_match[] = {
-	{ .compatible = "sprd,sc27xx-eic", },
+	{ .compatible = "sprd,sc2731-eic", },
 	{ /* end of list */ }
 };
 MODULE_DEVICE_TABLE(of, sprd_pmic_eic_of_match);

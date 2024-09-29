@@ -10,21 +10,21 @@
  * GNU General Public License for more details.
  */
 
-#include <linux/module.h>
+#include <linux/debugfs.h>
 #include <linux/fs.h>
 #include <linux/init.h>
-#include <linux/kernel.h>
-#include <linux/seq_file.h>
-#include <linux/proc_fs.h>
 #include <linux/io.h>
-#include <linux/mfd/syscon.h>
-#include <linux/of.h>
-#include <linux/regmap.h>
-#include <linux/debugfs.h>
-#include <linux/uaccess.h>
-#include <linux/platform_device.h>
-#include <linux/of_device.h>
+#include <linux/kernel.h>
 #include <linux/math64.h>
+#include <linux/mfd/syscon.h>
+#include <linux/module.h>
+#include <linux/of.h>
+#include <linux/of_device.h>
+#include <linux/platform_device.h>
+#include <linux/proc_fs.h>
+#include <linux/regmap.h>
+#include <linux/seq_file.h>
+#include <linux/uaccess.h>
 
 #define PUB_MONITOR_CLK		128	/* 128MHz */
 #define PUB_DFS_MONITOR_CLK	65	/* 6.5MHz */
@@ -32,7 +32,7 @@
 #define DMC_DDR_CLK_CTRL_OFFSET	0x4000
 #define PUB_CLK_DMC_REF_EB	22
 #define PUB_CLK_DFS_EB	15
-#define DDR_MAX_SUPPORT_CS_NUM		2
+#define DDR_MAX_SUPPORT_CS_NUM	2
 #define DMC_PROC_NAME "sprd_dmc"
 #define DDR_PROPERTY_NAME "property"
 #define DDR_INFO_NAME "ddr_info"
@@ -75,47 +75,6 @@ struct dmc_drv_data {
 	u32 reg_clk_ctrl;
 	u64 size;
 };
-#define PIKE2_SIZE_L_OFFSET	0x1b4
-#define PIKE2_SIZE_H_OFFSET	0x1b8
-#define PIKE2_TYPE_OFFSET	0x1bc
-#define PIKE2_CS0_MR_OFFSET	0x1c0
-#define PIKE2_CS1_MR_OFFSET	0x1c4
-
-#define SHARKLE_SIZE_L_OFFSET	0x1b4
-#define SHARKLE_SIZE_H_OFFSET	0x1b8
-#define SHARKLE_TYPE_OFFSET	0x1bc
-#define SHARKLE_CS0_MR_OFFSET	0x1c0
-#define SHARKLE_CS1_MR_OFFSET	0x1c4
-
-#define SHARKL3_SIZE_L_OFFSET	0x19c
-#define SHARKL3_SIZE_H_OFFSET	0x1a0
-#define SHARKL3_TYPE_OFFSET	0x1a4
-#define SHARKL3_CS0_MR_OFFSET	0x1a8
-#define SHARKL3_CS1_MR_OFFSET	0x1ac
-
-#define SHARKL5_SIZE_L_OFFSET	0x0
-#define SHARKL5_SIZE_H_OFFSET	0x4
-#define SHARKL5_TYPE_OFFSET	0x8
-#define SHARKL5_CS0_MR_OFFSET	0xc
-#define SHARKL5_CS1_MR_OFFSET	0x10
-
-#define SHARKL5PRO_SIZE_L_OFFSET 0x0
-#define SHARKL5PRO_SIZE_H_OFFSET 0x4
-#define SHARKL5PRO_TYPE_OFFSET	 0x8
-#define SHARKL5PRO_CS0_MR_OFFSET 0xc
-#define SHARKL5PRO_CS1_MR_OFFSET 0x10
-
-#define ROC1_SIZE_L_OFFSET	0x0
-#define ROC1_SIZE_H_OFFSET	0x4
-#define ROC1_TYPE_OFFSET	0x8
-#define ROC1_CS0_MR_OFFSET	0xc
-#define ROC1_CS1_MR_OFFSET	0x10
-
-#define ORCA_SIZE_L_OFFSET	0x0
-#define ORCA_SIZE_H_OFFSET	0x4
-#define ORCA_TYPE_OFFSET	0x8
-#define ORCA_CS0_MR_OFFSET	0xc
-#define ORCA_CS1_MR_OFFSET	0x10
 
 #define PUB_DMC_SIZE_L_OFFSET	0x0
 #define PUB_DMC_SIZE_H_OFFSET	0x4
@@ -123,91 +82,21 @@ struct dmc_drv_data {
 #define PUB_DMC_CS0_MR_OFFSET	0xc
 #define PUB_DMC_CS1_MR_OFFSET	0x10
 
-static const struct dmc_data pike2_data = {
-	.proc_res = 0,
-	.mon_res = INVALID_RES_IDX,
-	.size_l_offset = PIKE2_SIZE_L_OFFSET,
-	.size_h_offset = PIKE2_SIZE_H_OFFSET,
-	.type_offset = PIKE2_TYPE_OFFSET,
-	.mr_offset = {
-		PIKE2_CS0_MR_OFFSET,
-		PIKE2_CS1_MR_OFFSET,
-	},
-};
-
-static const struct dmc_data sharkle_data = {
-	.proc_res = 0,
-	.mon_res = INVALID_RES_IDX,
-	.size_l_offset = SHARKLE_SIZE_L_OFFSET,
-	.size_h_offset = SHARKLE_SIZE_H_OFFSET,
-	.type_offset = SHARKLE_TYPE_OFFSET,
-	.mr_offset = {
-		SHARKLE_CS0_MR_OFFSET,
-		SHARKLE_CS1_MR_OFFSET,
-	},
-};
-
-static const struct dmc_data sharkl3_data = {
-	.proc_res = 0,
-	.mon_res = INVALID_RES_IDX,
-	.size_l_offset = SHARKL3_SIZE_L_OFFSET,
-	.size_h_offset = SHARKL3_SIZE_H_OFFSET,
-	.type_offset = SHARKL3_TYPE_OFFSET,
-	.mr_offset = {
-		SHARKL3_CS0_MR_OFFSET,
-		SHARKL3_CS1_MR_OFFSET,
-	},
-};
-
-static const struct dmc_data sharkl5_data = {
-	.proc_res = 1,
-	.mon_res = 0,
-	.size_l_offset = SHARKL5_SIZE_L_OFFSET,
-	.size_h_offset = SHARKL5_SIZE_H_OFFSET,
-	.type_offset = SHARKL5_TYPE_OFFSET,
-	.mr_offset = {
-		SHARKL5_CS0_MR_OFFSET,
-		SHARKL5_CS1_MR_OFFSET,
-	},
-};
-
-static const struct dmc_data sharkl5pro_data = {
-	.proc_res = 1,
-	.mon_res = 0,
-	.size_l_offset = SHARKL5PRO_SIZE_L_OFFSET,
-	.size_h_offset = SHARKL5PRO_SIZE_H_OFFSET,
-	.type_offset = SHARKL5PRO_TYPE_OFFSET,
-	.mr_offset = {
-		SHARKL5PRO_CS0_MR_OFFSET,
-		SHARKL5PRO_CS1_MR_OFFSET,
-	},
-};
-static const struct dmc_data roc1_data = {
-	.proc_res = 1,
-	.mon_res = 0,
-	.size_l_offset = ROC1_SIZE_L_OFFSET,
-	.size_h_offset = ROC1_SIZE_H_OFFSET,
-	.type_offset = ROC1_TYPE_OFFSET,
-	.mr_offset = {
-		ROC1_CS0_MR_OFFSET,
-		ROC1_CS1_MR_OFFSET,
-	},
-};
-static const struct dmc_data orca_data = {
-	.proc_res = 1,
-	.mon_res = 0,
-	.size_l_offset = ORCA_SIZE_L_OFFSET,
-	.size_h_offset = ORCA_SIZE_H_OFFSET,
-	.type_offset = ORCA_TYPE_OFFSET,
-	.mr_offset = {
-		ORCA_CS0_MR_OFFSET,
-		ORCA_CS1_MR_OFFSET,
-	},
-};
-
 static const struct dmc_data pub_dmc_data = {
-	.proc_res = 1,
-	.mon_res = 0,
+	.proc_res = 0,
+	.mon_res = 1,
+	.size_l_offset = PUB_DMC_SIZE_L_OFFSET,
+	.size_h_offset = PUB_DMC_SIZE_H_OFFSET,
+	.type_offset = PUB_DMC_TYPE_OFFSET,
+	.mr_offset = {
+		PUB_DMC_CS0_MR_OFFSET,
+		PUB_DMC_CS1_MR_OFFSET,
+	},
+};
+
+static const struct dmc_data pub_dmc_original_data = {
+	.proc_res = 0,
+	.mon_res = INVALID_RES_IDX, /* not support pub status mointor */
 	.size_l_offset = PUB_DMC_SIZE_L_OFFSET,
 	.size_h_offset = PUB_DMC_SIZE_H_OFFSET,
 	.type_offset = PUB_DMC_TYPE_OFFSET,
@@ -233,7 +122,7 @@ static const char *const ddr_type_to_str[] = {
 #ifdef CONFIG_PROC_FS
 static int sprd_ddr_size_show(struct seq_file *m, void *v)
 {
-	seq_printf(m, "%llu\n", (long long int)(drv_data.size / 1024 / 1024));
+	seq_printf(m, "%llu\n", (long long)(drv_data.size / 1024 / 1024));
 	return 0;
 }
 
@@ -287,37 +176,6 @@ static const struct file_operations sprd_ddr_info_fops = {
 	.release = single_release,
 };
 
-extern unsigned long totalram_pages;
-static int proc_ddr_info_show(struct seq_file *m, void *v)
-{
-	u32 size, manu_id, size_meminfo;
-
-	size = (drv_data.size / 1024 / 1024 / 1024);
-	size_meminfo = ((totalram_pages<<(PAGE_SHIFT-10))/1024/1024) + 1;
-	if (size < size_meminfo)
-		size = size_meminfo;
-
-	size = size << 8;
-	manu_id = drv_data.mr_val[0] & 0xff;
-
-	seq_printf(m, "ddr_info:\n");
-	seq_printf(m, "0x%x\n", size | manu_id);
-	return 0;
-}
-
-static int proc_ddr_info_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, proc_ddr_info_show, PDE_DATA(inode));
-}
-
-static const struct file_operations proc_ddr_info_fops = {
-	.open = proc_ddr_info_open,
-	.read = seq_read,
-	.llseek = seq_lseek,
-	.release = single_release,
-};
-
-
 static int sprd_ddr_proc_creat(void)
 {
 	drv_data.proc_dir = proc_mkdir(DMC_PROC_NAME, NULL);
@@ -339,9 +197,6 @@ static int sprd_ddr_proc_creat(void)
 		remove_proc_entry(DMC_PROC_NAME, NULL);
 		return -ENOMEM;
 	}
-	if (!proc_create(DDR_INFO_NAME, 0444, NULL,
-			 &proc_ddr_info_fops))
-		pr_err("Failed to register /proc/ddr_info\n");
 	return 0;
 }
 #endif
@@ -378,9 +233,6 @@ static int sprd_pub_monitor_status_show(struct seq_file *m, void *v)
 	u64 idle_time, write_time, read_time, sref_time, light_time;
 	u64 fx_time[8], total_tm, sts_tm;
 	u32 light_cnt, sref_cnt;
-
-	if (!drv_data.mon_base)
-		return -ENOMEM;
 
 	if (!drv_data.pub_mon_enabled)
 		return -ENODATA;
@@ -546,7 +398,7 @@ static int sprd_dmc_probe(struct platform_device *pdev)
 			return -ENODEV;
 		io_addr = devm_ioremap_resource(&pdev->dev, res);
 		if (IS_ERR(io_addr))
-			return PTR_ERR(io_addr);
+			return (int)PTR_ERR(io_addr);
 		drv_data.size = readl_relaxed(io_addr + pdata->size_l_offset)
 		  + ((u64) readl_relaxed(io_addr + pdata->size_h_offset) << 32);
 		drv_data.type = readl_relaxed(io_addr + pdata->type_offset);
@@ -566,7 +418,7 @@ static int sprd_dmc_probe(struct platform_device *pdev)
 			return -ENODEV;
 		drv_data.mon_base = devm_ioremap_resource(&pdev->dev, res);
 		if (IS_ERR(drv_data.mon_base))
-			return PTR_ERR(drv_data.mon_base);
+			return (int)PTR_ERR(drv_data.mon_base);
 		sprd_pub_monitor_init();
 	}
 	return 0;
@@ -585,14 +437,9 @@ static int sprd_dmc_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id sprd_dmc_of_match[] = {
-	{.compatible = "sprd,pike2-dmc", .data = &pike2_data},
-	{.compatible = "sprd,sharkle-dmc", .data = &sharkle_data},
-	{.compatible = "sprd,sharkl3-dmc", .data = &sharkl3_data},
-	{.compatible = "sprd,sharkl5-dmc", .data = &sharkl5_data},
-	{.compatible = "sprd,sharkl5pro-dmc", .data = &sharkl5pro_data},
-	{.compatible = "sprd,roc1-dmc", .data = &roc1_data},
-	{.compatible = "sprd,orca-dmc", .data = &orca_data},
 	{.compatible = "sprd,pub-dmc", .data = &pub_dmc_data},
+	/* for such earlier platform which not support pub status mointor */
+	{.compatible = "sprd,pub-dmc-original", .data = &pub_dmc_original_data},
 	{},
 };
 
@@ -610,5 +457,4 @@ static struct platform_driver sprd_dmc_driver = {
 module_platform_driver(sprd_dmc_driver);
 
 MODULE_LICENSE("GPL v2");
-MODULE_AUTHOR("junqiang wang<junqiang.wang@spreadtrum.com>");
 MODULE_DESCRIPTION("dmc drv for Spreadtrum");

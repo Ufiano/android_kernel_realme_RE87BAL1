@@ -1,15 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
+
 #ifndef _VIDEO_GSP_CFG_H
 #define _VIDEO_GSP_CFG_H
 
@@ -60,15 +53,15 @@ struct gsp_cfg {
 	unsigned long frame_cnt;
 };
 
-struct COEF_ENTRY_T {
+struct coef_entry {
 	struct list_head list;
-	uint16_t in_w;
-	uint16_t in_h;
-	uint16_t out_w;
-	uint16_t out_h;
-	uint16_t hor_tap;
-	uint16_t ver_tap;
-	uint32_t coef[64 + 64];
+	u16 in_w;
+	u16 in_h;
+	u16 out_w;
+	u16 out_h;
+	u16 hor_tap;
+	u16 ver_tap;
+	u32 coef[64 + 64];
 };
 
 #endif

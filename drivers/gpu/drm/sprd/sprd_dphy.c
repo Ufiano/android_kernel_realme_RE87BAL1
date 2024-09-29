@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/err.h>
@@ -16,21 +8,16 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/of_address.h>
+#include <linux/of_device.h>
 #include <linux/of_graph.h>
 #include <linux/of_platform.h>
-#include <linux/of_address.h>
-#include <linux/of_platform.h>
-#include <linux/pm_runtime.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
 
 #include "sprd_dphy.h"
-#include "sprd_dsi.h"
+#include "dphy/sprd_dphy_api.h"
 #include "sysfs/sysfs_display.h"
-
-LIST_HEAD(dphy_pll_head);
-LIST_HEAD(dphy_ppi_head);
-LIST_HEAD(dphy_glb_head);
 
 static int regmap_tst_io_write(void *context, u32 reg, u32 val)
 {
@@ -39,7 +26,7 @@ static int regmap_tst_io_write(void *context, u32 reg, u32 val)
 	if (val > 0xff || reg > 0xff)
 		return -EINVAL;
 
-	pr_debug("reg = 0x%02x, val = 0x%02x\n", reg, val);
+	DRM_DEBUG("reg = 0x%02x, val = 0x%02x\n", reg, val);
 
 	sprd_dphy_test_write(dphy, reg, val);
 
@@ -50,12 +37,6 @@ static int regmap_tst_io_read(void *context, u32 reg, u32 *val)
 {
 	struct sprd_dphy *dphy = context;
 	int ret;
-	struct sprd_dsi *dsi = dev_get_drvdata(dphy->dsi_dev);
-
-	if (!dsi->ctx.is_inited) {
-		pr_err("dphy is suspended, stop access\n");
-		return -EINVAL;
-	}
 
 	if (reg > 0xff)
 		return -EINVAL;
@@ -66,7 +47,7 @@ static int regmap_tst_io_read(void *context, u32 reg, u32 *val)
 
 	*val = ret;
 
-	pr_debug("reg = 0x%02x, val = 0x%02x\n", reg, *val);
+	DRM_DEBUG("reg = 0x%02x, val = 0x%02x\n", reg, *val);
 	return 0;
 }
 
@@ -78,14 +59,12 @@ static struct regmap_bus regmap_tst_io = {
 static const struct regmap_config byte_config = {
 	.reg_bits = 8,
 	.val_bits = 8,
-	.max_register = 250,
 };
 
 static const struct regmap_config word_config = {
 	.reg_bits = 32,
 	.val_bits = 32,
 	.reg_stride = 4,
-	.max_register = 250,
 };
 
 static int sprd_dphy_regmap_init(struct sprd_dphy *dphy)
@@ -110,103 +89,42 @@ static int sprd_dphy_regmap_init(struct sprd_dphy *dphy)
 	return 0;
 }
 
-void sprd_dphy_ulps_enter(struct sprd_dphy *dphy)
-{
-	DRM_INFO("dphy ulps enter\n");
-	sprd_dphy_hs_clk_en(dphy, false);
-	sprd_dphy_data_ulps_enter(dphy);
-	sprd_dphy_clk_ulps_enter(dphy);
-}
-
-void sprd_dphy_ulps_exit(struct sprd_dphy *dphy)
-{
-	DRM_INFO("dphy ulps exit\n");
-	sprd_dphy_force_pll(dphy, true);
-	sprd_dphy_clk_ulps_exit(dphy);
-	sprd_dphy_data_ulps_exit(dphy);
-	sprd_dphy_force_pll(dphy, false);
-}
-
-int sprd_dphy_resume(struct sprd_dphy *dphy)
+int sprd_dphy_enable(struct sprd_dphy *dphy)
 {
 	int ret;
 
 	mutex_lock(&dphy->ctx.lock);
-
-	if (dphy->glb && dphy->glb->power)
+	if (dphy->glb->power)
 		dphy->glb->power(&dphy->ctx, true);
-	if (dphy->glb && dphy->glb->enable)
+	if (dphy->glb->enable)
 		dphy->glb->enable(&dphy->ctx);
 
-	ret = sprd_dphy_configure(dphy);
+	ret = sprd_dphy_init(dphy);
 	if (ret) {
 		mutex_unlock(&dphy->ctx.lock);
 		DRM_ERROR("sprd dphy init failed\n");
 		return -EINVAL;
 	}
 
-	if (dphy->slave) {
-		if (dphy->slave->glb && dphy->slave->glb->power)
-			dphy->slave->glb->power(&dphy->slave->ctx, true);
-		if (dphy->slave->glb && dphy->slave->glb->enable)
-			dphy->slave->glb->enable(&dphy->slave->ctx);
-
-		ret = sprd_dphy_configure(dphy->slave);
-		if (ret) {
-			mutex_unlock(&dphy->ctx.lock);
-			DRM_ERROR("sprd dphy slave init failed\n");
-			return -EINVAL;
-		}
-	}
-
-	dphy->ctx.is_enabled = true;
+	dphy->ctx.enabled = true;
 	mutex_unlock(&dphy->ctx.lock);
 
-	DRM_INFO("dphy resume OK\n");
-	return ret;
+	return 0;
 }
 
-int sprd_dphy_suspend(struct sprd_dphy *dphy)
+int sprd_dphy_disable(struct sprd_dphy *dphy)
 {
-	int ret;
-
 	mutex_lock(&dphy->ctx.lock);
-	ret = sprd_dphy_close(dphy);
-	if (ret)
-		DRM_ERROR("sprd dphy close failed\n");
-
-	if (dphy->glb && dphy->glb->disable)
+	if (dphy->glb->disable)
 		dphy->glb->disable(&dphy->ctx);
-	if (dphy->glb && dphy->glb->power)
+	if (dphy->glb->power)
 		dphy->glb->power(&dphy->ctx, false);
 
-	if (dphy->slave) {
-		ret = sprd_dphy_close(dphy->slave);
-		if (ret)
-			DRM_ERROR("sprd dphy slave close failed\n");
-
-		if (dphy->slave->glb && dphy->slave->glb->disable)
-			dphy->slave->glb->disable(&dphy->slave->ctx);
-		if (dphy->slave->glb && dphy->slave->glb->power)
-			dphy->slave->glb->power(&dphy->slave->ctx, false);
-
-	}
-	dphy->ctx.is_enabled = false;
+	dphy->ctx.enabled = false;
 	mutex_unlock(&dphy->ctx.lock);
 
-	DRM_INFO("dphy suspend OK\n");
-	return ret;
+	return 0;
 }
-
-static const struct of_device_id dt_ids[] = {
-	{ .compatible = "sprd,dsi-phy", },
-	{},
-};
-
-static struct device_driver dev_driver = {
-	.name  = "sprd-dphy-drv",
-	.of_match_table = of_match_ptr(dt_ids),
-};
 
 static int sprd_dphy_device_create(struct sprd_dphy *dphy,
 				   struct device *parent)
@@ -216,8 +134,7 @@ static int sprd_dphy_device_create(struct sprd_dphy *dphy,
 	dphy->dev.class = display_class;
 	dphy->dev.parent = parent;
 	dphy->dev.of_node = parent->of_node;
-	dphy->dev.driver = &dev_driver;
-	dev_set_name(&dphy->dev, "dphy%d", dphy->ctx.id);
+	dev_set_name(&dphy->dev, "dphy0");
 	dev_set_drvdata(&dphy->dev, dphy);
 
 	ret = device_register(&dphy->dev);
@@ -233,10 +150,7 @@ static int sprd_dphy_context_init(struct sprd_dphy *dphy,
 	struct resource r;
 	u32 tmp;
 
-	dphy->ctx.is_enabled = true;
-	dphy->ctx.chip_id = 0xffffffff;
-
-	if (dphy->glb && dphy->glb->parse_dt)
+	if (dphy->glb->parse_dt)
 		dphy->glb->parse_dt(&dphy->ctx, np);
 
 	if (!of_address_to_resource(np, 0, &r)) {
@@ -273,37 +187,78 @@ static int sprd_dphy_context_init(struct sprd_dphy *dphy,
 		dphy->ctx.ulps_enable = true;
 
 	mutex_init(&dphy->ctx.lock);
+	dphy->ctx.enabled = true;
+	dphy->ctx.chip_id = 0xffffffff;
 
 	return 0;
 }
 
-static int sprd_dphy_dual_channel_init(struct sprd_dphy *dphy)
-{
-	struct device_node *np;
-	struct platform_device *secondary;
 
-	np = of_parse_phandle(dphy->dev.of_node, "sprd,dual-channel", 0);
-	if (np) {
-		DRM_INFO("find sprd,dual-channel\n");
-		secondary = of_find_device_by_node(np);
-		dphy->slave = platform_get_drvdata(secondary);
-		of_node_put(np);
+static const struct sprd_dphy_ops sharkle_dphy = {
+	.ppi = &dsi_ctrl_ppi_ops,
+	.pll = &sharkle_dphy_pll_ops,
+	.glb = &sharkle_dphy_glb_ops,
+};
 
-		if (!dphy->slave)
-			return -EPROBE_DEFER;
+static const struct sprd_dphy_ops pike2_dphy = {
+	.ppi = &dsi_ctrl_ppi_ops,
+	.pll = &sharkle_dphy_pll_ops,
+	.glb = &pike2_dphy_glb_ops,
+};
 
-		dphy->slave->master = dphy;
-	}
+static const struct sprd_dphy_ops sharkl3_dphy = {
+	.ppi = &dsi_ctrl_ppi_ops,
+	.pll = &sharkle_dphy_pll_ops,
+	.glb = &sharkl3_dphy_glb_ops,
+};
 
-	return 0;
-}
+static const struct sprd_dphy_ops sharkl5_dphy = {
+	.ppi = &dsi_ctrl_ppi_ops,
+	.pll = &sharkl5_dphy_pll_ops,
+	.glb = &sharkl5_dphy_glb_ops,
+};
+
+static const struct sprd_dphy_ops sharkl5pro_dphy = {
+	.ppi = &dsi_ctrl_ppi_ops,
+	.pll = &sharkl5_dphy_pll_ops,
+	.glb = &sharkl5pro_dphy_glb_ops,
+};
+
+static const struct sprd_dphy_ops qogirl6_dphy = {
+	.ppi = &dsi_ctrl_ppi_ops,
+	.pll = &sharkl5_dphy_pll_ops,
+	.glb = &qogirl6_dphy_glb_ops,
+};
+
+static const struct sprd_dphy_ops qogirn6pro_dphy = {
+	.ppi = &dsi_ctrl_ppi_ops,
+	.pll = &sharkl5_dphy_pll_ops,
+	.glb = &qogirn6pro_dphy_glb_ops,
+};
+
+static const struct of_device_id dphy_match_table[] = {
+	{ .compatible = "sprd,sharkle-dsi-phy",
+	  .data = &sharkle_dphy },
+	{ .compatible = "sprd,pike2-dsi-phy",
+	  .data = &pike2_dphy },
+	{ .compatible = "sprd,sharkl3-dsi-phy",
+	  .data = &sharkl3_dphy },
+	{ .compatible = "sprd,sharkl5-dsi-phy",
+	  .data = &sharkl5_dphy },
+	{ .compatible = "sprd,sharkl5pro-dsi-phy",
+	  .data = &sharkl5pro_dphy },
+	{ .compatible = "sprd,qogirl6-dsi-phy",
+	  .data = &qogirl6_dphy },
+	{ .compatible = "sprd,qogirn6pro-dsi-phy",
+	  .data = &qogirn6pro_dphy },
+	{ /* sentinel */ },
+};
 
 static int sprd_dphy_probe(struct platform_device *pdev)
 {
-	struct device_node *np = pdev->dev.of_node;
+	const struct sprd_dphy_ops *pdata;
 	struct sprd_dphy *dphy;
 	struct device *dsi_dev;
-	const char *str;
 	int ret;
 
 	dphy = devm_kzalloc(&pdev->dev, sizeof(*dphy), GFP_KERNEL);
@@ -314,53 +269,46 @@ static int sprd_dphy_probe(struct platform_device *pdev)
 	if (!dsi_dev)
 		return -ENODEV;
 
-	dphy->dsi_dev = dsi_dev;
-	if (!of_property_read_string(dsi_dev->of_node, "sprd,ip", &str))
-		dphy->ppi = dphy_ppi_ops_attach(str);
-	else
-		DRM_WARN("dphy ppi ops parse failed\n");
-
-	if (!of_property_read_string(np, "sprd,ip", &str))
-		dphy->pll = dphy_pll_ops_attach(str);
-	else
-		DRM_WARN("dphy pll ops parse failed\n");
-
-	if (!of_property_read_string(np, "sprd,soc", &str))
-		dphy->glb = dphy_glb_ops_attach(str);
-	else
-		DRM_WARN("dphy glb ops parse failed\n");
+	pdata = of_device_get_match_data(&pdev->dev);
+	if (pdata) {
+		dphy->ppi = pdata->ppi;
+		dphy->pll = pdata->pll;
+		dphy->glb = pdata->glb;
+	} else {
+		DRM_ERROR("No matching driver data found\n");
+		return -EINVAL;
+	}
 
 	ret = sprd_dphy_context_init(dphy, pdev->dev.of_node);
 	if (ret)
 		return ret;
 
-	DRM_INFO("dphy driver probe (dphy->ctx.id=%d)\n", dphy->ctx.id);
-
-	sprd_dphy_device_create(dphy, &pdev->dev);
-	sprd_dphy_sysfs_init(&dphy->dev);
-	sprd_dphy_regmap_init(dphy);
-	platform_set_drvdata(pdev, dphy);
-
-	ret = sprd_dphy_dual_channel_init(dphy);
+	ret = sprd_dphy_device_create(dphy, &pdev->dev);
 	if (ret)
 		return ret;
 
-	DRM_INFO("dphy driver probe success\n");
+	ret = sprd_dphy_sysfs_init(&dphy->dev);
+	if (ret)
+		return ret;
+
+	ret = sprd_dphy_regmap_init(dphy);
+	if (ret)
+		return ret;
+
+	platform_set_drvdata(pdev, dphy);
 
 	return 0;
 }
 
-static struct platform_driver sprd_dphy_driver = {
+struct platform_driver sprd_dphy_driver = {
 	.probe	= sprd_dphy_probe,
 	.driver = {
 		.name  = "sprd-dphy-drv",
-		.of_match_table	= of_match_ptr(dt_ids),
+		.of_match_table	= dphy_match_table,
 	}
 };
 
-module_platform_driver(sprd_dphy_driver);
-
+MODULE_AUTHOR("Leon He <leon.he@unisoc.com>");
+MODULE_AUTHOR("Kevin Tang <kevin.tang@unisoc.com>");
+MODULE_DESCRIPTION("Unisoc SoC MIPI DSI PHY driver");
 MODULE_LICENSE("GPL v2");
-MODULE_AUTHOR("infi.chen <infi.chen@spreadtrum.com>");
-MODULE_AUTHOR("Leon He <leon.he@spreadtrum.com>");
-MODULE_DESCRIPTION("Spreadtrum SoC MIPI DSI PHY driver");

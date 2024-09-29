@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2017 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include "gsp_lite_r2p0_coef_cal.h"
@@ -158,7 +150,7 @@ static void adjust_coef_inter(int32_t *coef, int tap)
 *desc:find the entry have the same in_w in_h out_w out_h
 *return:if hit,return the entry pointer; else return null;
 */
-static struct COEF_ENTRY_T *gsp_lite_r2p0_coef_cache_hit_check(
+static struct coef_entry *gsp_lite_r2p0_coef_cache_hit_check(
 		struct gsp_lite_r2p0_core *core,
 		uint16_t in_w, uint16_t in_h,
 		uint16_t out_w, uint16_t out_h,
@@ -166,7 +158,7 @@ static struct COEF_ENTRY_T *gsp_lite_r2p0_coef_cache_hit_check(
 {
 	static uint32_t total_cnt = 1;
 	static uint32_t hit_cnt = 1;
-	struct COEF_ENTRY_T *pos = NULL;
+	struct coef_entry *pos = NULL;
 
 	total_cnt++;
 	list_for_each_entry(pos, &core->coef_list, list) {
@@ -187,7 +179,7 @@ static struct COEF_ENTRY_T *gsp_lite_r2p0_coef_cache_hit_check(
 }
 
 static inline void gsp_lite_r2p0_coef_cache_move_to_head(
-	struct gsp_lite_r2p0_core *core, struct COEF_ENTRY_T *entry)
+	struct gsp_lite_r2p0_core *core, struct coef_entry *entry)
 {
 	list_del(&entry->list);
 	list_add(&entry->list, &core->coef_list);
@@ -354,7 +346,7 @@ uint32_t *gsp_lite_r2p0_gen_block_scaler_coef(struct gsp_lite_r2p0_core *core,
 				 uint32_t ver_tap)
 {
 	struct GSC_MEM_POOL pool = { 0 };
-	struct COEF_ENTRY_T *entry = NULL;
+	struct coef_entry *entry = NULL;
 	int32_t icnt = 0;
 	int32_t jcnt = 0;
 	int32_t (*coeff_array_hor)[MAX_TAP] = NULL;
@@ -404,7 +396,7 @@ uint32_t *gsp_lite_r2p0_gen_block_scaler_coef(struct gsp_lite_r2p0_core *core,
 
 	if (core->cache_coef_init_flag == 1) {
 		entry = list_entry(core->coef_list.prev,
-				struct COEF_ENTRY_T, list);
+				struct coef_entry, list);
 		if (entry->in_w == 0)
 			GSP_DEBUG("add.\n");
 		else

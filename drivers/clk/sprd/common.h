@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+/* SPDX-License-Identifier: GPL-2.0 */
 //
 // Spreadtrum clock infrastructure
 //
@@ -11,19 +11,12 @@
 #include <linux/clk-provider.h>
 #include <linux/of_platform.h>
 #include <linux/regmap.h>
-#include <linux/sprd_sip_svc.h>
 
 struct device_node;
 
 struct sprd_clk_common {
-	union {
-		struct regmap	*regmap;
-		struct sprd_sip_svc_handle *svc_handle;
-	};
-	union {
-		u32		reg;
-		u32		id;
-	};
+	struct regmap	*regmap;
+	u32		reg;
 	struct clk_hw	hw;
 };
 

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (C) 2018 Spreadtrum Communications Inc.
  *
@@ -51,7 +52,7 @@ static int spipe_open(struct inode *inode, struct file *filp)
 
 	spipe = container_of(inode->i_cdev, struct spipe_device, cdev);
 	if (sbuf_status(spipe->init->dst, spipe->init->channel) != 0) {
-		pr_info("spipe %d-%d not ready to open!\n",
+		pr_debug("spipe %d-%d not ready to open!\n",
 			spipe->init->dst, spipe->init->channel);
 		filp->private_data = NULL;
 		return -ENODEV;
@@ -128,59 +129,77 @@ static const struct file_operations spipe_fops = {
 	.llseek		= default_llseek,
 };
 
-static int spipe_parse_dt(struct spipe_init_data **init, struct device_node *node)
+static int spipe_parse_dt(struct spipe_init_data **init,
+	struct device_node *np, struct device *dev)
 {
-	struct device_node *np = node;
+	struct device_node *parent_np ;
 	struct spipe_init_data *pdata = NULL;
 	int ret;
 	u32 data;
 
-	pdata = kzalloc(sizeof(struct spipe_init_data), GFP_KERNEL);
+	pdata = devm_kzalloc(dev, sizeof(struct spipe_init_data), GFP_KERNEL);
 	if (!pdata)
 		return -ENOMEM;
 
-	ret = of_property_read_string(np,
-				      "sprd,name",
-				      (const char **)&pdata->name);
+	/* Get the label id for the node of spipe */
+	ret = of_property_read_string(np, "label", &pdata->name);
 	if (ret)
 		goto error;
 
-	ret = of_property_read_u32(np, "sprd,dst", (u32 *)&data);
-	if (ret)
-		goto error;
-	pdata->dst = (u8)data;
+	/* Get sipc dst id, spipe dst is share sipc dst on dtsi
+	 * Get the parent of the spipe, it is the node of sipc, get reg
+	 */
+	parent_np = of_get_parent(np);
+	if (parent_np) {
+		ret = of_property_read_u32(parent_np, "reg", (u32 *)&data);
+		if (ret)
+			goto error;
+		pdata->dst = (u8)data;
+	}
+	of_node_put(parent_np);
 
-	ret = of_property_read_u32(np, "sprd,channel", (u32 *)&data);
+	/* Get the channel id for the node of spipe */
+	ret = of_property_read_u32(np, "reg", (u32 *)&data);
 	if (ret)
 		goto error;
 	pdata->channel = (u8)data;
 
-	ret = of_property_read_u32(np, "sprd,smem", (u32 *)&data);
+	/* smem, optional, default value is 0. */
+	ret = of_property_read_u32(np, "sprd,smem", &data);
 	if (!ret)
-		pdata->smem = (u32)data;
+		pdata->smem = (u16)data;
 
-	ret = of_property_read_u32(np,
-				   "sprd,ringnr",
-				   (u32 *)&pdata->ringnr);
+	/* Get the ringnr for the node of spipe */
+	ret = of_property_read_u32(np,  "sprd,ringnr", (u32 *)&pdata->ringnr);
 	if (ret)
 		goto error;
 
+	/* Get the rxbuf size for the node of spipe */
 	ret = of_property_read_u32(np,
-				   "sprd,size-rxbuf",
-				   (u32 *)&pdata->rxbuf_size);
+				"sprd,size-rxbuf", (u32 *)&pdata->rxbuf_size);
 	if (ret)
 		goto error;
 
-	ret = of_property_read_u32(np,
-				   "sprd,size-txbuf",
+	/* Get the txbuf size for the node of spipe */
+	ret = of_property_read_u32(np, "sprd,size-txbuf",
 				   (u32 *)&pdata->txbuf_size);
 	if (ret)
 		goto error;
 
+	dev_dbg(dev, "label = %s\n", pdata->name);
+	dev_dbg(dev, "dst = %d\n", pdata->dst);
+	dev_dbg(dev, "channel = %d\n", pdata->channel);
+	dev_dbg(dev, "smem = %d\n", pdata->smem);
+	dev_dbg(dev, "ringnr = %d\n", pdata->ringnr);
+	dev_dbg(dev, "size-rxbuf = %x\n", pdata->rxbuf_size);
+	dev_dbg(dev, "size-txbuf = %x\n", pdata->txbuf_size);
+
 	*init = pdata;
+
+
 	return ret;
 error:
-	kfree(pdata);
+	devm_kfree(dev, pdata);
 	*init = NULL;
 	return ret;
 }
@@ -201,88 +220,82 @@ static int spipe_probe(struct platform_device *pdev)
 	struct spipe_device *spipe;
 	dev_t devid;
 	int i, rval;
-	struct device_node *np, *chd;
-	int segnr;
+	struct device_node *np;
 	struct device *dev = &pdev->dev;
 
 	if (pdev->dev.of_node && !init) {
 		np = pdev->dev.of_node;
-		segnr = of_get_child_count(np);
-		dev_info(dev, "segnr = %d\n", segnr);
 
-		for_each_child_of_node(np, chd) {
-			rval = spipe_parse_dt(&init, chd);
-			if (rval) {
-				dev_err(dev, "Failed to parse spipe device tree, ret=%d\n",
-					rval);
-				return rval;
-			}
-			dev_info(dev, "After parse device tree, name=%s, dst=%u, channel=%u, ringnr=%u,  rxbuf_size=0x%x, txbuf_size=0x%x\n",
-				init->name,
-				init->dst,
-				init->channel,
-				init->ringnr,
-				init->rxbuf_size,
-				init->txbuf_size);
-
-			rval = sbuf_create_ex(init->dst, init->channel,
-					      init->smem, init->ringnr,
-					      init->txbuf_size,
-					      init->rxbuf_size);
-			if (rval != 0) {
-				dev_err(dev, "Failed to create sbuf: %d\n",
-					rval);
-				spipe_destroy_pdata(&init, &pdev->dev);
-				return rval;
-			}
-
-			spipe = devm_kzalloc(&pdev->dev,
-					     sizeof(struct spipe_device),
-					     GFP_KERNEL);
-			if (spipe == NULL) {
-				sbuf_destroy(init->dst, init->channel);
-				spipe_destroy_pdata(&init, &pdev->dev);
-				return -ENOMEM;
-			}
-
-			rval = alloc_chrdev_region(&devid, 0, init->ringnr, init->name);
-			if (rval != 0) {
-				sbuf_destroy(init->dst, init->channel);
-				devm_kfree(&pdev->dev, spipe);
-				spipe_destroy_pdata(&init, &pdev->dev);
-				dev_err(dev, "Failed to alloc spipe chrdev\n");
-				return rval;
-			}
-
-			cdev_init(&(spipe->cdev), &spipe_fops);
-			rval = cdev_add(&(spipe->cdev), devid, init->ringnr);
-			if (rval != 0) {
-				sbuf_destroy(init->dst, init->channel);
-				devm_kfree(&pdev->dev, spipe);
-				unregister_chrdev_region(devid, init->ringnr);
-				spipe_destroy_pdata(&init, &pdev->dev);
-				dev_err(dev, "Failed to add spipe cdev\n");
-				return rval;
-			}
-
-			spipe->major = MAJOR(devid);
-			spipe->minor = MINOR(devid);
-			if (init->ringnr > 1) {
-				for (i = 0; i < init->ringnr; i++) {
-					device_create(spipe_class, NULL,
-						MKDEV(spipe->major, spipe->minor + i),
-						NULL, "%s%d", init->name, i);
-				}
-			} else {
-				device_create(spipe_class, NULL,
-					MKDEV(spipe->major, spipe->minor),
-					NULL, "%s", init->name);
-			}
-
-			spipe->init = init;
-
-			platform_set_drvdata(pdev, spipe);
+		rval = spipe_parse_dt(&init, np, &pdev->dev);
+		if (rval) {
+			dev_err(dev, "Failed to parse spipe device tree, ret=%d\n",
+				rval);
+			return rval;
 		}
+		dev_info(dev, "After parse device tree, name=%s, dst=%u, channel=%u, ringnr=%u,  rxbuf_size=0x%x, txbuf_size=0x%x\n",
+			init->name,
+			init->dst,
+			init->channel,
+			init->ringnr,
+			init->rxbuf_size,
+			init->txbuf_size);
+
+		rval = sbuf_create_ex(init->dst, init->channel,
+				      init->smem, init->ringnr,
+				      init->txbuf_size, init->rxbuf_size);
+
+		if (rval != 0) {
+			dev_err(dev, "Failed to create sbuf: %d\n", rval);
+			spipe_destroy_pdata(&init, &pdev->dev);
+			return rval;
+		}
+
+		spipe = devm_kzalloc(&pdev->dev,
+				     sizeof(struct spipe_device),
+				     GFP_KERNEL);
+		if (spipe == NULL) {
+			sbuf_destroy(init->dst, init->channel);
+			spipe_destroy_pdata(&init, &pdev->dev);
+			return -ENOMEM;
+		}
+
+		rval = alloc_chrdev_region(&devid, 0, init->ringnr, init->name);
+		if (rval != 0) {
+			sbuf_destroy(init->dst, init->channel);
+			devm_kfree(&pdev->dev, spipe);
+			spipe_destroy_pdata(&init, &pdev->dev);
+			dev_err(dev, "Failed to alloc spipe chrdev\n");
+			return rval;
+		}
+
+		cdev_init(&(spipe->cdev), &spipe_fops);
+		rval = cdev_add(&(spipe->cdev), devid, init->ringnr);
+		if (rval != 0) {
+			sbuf_destroy(init->dst, init->channel);
+			devm_kfree(&pdev->dev, spipe);
+			unregister_chrdev_region(devid, init->ringnr);
+			spipe_destroy_pdata(&init, &pdev->dev);
+			dev_err(dev, "Failed to add spipe cdev\n");
+			return rval;
+		}
+
+		spipe->major = MAJOR(devid);
+		spipe->minor = MINOR(devid);
+		if (init->ringnr > 1) {
+			for (i = 0; i < init->ringnr; i++) {
+				device_create(spipe_class, NULL,
+					MKDEV(spipe->major, spipe->minor + i),
+					NULL, "%s%d", init->name, i);
+			}
+		} else {
+			device_create(spipe_class, NULL,
+				MKDEV(spipe->major, spipe->minor),
+				NULL, "%s", init->name);
+		}
+
+		spipe->init = init;
+
+		platform_set_drvdata(pdev, spipe);
 	}
 
 	return 0;

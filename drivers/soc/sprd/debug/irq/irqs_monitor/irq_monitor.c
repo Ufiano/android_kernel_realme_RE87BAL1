@@ -52,9 +52,9 @@ static unsigned int irqrunt_period;
 static struct timespec64 ts_ration[IRQ_RUNTIME_STAT_TIMES];
 #endif
 
-static void scan_burst_irq(unsigned long data)
+static void scan_burst_irq(struct timer_list *t)
 {
-	unsigned int i, k, index;
+	unsigned i, index;
 	int j, irq_occur_value;
 	unsigned int tmp_kstat_irq;
 	struct irq_desc *desc;
@@ -70,7 +70,7 @@ static void scan_burst_irq(unsigned long data)
 	unsigned long long irq_runtime;
 #endif
 
-	getnstimeofday64(&ts_start);
+	ktime_get_real_ts64(&ts_start);
 	ts_sub = timespec64_sub(ts_start, ts_end);
 	ts_end = ts_start;
 	delta = jiffies_to_msecs(timespec64_to_jiffies(&ts_sub));
@@ -101,8 +101,8 @@ static void scan_burst_irq(unsigned long data)
 
 		if (sprd_g_irq_ratio >= 20) {
 			irq_runtime = 0;
-			for (k = 0; k < IRQ_RUNTIME_STAT_TIMES; k++)
-				irq_runtime += irq_monitor[i].irq_g_runtime[k];
+			for (j = 0; j < IRQ_RUNTIME_STAT_TIMES; j++)
+				irq_runtime += irq_monitor[i].irq_g_runtime[j];
 
 			irq_runtime = (irq_runtime >> 10);
 			if (irq_runtime) {
@@ -581,11 +581,10 @@ static int __init irq_monitor_init(void)
 
 	}
 
-	init_timer_deferrable(irq_monitor_timer);
-	irq_monitor_timer->function = scan_burst_irq;
+	timer_setup(irq_monitor_timer, scan_burst_irq, TIMER_DEFERRABLE);
 	irq_monitor_timer->expires = jiffies + (HZ);
 	add_timer(irq_monitor_timer);
-	getnstimeofday64(&ts_end);
+	ktime_get_real_ts64(&ts_end);
 
 	return 0;
 }

@@ -1,8 +1,7 @@
-
 /*
  * R61350 Truly LCD config dtsi file for spreadtrum
  *
- * Copyright (C) 2018, Spreadtrum Communications Inc.
+ * Copyright (C) 2021, Spreadtrum Communications Inc.
  *
  * SPDX-License-Identifier: (GPL-2.0+ OR MIT)
  */

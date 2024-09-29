@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/io.h>
@@ -17,9 +9,6 @@
 
 #include "dsi_ctrl_r1p0.h"
 #include "sprd_dphy.h"
-
-#define read32(c)	readl((void __force __iomem *)(c))
-#define write32(v, c)	writel(v, (void __force __iomem *)(c))
 
 /**
  * Reset D-PHY module
@@ -32,10 +21,10 @@ static void dsi_phy_rstz(struct dphy_context *ctx, int level)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0x78 phy_interface_ctrl;
 
-	phy_interface_ctrl.val = read32(&reg->PHY_INTERFACE_CTRL);
+	phy_interface_ctrl.val = readl(&reg->PHY_INTERFACE_CTRL);
 	phy_interface_ctrl.bits.rf_phy_reset_n = level;
 
-	write32(phy_interface_ctrl.val, &reg->PHY_INTERFACE_CTRL);
+	writel(phy_interface_ctrl.val, &reg->PHY_INTERFACE_CTRL);
 }
 
 /**
@@ -49,10 +38,10 @@ static void dsi_phy_shutdownz(struct dphy_context *ctx, int level)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0x78 phy_interface_ctrl;
 
-	phy_interface_ctrl.val = read32(&reg->PHY_INTERFACE_CTRL);
+	phy_interface_ctrl.val = readl(&reg->PHY_INTERFACE_CTRL);
 	phy_interface_ctrl.bits.rf_phy_shutdown = level;
 
-	write32(phy_interface_ctrl.val, &reg->PHY_INTERFACE_CTRL);
+	writel(phy_interface_ctrl.val, &reg->PHY_INTERFACE_CTRL);
 }
 
 /**
@@ -67,10 +56,10 @@ static void dsi_phy_force_pll(struct dphy_context *ctx, int force)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0x78 phy_interface_ctrl;
 
-	phy_interface_ctrl.val = read32(&reg->PHY_INTERFACE_CTRL);
+	phy_interface_ctrl.val = readl(&reg->PHY_INTERFACE_CTRL);
 	phy_interface_ctrl.bits.rf_phy_force_pll = force;
 
-	write32(phy_interface_ctrl.val, &reg->PHY_INTERFACE_CTRL);
+	writel(phy_interface_ctrl.val, &reg->PHY_INTERFACE_CTRL);
 }
 
 static void dsi_phy_clklane_ulps_rqst(struct dphy_context *ctx, int en)
@@ -78,10 +67,10 @@ static void dsi_phy_clklane_ulps_rqst(struct dphy_context *ctx, int en)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0x78 phy_interface_ctrl;
 
-	phy_interface_ctrl.val = read32(&reg->PHY_INTERFACE_CTRL);
+	phy_interface_ctrl.val = readl(&reg->PHY_INTERFACE_CTRL);
 	phy_interface_ctrl.bits.rf_phy_clk_txrequlps = en;
 
-	write32(phy_interface_ctrl.val, &reg->PHY_INTERFACE_CTRL);
+	writel(phy_interface_ctrl.val, &reg->PHY_INTERFACE_CTRL);
 }
 
 static void dsi_phy_clklane_ulps_exit(struct dphy_context *ctx, int en)
@@ -89,10 +78,10 @@ static void dsi_phy_clklane_ulps_exit(struct dphy_context *ctx, int en)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0x78 phy_interface_ctrl;
 
-	phy_interface_ctrl.val = read32(&reg->PHY_INTERFACE_CTRL);
+	phy_interface_ctrl.val = readl(&reg->PHY_INTERFACE_CTRL);
 	phy_interface_ctrl.bits.rf_phy_clk_txexitulps = en;
 
-	write32(phy_interface_ctrl.val, &reg->PHY_INTERFACE_CTRL);
+	writel(phy_interface_ctrl.val, &reg->PHY_INTERFACE_CTRL);
 }
 
 static void dsi_phy_datalane_ulps_rqst(struct dphy_context *ctx, int en)
@@ -100,10 +89,10 @@ static void dsi_phy_datalane_ulps_rqst(struct dphy_context *ctx, int en)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0x78 phy_interface_ctrl;
 
-	phy_interface_ctrl.val = read32(&reg->PHY_INTERFACE_CTRL);
+	phy_interface_ctrl.val = readl(&reg->PHY_INTERFACE_CTRL);
 	phy_interface_ctrl.bits.rf_phy_data_txrequlps = en;
 
-	write32(phy_interface_ctrl.val, &reg->PHY_INTERFACE_CTRL);
+	writel(phy_interface_ctrl.val, &reg->PHY_INTERFACE_CTRL);
 }
 
 static void dsi_phy_datalane_ulps_exit(struct dphy_context *ctx, int en)
@@ -111,10 +100,10 @@ static void dsi_phy_datalane_ulps_exit(struct dphy_context *ctx, int en)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0x78 phy_interface_ctrl;
 
-	phy_interface_ctrl.val = read32(&reg->PHY_INTERFACE_CTRL);
+	phy_interface_ctrl.val = readl(&reg->PHY_INTERFACE_CTRL);
 	phy_interface_ctrl.bits.rf_phy_data_txexitulps = en;
 
-	write32(phy_interface_ctrl.val, &reg->PHY_INTERFACE_CTRL);
+	writel(phy_interface_ctrl.val, &reg->PHY_INTERFACE_CTRL);
 }
 
 /**
@@ -127,7 +116,7 @@ static void dsi_phy_stop_wait_time(struct dphy_context *ctx, u8 byte_cycle)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 
-	write32(byte_cycle, &reg->PHY_MIN_STOP_TIME);
+	writel(byte_cycle, &reg->PHY_MIN_STOP_TIME);
 }
 
 /**
@@ -140,7 +129,7 @@ static void dsi_phy_datalane_en(struct dphy_context *ctx)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 
-	write32(ctx->lanes - 1, &reg->PHY_LANE_NUM_CONFIG);
+	writel(ctx->lanes - 1, &reg->PHY_LANE_NUM_CONFIG);
 }
 
 /**
@@ -154,10 +143,10 @@ static void dsi_phy_clklane_en(struct dphy_context *ctx, int en)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0x78 phy_interface_ctrl;
 
-	phy_interface_ctrl.val = read32(&reg->PHY_INTERFACE_CTRL);
+	phy_interface_ctrl.val = readl(&reg->PHY_INTERFACE_CTRL);
 	phy_interface_ctrl.bits.rf_phy_clk_en = en;
 
-	write32(phy_interface_ctrl.val, &reg->PHY_INTERFACE_CTRL);
+	writel(phy_interface_ctrl.val, &reg->PHY_INTERFACE_CTRL);
 }
 
 /**
@@ -175,11 +164,11 @@ static void dsi_phy_clk_hs_rqst(struct dphy_context *ctx, int enable)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0x74 phy_clk_lane_lp_ctrl;
 
-	phy_clk_lane_lp_ctrl.val = read32(&reg->PHY_CLK_LANE_LP_CTRL);
+	phy_clk_lane_lp_ctrl.val = readl(&reg->PHY_CLK_LANE_LP_CTRL);
 	phy_clk_lane_lp_ctrl.bits.auto_clklane_ctrl_en = 0;
 	phy_clk_lane_lp_ctrl.bits.phy_clklane_tx_req_hs = enable;
 
-	write32(phy_clk_lane_lp_ctrl.val, &reg->PHY_CLK_LANE_LP_CTRL);
+	writel(phy_clk_lane_lp_ctrl.val, &reg->PHY_CLK_LANE_LP_CTRL);
 }
 
 /**
@@ -194,7 +183,7 @@ static u8 dsi_phy_is_pll_locked(struct dphy_context *ctx)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0x9C phy_status;
 
-	phy_status.val = read32(&reg->PHY_STATUS);
+	phy_status.val = readl(&reg->PHY_STATUS);
 
 	return phy_status.bits.phy_lock;
 }
@@ -204,7 +193,7 @@ static u8 dsi_phy_is_rx_direction(struct dphy_context *ctx)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0x9C phy_status;
 
-	phy_status.val = read32(&reg->PHY_STATUS);
+	phy_status.val = readl(&reg->PHY_STATUS);
 
 	return phy_status.bits.phy_direction;
 }
@@ -214,7 +203,7 @@ static u8 dsi_phy_is_rx_ulps_esc_lane0(struct dphy_context *ctx)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0x9C phy_status;
 
-	phy_status.val = read32(&reg->PHY_STATUS);
+	phy_status.val = readl(&reg->PHY_STATUS);
 
 	return phy_status.bits.phy_rxulpsesc0lane;
 }
@@ -225,7 +214,7 @@ static u8 dsi_phy_is_stop_state_datalane(struct dphy_context *ctx)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0x9C phy_status;
 
-	phy_status.val = read32(&reg->PHY_STATUS);
+	phy_status.val = readl(&reg->PHY_STATUS);
 
 	if (phy_status.bits.phy_stopstate0lane)
 		state |= BIT(0);
@@ -244,7 +233,7 @@ static u8 dsi_phy_is_stop_state_clklane(struct dphy_context *ctx)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0x9C phy_status;
 
-	phy_status.val = read32(&reg->PHY_STATUS);
+	phy_status.val = readl(&reg->PHY_STATUS);
 
 	return phy_status.bits.phy_stopstateclklane;
 }
@@ -255,7 +244,7 @@ static u8 dsi_phy_is_ulps_active_datalane(struct dphy_context *ctx)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0x9C phy_status;
 
-	phy_status.val = read32(&reg->PHY_STATUS);
+	phy_status.val = readl(&reg->PHY_STATUS);
 
 	if (!phy_status.bits.phy_ulpsactivenot0lane)
 		state |= BIT(0);
@@ -274,7 +263,7 @@ static u8 dsi_phy_is_ulps_active_clklane(struct dphy_context *ctx)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0x9C phy_status;
 
-	phy_status.val = read32(&reg->PHY_STATUS);
+	phy_status.val = readl(&reg->PHY_STATUS);
 
 	return !phy_status.bits.phy_ulpsactivenotclk;
 }
@@ -289,10 +278,10 @@ static void dsi_phy_test_clk(struct dphy_context *ctx, u8 value)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0xF0 phy_tst_ctrl0;
 
-	phy_tst_ctrl0.val = read32(&reg->PHY_TST_CTRL0);
+	phy_tst_ctrl0.val = readl(&reg->PHY_TST_CTRL0);
 	phy_tst_ctrl0.bits.phy_testclk = value;
 
-	write32(phy_tst_ctrl0.val, &reg->PHY_TST_CTRL0);
+	writel(phy_tst_ctrl0.val, &reg->PHY_TST_CTRL0);
 }
 
 /**
@@ -305,10 +294,10 @@ static void dsi_phy_test_clr(struct dphy_context *ctx, u8 value)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0xF0 phy_tst_ctrl0;
 
-	phy_tst_ctrl0.val = read32(&reg->PHY_TST_CTRL0);
+	phy_tst_ctrl0.val = readl(&reg->PHY_TST_CTRL0);
 	phy_tst_ctrl0.bits.phy_testclr = value;
 
-	write32(phy_tst_ctrl0.val, &reg->PHY_TST_CTRL0);
+	writel(phy_tst_ctrl0.val, &reg->PHY_TST_CTRL0);
 }
 
 /**
@@ -321,10 +310,10 @@ static void dsi_phy_test_en(struct dphy_context *ctx, u8 value)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0xF4 phy_tst_ctrl1;
 
-	phy_tst_ctrl1.val = read32(&reg->PHY_TST_CTRL1);
+	phy_tst_ctrl1.val = readl(&reg->PHY_TST_CTRL1);
 	phy_tst_ctrl1.bits.phy_testen = value;
 
-	write32(phy_tst_ctrl1.val, &reg->PHY_TST_CTRL1);
+	writel(phy_tst_ctrl1.val, &reg->PHY_TST_CTRL1);
 }
 
 /**
@@ -336,7 +325,7 @@ static u8 dsi_phy_test_dout(struct dphy_context *ctx)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0xF4 phy_tst_ctrl1;
 
-	phy_tst_ctrl1.val = read32(&reg->PHY_TST_CTRL1);
+	phy_tst_ctrl1.val = readl(&reg->PHY_TST_CTRL1);
 
 	return phy_tst_ctrl1.bits.phy_testdout;
 }
@@ -351,13 +340,13 @@ static void dsi_phy_test_din(struct dphy_context *ctx, u8 data)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->ctrlbase;
 	union _0xF4 phy_tst_ctrl1;
 
-	phy_tst_ctrl1.val = read32(&reg->PHY_TST_CTRL1);
+	phy_tst_ctrl1.val = readl(&reg->PHY_TST_CTRL1);
 	phy_tst_ctrl1.bits.phy_testdin = data;
 
-	write32(phy_tst_ctrl1.val, &reg->PHY_TST_CTRL1);
+	writel(phy_tst_ctrl1.val, &reg->PHY_TST_CTRL1);
 }
 
-static struct dphy_ppi_ops dsi_ctrl_ppi_ops = {
+const struct dphy_ppi_ops dsi_ctrl_ppi_ops = {
 	.rstz                     = dsi_phy_rstz,
 	.shutdownz                = dsi_phy_shutdownz,
 	.force_pll                = dsi_phy_force_pll,
@@ -384,19 +373,3 @@ static struct dphy_ppi_ops dsi_ctrl_ppi_ops = {
 	.bist_en                  = NULL,
 	.is_bist_ok               = NULL,
 };
-
-static struct ops_entry entry = {
-	.ver = "sprd,dsi-ctrl",
-	.ops = &dsi_ctrl_ppi_ops,
-};
-
-static int __init dphy_ppi_register(void)
-{
-	return dphy_ppi_ops_register(&entry);
-}
-
-subsys_initcall(dphy_ppi_register);
-
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("leon.he@unisoc.com");
-MODULE_DESCRIPTION("DPHY Protocal Interface for SPRD DSI_CTRL RXP0");

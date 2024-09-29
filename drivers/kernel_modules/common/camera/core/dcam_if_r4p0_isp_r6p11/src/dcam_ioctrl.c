@@ -1709,6 +1709,24 @@ exit:
 	return ret;
 }
 
+static int camioctl_key_set(struct camera_file *camerafile,
+				unsigned long arg, uint32_t cmd)
+{
+	int ret = 0;
+	uint32_t param = 0;
+	ret = copy_from_user(&param, (void __user *)arg, sizeof(uint32_t));
+	if (unlikely(ret)) {
+		pr_err("fail to copy from user, ret %d\n", ret);
+		return -EFAULT;
+	}
+	if (param == CAM_IOCTL_PRIVATE_KEY) {
+		camerafile->private_key = 1;
+	}
+
+	pr_info("cam%d get ioctrl permission %d\n", camerafile->idx, camerafile->private_key);
+	return 0;
+}
+
 static struct dcam_io_ctrl_fun s_cam_io_ctrl_fun_tab[] = {
 	{SPRD_IMG_IO_SET_MODE,			dcamio_set_mode},
 	{SPRD_IMG_IO_SET_CAP_SKIP_NUM,		dcamio_set_cap_skip_num},
@@ -1757,6 +1775,7 @@ static struct dcam_io_ctrl_fun s_cam_io_ctrl_fun_tab[] = {
 	{SPRD_IMG_IO_SET_3DNR,			dcamio_set_3dnr},
 	{SPRD_ISP_IO_MASK_3A,			dcamio_isp_k_ioctl},
 	{SPRD_IMG_IO_EBD_CONTROL,		dcamio_core_ebd_ctrl},
+	{SPRD_IMG_IO_SET_KEY,              	camioctl_key_set},
 };
 
 static dcam_io_fun dcam_ioctl_get_fun(uint32_t cmd)

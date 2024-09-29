@@ -68,7 +68,7 @@
 #define GESTURE_C                               0x34
 
 
-extern unsigned long tp_gesture;
+//extern unsigned long tp_gesture;
 
 /*****************************************************************************
 * Private enumerations, structures and unions using typedef
@@ -112,9 +112,11 @@ static ssize_t fts_gesture_show(
     mutex_lock(&ts_data->input_dev->mutex);
     fts_read_reg(FTS_REG_GESTURE_EN, &val);
     count = snprintf(buf, PAGE_SIZE, "Gesture Mode:%s\n",
-                     ((ts_data->gesture_mode ? "On" : "Off")||tp_gesture));
+                     tp_gesture ? "On" : "Off");
     count += snprintf(buf + count, PAGE_SIZE, "Reg(0xD0)=%d\n", val);
     mutex_unlock(&ts_data->input_dev->mutex);
+	
+	FTS_INFO("gesture_show, tp_gesture = %d", tp_gesture);
 
     return count;
 }
@@ -136,6 +138,8 @@ static ssize_t fts_gesture_store(
 		tp_gesture= DISABLE;
     }
     mutex_unlock(&ts_data->input_dev->mutex);
+	
+	FTS_INFO("gesture_store, tp_gesture = %d", tp_gesture);
 
     return count;
 }
@@ -297,7 +301,7 @@ int fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *data)
     struct input_dev *input_dev = ts_data->input_dev;
     struct fts_gesture_st *gesture = &fts_gesture_data;
 
-    if (!ts_data->suspended || !ts_data->gesture_mode) {
+    if (!ts_data->suspended || !tp_gesture) {
         return 1;
     }
 
@@ -338,7 +342,7 @@ int fts_gesture_readdata(struct fts_ts_data *ts_data, u8 *data)
 
 void fts_gesture_recovery(struct fts_ts_data *ts_data)
 {
-    if (ts_data->gesture_mode && ts_data->suspended) {
+    if (tp_gesture && ts_data->suspended) {
         FTS_DEBUG("gesture recovery...");
         fts_write_reg(0xD1, 0xFF);
         fts_write_reg(0xD2, 0xFF);
@@ -449,7 +453,8 @@ int fts_gesture_init(struct fts_ts_data *ts_data)
     fts_create_gesture_sysfs(ts_data->dev);
 
     memset(&fts_gesture_data, 0, sizeof(struct fts_gesture_st));
-    ts_data->gesture_mode = FTS_GESTURE_EN;
+
+	FTS_INFO("gesture_init, tp_gesture = %d", tp_gesture);
 
     FTS_FUNC_EXIT();
     return 0;

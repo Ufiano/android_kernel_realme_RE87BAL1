@@ -16,6 +16,7 @@
 #include <linux/platform_device.h>
 #include <linux/power_supply.h>
 #include <linux/power/charger-manager.h>
+#include <linux/power/sprd_battery_info.h>
 #include <linux/regmap.h>
 #include <linux/regulator/driver.h>
 #include <linux/regulator/machine.h>
@@ -119,7 +120,7 @@
 #define BIT_DP_DM_BC_ENB				BIT(0)
 #define ETA6937_OTG_VALID_MS				(500)
 #define ETA6937_FEED_WATCHDOG_VALID_MS			(50)
-#define ETA6937_OTG_ALARM_TIMER_MS			(15000)
+#define ETA6937_WDG_TIMER_MS			(15000)
 
 #define ETA6937_OTG_TIMER_FAULT				(0x6)
 
@@ -186,13 +187,26 @@ static int eta6937_iin_lim2_tbl[] = {
 	5000000,
 };
 
+struct eta6937_charge_current {
+	int sdp_limit;
+	int sdp_cur;
+	int dcp_limit;
+	int dcp_cur;
+	int cdp_limit;
+	int cdp_cur;
+	int unknown_limit;
+	int unknown_cur;
+	int fchg_limit;
+	int fchg_cur;
+};
+
 struct eta6937_charger_info {
 	struct i2c_client *client;
 	struct device *dev;
 	struct usb_phy *usb_phy;
 	struct notifier_block usb_notify;
 	struct power_supply *psy_usb;
-	struct power_supply_charge_current cur;
+	struct eta6937_charge_current cur;
 	struct work_struct work;
 	struct mutex lock;
 	bool charging;
@@ -206,8 +220,9 @@ struct eta6937_charger_info {
 	struct gpio_desc *gpiod;
 	struct extcon_dev *edev;
 	bool otg_enable;
-	struct alarm otg_timer;
+	struct alarm wdg_timer;
 	bool need_reinit;
+	int termination_cur;
 };
 
 static int eta6937_charger_set_limit_current(struct eta6937_charger_info *info, u32 limit_cur);
@@ -224,6 +239,8 @@ static bool eta6937_charger_is_bat_present(struct eta6937_charger_info *info)
 		dev_err(info->dev, "Failed to get psy of sc27xx_fgu\n");
 		return present;
 	}
+
+	val.intval = 0;
 	ret = power_supply_get_property(psy, POWER_SUPPLY_PROP_PRESENT,
 					&val);
 	if (ret == 0 && val.intval)
@@ -318,27 +335,31 @@ static int eta6937_charger_set_max_chg_cur(struct eta6937_charger_info *info, u3
 
 static int eta6937_charger_hw_init(struct eta6937_charger_info *info)
 {
-	struct power_supply_battery_info bat_info = { };
-	int voltage_max_microvolt;
+	struct sprd_battery_info bat_info = {};
+	int voltage_max_microvolt, termination_cur;
 	int ret;
 
-	ret = power_supply_get_battery_info(info->psy_usb, &bat_info, 0);
+	ret = sprd_battery_get_battery_info(info->psy_usb, &bat_info);
 	if (ret) {
-		dev_warn(info->dev, "no battery information is supplied, ret = %d\n", ret);
+		dev_warn(info->dev, "no battery information is supplied\n");
+
+		info->cur.sdp_limit = 500000;
+		info->cur.sdp_cur = 500000;
+		info->cur.dcp_limit = 1500000;
+		info->cur.dcp_cur = 1500000;
+		info->cur.cdp_limit = 1000000;
+		info->cur.cdp_cur = 1000000;
+		info->cur.unknown_limit = 500000;
+		info->cur.unknown_cur = 500000;
 
 		/*
 		 * If no battery information is supplied, we should set
-		 * default charge termination current to 100 mA, and default
-		 * charge termination voltage to 4.2V.
+		 * default charge termination current to 120 mA, and default
+		 * charge termination voltage to 4.44V.
 		 */
-		info->cur.sdp_limit = 500000;
-		info->cur.sdp_cur = 500000;
-		info->cur.dcp_limit = 20000000;
-		info->cur.dcp_cur = 2000000;
-		info->cur.cdp_limit = 11500000;
-		info->cur.cdp_cur = 1150000;
-		info->cur.unknown_limit = 5000000;
-		info->cur.unknown_cur = 500000;
+		voltage_max_microvolt = 4440;
+		termination_cur = 120;
+		info->termination_cur = termination_cur;
 	} else {
 		info->cur.sdp_limit = bat_info.cur.sdp_limit;
 		info->cur.sdp_cur = bat_info.cur.sdp_cur;
@@ -348,95 +369,98 @@ static int eta6937_charger_hw_init(struct eta6937_charger_info *info)
 		info->cur.cdp_cur = bat_info.cur.cdp_cur;
 		info->cur.unknown_limit = bat_info.cur.unknown_limit;
 		info->cur.unknown_cur = bat_info.cur.unknown_cur;
+		info->cur.fchg_limit = bat_info.cur.fchg_limit;
+		info->cur.fchg_cur = bat_info.cur.fchg_cur;
 
-		voltage_max_microvolt =
-			bat_info.constant_charge_voltage_max_uv / 1000;
-		power_supply_put_battery_info(info->psy_usb, &bat_info);
-
-		if (of_device_is_compatible(info->dev->of_node,
-					    "eta,eta6937_chg")) {
-			ret = eta6937_update_bits(info, ETA6937_REG_4,
-						  ETA6937_REG_RESET_MASK,
-						  ETA6937_REG_RESET_MASK);
-			if (ret) {
-				dev_err(info->dev, "reset eta6937 failed ret = %d\n", ret);
-				return ret;
-			}
-
-			ret = eta6937_charger_set_max_batt_reg_vol(info,
-						voltage_max_microvolt);
-			if (ret) {
-				dev_err(info->dev, "set eta6937 safety vol failed ret = %d\n", ret);
-				return ret;
-			}
-
-			ret = eta6937_charger_set_max_chg_cur(info,
-						info->cur.dcp_cur);
-			if (ret) {
-				dev_err(info->dev, "set eta6937 safety cur failed, ret = %d\n", ret);
-				return ret;
-			}
-		}
-
-		/* do not force charge to 550mA */
-		ret = eta6937_update_bits(info, ETA6937_REG_5, ETA6937_REG_LOW_CHG_MASK, 0);
-		if (ret) {
-			dev_err(info->dev, "release eta6937 force charge failed ret = %d\n", ret);
-			return ret;
-		}
-		/* set wake battery voltage threshold 3.4V */
-		ret = eta6937_update_bits(info, ETA6937_REG_1, ETA6937_REG_VLOWV_MASK, 0);
-		if (ret) {
-			dev_err(info->dev, "set eta6937 weak voltage threshold failed ret = %d\n", ret);
-			return ret;
-		}
-		/* set ichg offset , ichg begain from 550mA or 650mA*/
-		ret = eta6937_update_bits(info, ETA6937_REG_4, ETA6937_REG_ICHG_OFFSET_MASK,
-					  ETA6937_REG_ICHG_OFFSET << ETA6937_REG_ICHG_OFFSET_SHIFT);
-		if (ret) {
-			dev_err(info->dev, "set eta6937 io level failed ret = %d\n", ret);
-			return ret;
-		}
-		/*set VOREG 4.3V?*/
-		ret = eta6937_update_bits(info, ETA6937_REG_2, ETA6937_REG_VOREG_MASK,
-					  ETA6937_REG_VOREG << ETA6937_REG_VOREG_SHIFT);
-		if (ret) {
-			dev_err(info->dev, "set eta6937 VOREG failed ret = %d\n", ret);
-			return ret;
-		}
-		/*Disable termination charge current function*/
-		ret = eta6937_update_bits(info, ETA6937_REG_1, ETA6937_REG_TE_MASK, 0);
-		if (ret) {
-			dev_err(info->dev, "set eta6937 terminal cur failed ret = %d\n", ret);
-			return ret;
-		}
-
-		/*Feed Watchdog*/
-		ret = eta6937_update_bits(info,	ETA6937_REG_0, ETA6937_REG_TMR_RST_OTG_STAT_MASK,
-					  ETA6937_REG_TMR_RST_OTG_STAT_MASK);
-		if (ret) {
-			dev_err(info->dev, "feed eta6937 watchdog failed ret = %d\n", ret);
-			return ret;
-		}
-
-		/*input current limit sel*/
-		ret = eta6937_update_bits(info,	ETA6937_REG_7, ETA6937_REG_EN_ILIM_2_MASK,
-					  ETA6937_IIN_LIM_SEL << ETA6937_REG_EN_ILIM_2_SHIFT);
-		if (ret) {
-			dev_err(info->dev, "feed eta6937 watchdog failed ret = %d\n", ret);
-			return ret;
-		}
-
-		ret = eta6937_charger_set_termina_vol(info, voltage_max_microvolt);
-		if (ret) {
-			dev_err(info->dev, "set eta6937 terminal vol failed ret = %d\n", ret);
-			return ret;
-		}
-
-		ret = eta6937_charger_set_limit_current(info, info->cur.unknown_cur);
-		if (ret)
-			dev_err(info->dev, "set eta6937 limit current failed ret = %d\n", ret);
+		voltage_max_microvolt = bat_info.constant_charge_voltage_max_uv / 1000;
+		termination_cur = bat_info.charge_term_current_ua / 1000;
+		info->termination_cur = termination_cur;
+		sprd_battery_put_battery_info(info->psy_usb, &bat_info);
 	}
+
+	if (of_device_is_compatible(info->dev->of_node,
+				    "eta,eta6937_chg")) {
+		ret = eta6937_update_bits(info, ETA6937_REG_4,
+					  ETA6937_REG_RESET_MASK,
+					  ETA6937_REG_RESET_MASK);
+		if (ret) {
+			dev_err(info->dev, "reset eta6937 failed ret = %d\n", ret);
+			return ret;
+		}
+
+		ret = eta6937_charger_set_max_batt_reg_vol(info,
+					voltage_max_microvolt);
+		if (ret) {
+			dev_err(info->dev, "set eta6937 safety vol failed ret = %d\n", ret);
+			return ret;
+		}
+
+		ret = eta6937_charger_set_max_chg_cur(info,
+					info->cur.dcp_cur);
+		if (ret) {
+			dev_err(info->dev, "set eta6937 safety cur failed, ret = %d\n", ret);
+			return ret;
+		}
+	}
+
+	/* do not force charge to 550mA */
+	ret = eta6937_update_bits(info, ETA6937_REG_5, ETA6937_REG_LOW_CHG_MASK, 0);
+	if (ret) {
+		dev_err(info->dev, "release eta6937 force charge failed ret = %d\n", ret);
+		return ret;
+	}
+	/* set wake battery voltage threshold 3.4V */
+	ret = eta6937_update_bits(info, ETA6937_REG_1, ETA6937_REG_VLOWV_MASK, 0);
+	if (ret) {
+		dev_err(info->dev, "set eta6937 weak voltage threshold failed ret = %d\n", ret);
+		return ret;
+	}
+	/* set ichg offset , ichg begain from 550mA or 650mA*/
+	ret = eta6937_update_bits(info, ETA6937_REG_4, ETA6937_REG_ICHG_OFFSET_MASK,
+				  ETA6937_REG_ICHG_OFFSET << ETA6937_REG_ICHG_OFFSET_SHIFT);
+	if (ret) {
+		dev_err(info->dev, "set eta6937 io level failed ret = %d\n", ret);
+		return ret;
+	}
+	/*set VOREG 4.3V?*/
+	ret = eta6937_update_bits(info, ETA6937_REG_2, ETA6937_REG_VOREG_MASK,
+				  ETA6937_REG_VOREG << ETA6937_REG_VOREG_SHIFT);
+	if (ret) {
+		dev_err(info->dev, "set eta6937 VOREG failed ret = %d\n", ret);
+		return ret;
+	}
+	/*Disable termination charge current function*/
+	ret = eta6937_update_bits(info, ETA6937_REG_1, ETA6937_REG_TE_MASK, 0);
+	if (ret) {
+		dev_err(info->dev, "set eta6937 terminal cur failed ret = %d\n", ret);
+		return ret;
+	}
+
+	/*Feed Watchdog*/
+	ret = eta6937_update_bits(info,	ETA6937_REG_0, ETA6937_REG_TMR_RST_OTG_STAT_MASK,
+				  ETA6937_REG_TMR_RST_OTG_STAT_MASK);
+	if (ret) {
+		dev_err(info->dev, "feed eta6937 watchdog failed ret = %d\n", ret);
+		return ret;
+	}
+
+	/*input current limit sel*/
+	ret = eta6937_update_bits(info,	ETA6937_REG_7, ETA6937_REG_EN_ILIM_2_MASK,
+				  ETA6937_IIN_LIM_SEL << ETA6937_REG_EN_ILIM_2_SHIFT);
+	if (ret) {
+		dev_err(info->dev, "feed eta6937 watchdog failed ret = %d\n", ret);
+		return ret;
+	}
+
+	ret = eta6937_charger_set_termina_vol(info, voltage_max_microvolt);
+	if (ret) {
+		dev_err(info->dev, "set eta6937 terminal vol failed ret = %d\n", ret);
+		return ret;
+	}
+
+	ret = eta6937_charger_set_limit_current(info, info->cur.unknown_cur);
+	if (ret)
+		dev_err(info->dev, "set eta6937 limit current failed ret = %d\n", ret);
 
 	return ret;
 }
@@ -662,8 +686,7 @@ static int eta6937_charger_get_online(struct eta6937_charger_info *info,
 	return 0;
 }
 
-static int eta6937_charger_feed_watchdog(struct eta6937_charger_info *info,
-					  u32 val)
+static int eta6937_charger_feed_watchdog(struct eta6937_charger_info *info)
 {
 	int ret;
 
@@ -710,8 +733,8 @@ static void eta6937_charger_work(struct work_struct *data)
 		container_of(data, struct eta6937_charger_info, work);
 	bool present = eta6937_charger_is_bat_present(info);
 
-	dev_info(info->dev, "battery present = %d, charger type = %d\n",
-		 present, info->usb_phy->chg_type);
+	dev_info(info->dev, "battery present = %d, charger type = %d, limit = %d\n",
+		 present, info->usb_phy->chg_type, info->limit);
 	cm_notify_event(info->psy_usb, CM_EVENT_CHG_START_STOP, NULL);
 }
 
@@ -861,12 +884,6 @@ static int eta6937_charger_usb_set_property(struct power_supply *psy,
 			dev_err(info->dev, "set charge status failed\n");
 		break;
 
-	case POWER_SUPPLY_PROP_FEED_WATCHDOG:
-		ret = eta6937_charger_feed_watchdog(info, val->intval);
-		if (ret < 0)
-			dev_err(info->dev, "feed charger watchdog failed\n");
-		break;
-
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE_MAX:
 		ret = eta6937_charger_set_termina_vol(info, val->intval / 1000);
 		if (ret < 0)
@@ -954,20 +971,23 @@ eta6937_charger_feed_watchdog_work(struct work_struct *work)
 {
 	struct delayed_work *dwork = to_delayed_work(work);
 	struct eta6937_charger_info *info = container_of(dwork,
-							  struct eta6937_charger_info,
-							  wdt_work);
+							 struct eta6937_charger_info,
+							 wdt_work);
 	int ret;
 
-	ret = eta6937_update_bits(info, ETA6937_REG_0, ETA6937_REG_TMR_RST_OTG_STAT_MASK,
-				  ETA6937_REG_TMR_RST_OTG_STAT_MASK);
-	if (ret) {
-		dev_err(info->dev, "%s, feed watchdog  failed ret = %d\n", __func__, ret);
+	if (!info) {
+		pr_err("%s:line%d: NULL pointer!!!\n", __func__, __LINE__);
 		return;
 	}
-	schedule_delayed_work(&info->wdt_work, HZ * 15);
+
+	ret = eta6937_charger_feed_watchdog(info);
+	if (ret)
+		schedule_delayed_work(&info->wdt_work, HZ * 5);
+	else
+		schedule_delayed_work(&info->wdt_work, HZ * 15);
 }
 
-#ifdef CONFIG_REGULATOR
+#if IS_ENABLED(CONFIG_REGULATOR)
 static void eta6937_charger_otg_work(struct work_struct *work)
 {
 	struct delayed_work *dwork = to_delayed_work(work);
@@ -1143,7 +1163,7 @@ static int eta6937_charger_probe(struct i2c_client *client,
 	info->client = client;
 	info->dev = dev;
 
-	alarm_init(&info->otg_timer, ALARM_BOOTTIME, NULL);
+	alarm_init(&info->wdg_timer, ALARM_BOOTTIME, NULL);
 
 	mutex_init(&info->lock);
 	INIT_WORK(&info->work, eta6937_charger_work);
@@ -1281,35 +1301,33 @@ static int eta6937_charger_remove(struct i2c_client *client)
 {
 	struct eta6937_charger_info *info = i2c_get_clientdata(client);
 
+	cancel_delayed_work_sync(&info->wdt_work);
+	cancel_delayed_work_sync(&info->otg_work);
 	usb_unregister_notifier(info->usb_phy, &info->usb_notify);
 
 	return 0;
 }
 
-#ifdef CONFIG_PM_SLEEP
+#if IS_ENABLED(CONFIG_PM_SLEEP)
 static int eta6937_charger_suspend(struct device *dev)
 {
 	struct eta6937_charger_info *info = dev_get_drvdata(dev);
 	ktime_t now, add;
-	unsigned int wakeup_ms = ETA6937_OTG_ALARM_TIMER_MS;
-	int ret;
+	unsigned int wakeup_ms = ETA6937_WDG_TIMER_MS;
+
+	if (info->otg_enable || info->limit)
+		/* feed watchdog first before suspend */
+		eta6937_charger_feed_watchdog(info);
 
 	if (!info->otg_enable)
 		return 0;
 
 	cancel_delayed_work_sync(&info->wdt_work);
 
-	/* feed watchdog first before suspend */
-	ret = eta6937_update_bits(info, ETA6937_REG_0,
-				   ETA6937_REG_RESET_MASK,
-				   ETA6937_REG_RESET_MASK);
-	if (ret)
-		dev_warn(info->dev, "reset eta6937 failed before suspend ret = %d\n", ret);
-
 	now = ktime_get_boottime();
 	add = ktime_set(wakeup_ms / MSEC_PER_SEC,
 			(wakeup_ms % MSEC_PER_SEC) * NSEC_PER_MSEC);
-	alarm_start(&info->otg_timer, ktime_add(now, add));
+	alarm_start(&info->wdg_timer, ktime_add(now, add));
 
 	return 0;
 }
@@ -1317,19 +1335,20 @@ static int eta6937_charger_suspend(struct device *dev)
 static int eta6937_charger_resume(struct device *dev)
 {
 	struct eta6937_charger_info *info = dev_get_drvdata(dev);
-	int ret;
+
+	if (!info) {
+		pr_err("%s:line%d: NULL pointer!!!\n", __func__, __LINE__);
+		return -EINVAL;
+	}
+
+	if (info->otg_enable || info->limit)
+		/* feed watchdog first before suspend */
+		eta6937_charger_feed_watchdog(info);
 
 	if (!info->otg_enable)
 		return 0;
 
-	alarm_cancel(&info->otg_timer);
-
-	/* feed watchdog first after resume */
-	ret = eta6937_update_bits(info, ETA6937_REG_0,
-				   ETA6937_REG_RESET_MASK,
-				   ETA6937_REG_RESET_MASK);
-	if (ret)
-		dev_warn(info->dev, "reset eta6937 failed after resume, ret = %d\n", ret);
+	alarm_cancel(&info->wdg_timer);
 
 	schedule_delayed_work(&info->wdt_work, HZ * 15);
 

@@ -1,32 +1,309 @@
-// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Spreadtrum Sharkl3 platform DTS file
+ * Unisoc SP9863A-1h10 boards DTS file
  *
- * Copyright (C) 2018, Spreadtrum Communications Inc.
+ * Copyright (C) 2019, Unisoc Inc.
  */
 
 /dts-v1/;
-
-#include "sc9863a.dtsi"
-#include "sc9863a-wcn.dtsi"
-#include "sp9863a-mach.dtsi"
 #include <dt-bindings/gpio/gpio.h>
-#include <dt-bindings/input/input.h>
-
-/*
-Tips:
-*	1. <SoC>.dts store NOTHING unless properties "model","compatible" and "sprd,sc-id",
-*		which are used for matching board id;
-*	2. Puts nodes belong to chip family in <chip_family>.dtsi, like sharkl3.dtsi;
-*	3. Puts nodes belong to SoC in <SoC>.dtsi, like sc9863a.dtsi;
-*	4. Puts nodes belong to vendor solid configurations in <SoC-mach>.dtsi, like sp9863a-mach.dtsi.
-*/
+#include "sc9863a.dtsi"
+#include "sp9863a-l3dvfs.dtsi"
+#include "sp9863a-l3rdvfs.dtsi"
+#include "sc2721.dtsi"
+#include "sprd-sound-sharkl.dtsi"
+#include "sp9863a-mach.dtsi"
+#include "sc9863a-wcn.dtsi"
 
 / {
-	model = "Spreadtrum SC9863A SoC";
+	model = "Spreadtrum SP9863A SoC";
 
 	compatible = "sprd,sc9863a";
 
 	sprd,sc-id = "sp9863a 1000 1000";
+
+	aliases {
+		serial0 = &uart0;
+		serial1 = &uart1;
+	};
+
+	memory@80000000 {
+		device_type = "memory";
+		reg = <0x0 0x80000000 0x0 0x80000000>;
+	};
+
+	chosen: chosen {
+		stdout-path = "serial1:115200n8";
+		bootargs = "earlycon console=ttySPRD1,115200n8 loglevel=1 init=/init root=/dev/ram0 rw printk.devkmsg=on androidboot.boot_devices=soc/soc:ap-ahb/20600000.sdio dummy_hcd.num=0 swiotlb=1 initcall_debug=1";
+	};
+
+	extcon_gpio: extcon-gpio {
+		compatible = "linux,extcon-usb-gpio";
+		vbus-gpio = <&pmic_eic 0 0>;
+	};
 };
 
+&i2c3 {
+	status = "okay";
+
+	touchscreen@38 {
+		compatible = "focaltech,ft5436-touchscreen";
+		reg = <0x38>;
+		gpios = <&ap_gpio 145 GPIO_ACTIVE_HIGH
+			&ap_gpio 144 GPIO_ACTIVE_HIGH>;
+		controller = "focaltech,FT5436";
+		virtualkeys = <580 60 1320 60 45
+			172 360 1320 60 45
+			158 600 1320 60 45>;
+		private-data {
+			a8 = /bits/ 8 <0x5a>;
+		};
+	};
+};
+
+&i2c4 {
+	status = "okay";
+	clock-frequency = <400000>;
+
+	flash_ic: flash-ic@63 {
+		compatible = "sprd,flash-ocp8137";
+		reg = <0x63>;
+		sprd,flash-ic = <8137>;
+		sprd,torch = <1>;
+		sprd,preflash = <1>;
+		sprd,highlight = <1>;
+		sprd,torch-level = <128>;
+		sprd,preflash-level = <128>;
+		sprd,highlight-level = <128>;
+		sprd,lvfm-enable = <1>;
+		flash-torch-en-gpios = <&ap_gpio 88 0>;
+		flash-chip-en-gpios = <&ap_gpio 89 0>;
+		flash-en-gpios = <&ap_gpio 76 0>;
+		flash-sync-gpios = <&ap_gpio 141 0>;
+	};
+};
+
+&i2c7 {
+	status = "okay";
+};
+
+&dmc_mpu {
+	status = "okay";
+};
+
+&uart0 {
+	status = "okay";
+};
+
+&uart1 {
+	status = "okay";
+};
+
+&spi0 {
+	/*used for fingerprint sensor*/
+	status = "okay";
+};
+
+&vdd18 {
+	regulator-always-on;
+};
+
+&vddrf18 {
+	regulator-always-on;
+};
+
+&vddrf125 {
+	regulator-always-on;
+};
+
+&vddldomem {
+	regulator-always-on;
+};
+
+&vddemmccore {
+	regulator-always-on;
+};
+
+&vddsim2 {
+	status = "disabled";
+};
+
+&i2c7 {
+	status = "okay";
+	clock-frequency = <400000>;
+
+	fan53555_dcdc: regulator@60 {
+		compatible = "fcs,fan53555";
+		reg = <0x60>;
+		regulator-name = "fan53555";
+		regulator-min-microvolt = <603000>;
+		regulator-max-microvolt = <1411000>;
+		regulator-ramp-delay = <64000>;
+		regulator-always-on;
+		fcs,suspend-voltage-selector = <1>;
+	};
+};
+
+&mm_domain {
+	status = "okay";
+};
+
+&csi0 {
+	status = "okay";
+};
+
+&csi1 {
+	status = "okay";
+};
+
+&csi2 {
+	status = "okay";
+};
+
+&dcam {
+	status = "okay";
+};
+
+&iommu_dcam {
+	status = "okay";
+};
+
+&isp {
+	status = "okay";
+};
+
+&iommu_isp {
+	status = "okay";
+};
+
+&cpp {
+	status = "okay";
+};
+
+&iommu_cpp {
+	status = "okay";
+};
+
+&dpu {
+	status = "okay";
+};
+
+&iommu_dispc {
+	status = "okay";
+};
+
+&dsi {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	panel: panel {
+		compatible = "sprd,generic-mipi-panel";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		reg = <0>;
+
+		avdd-gpio = <&ap_gpio 4 GPIO_ACTIVE_HIGH>;
+		avee-gpio = <&ap_gpio 5 GPIO_ACTIVE_HIGH>;
+		reset-gpio = <&ap_gpio 50 GPIO_ACTIVE_HIGH>;
+		port@1 {
+			reg = <1>;
+			panel_in: endpoint {
+				remote-endpoint = <&dphy_out>;
+			};
+		};
+	};
+};
+
+&dphy {
+	status = "okay";
+};
+
+&jpg {
+	status = "okay";
+};
+
+&iommu_jpg {
+	status = "okay";
+};
+
+&vsp_pd {
+	status = "okay";
+};
+
+&vsp {
+	status = "okay";
+};
+
+&iommu_vsp {
+	status = "okay";
+};
+
+&sprd_hwdvfs {
+	hwdvfs_cluster0: cluster@0 {
+		reg = <0 0x0>;
+		dcdc-ctrl = <&dcdc_ctrl1>;
+	};
+
+	hwdvfs_cluster1: cluster@1 {
+		reg = <0 0x1>;
+		dcdc-ctrl = <&dcdc_ctrl0>;
+	};
+
+	hwdvfs_dsu: dsu@0 {
+		reg = <0 0x0>;
+		dcdc-ctrl = <&dcdc_ctrl0>;
+	};
+
+	dcdc_ctrl0: dcdc-controller@0 {
+		reg = <0x0 0x0>;
+		volt-via-adi;
+		volt-hold-us = <50>;
+		volt-pause-us = <5>;
+		volt-timeout-us = <800>;
+		volt-stable-us  = <5>;
+		volt-max-step-microvolt = <25000>;
+	};
+
+	dcdc_ctrl1: dcdc-controller@1 {
+		reg = <0x1 0x2>;
+		volt-via-i2c;
+		volt-hold-us = <25>;
+		volt-pause-us = <20>;
+		volt-timeout-us = <800>;
+		volt-stable-us  = <25>;
+		volt-max-step-microvolt = <1200004>;
+	};
+};
+
+&hsphy {
+	vdd-supply = <&vddusb33>;
+	extcon = <&extcon_gpio>;
+	status = "okay";
+};
+
+&usb {
+	extcon = <&extcon_gpio>;
+	status = "okay";
+};
+
+&i2s0 {
+	status = "okay";
+};
+
+&sprd_audio_codec_ana {
+	status = "okay";
+	digital-codec = <&sprd_audio_codec_dig>;
+};
+
+&sprd_headset {
+	status = "okay";
+};
+
+&sound_vbc_r1p0v3_sprd_codec {
+	status = "okay";
+};
+
+&sound_sprd_ap_alliis {
+	status = "okay";
+};

@@ -10,13 +10,14 @@ obj-$(CONFIG_DEVFREQ_GOV_PASSIVE)	+= governor_passive.o
 # DEVFREQ Drivers
 obj-$(CONFIG_ARM_EXYNOS_BUS_DEVFREQ)	+= exynos-bus.o
 obj-$(CONFIG_ARM_RK3399_DMC_DEVFREQ)	+= rk3399_dmc.o
-obj-$(CONFIG_ARM_TEGRA_DEVFREQ)		+= tegra-devfreq.o
-
-obj-$(CONFIG_SPRD_APSYS_DVFS_DEVFREQ)	+= apsys/
-obj-$(CONFIG_SPRD_TOP_DVFS_DEVFREQ) += sprd-top-dvfs.o
+obj-$(CONFIG_ARM_TEGRA_DEVFREQ)		+= tegra30-devfreq.o
+obj-$(CONFIG_ARM_TEGRA20_DEVFREQ)	+= tegra20-devfreq.o
+obj-$(CONFIG_SPRD_TOP_DVFS_DEVFREQ) 	+= sprd-top-dvfs.o
+obj-$(CONFIG_SPRD_HW_DEVICE_DVFS_CP)	+= sprd_cp_dvfs.o
+obj-$(CONFIG_DEVFREQ_SPRD_DDR_DVFS)	+= sprd/
 
 # DEVFREQ Event Drivers
 obj-$(CONFIG_PM_DEVFREQ_EVENT)		+= event/
 
-#SPRD DFS
-obj-$(CONFIG_ARCH_SPRD)		     	+= sprd/
+# SPRD DVFS Driver
+obj-$(CONFIG_DVFS_APSYS_SPRD)		+= apsys/

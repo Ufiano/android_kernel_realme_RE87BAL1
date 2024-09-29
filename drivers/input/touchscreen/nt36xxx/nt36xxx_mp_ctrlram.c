@@ -185,17 +185,14 @@ extern void nvt_change_mode(uint8_t mode);
 extern uint8_t nvt_get_fw_pipe(void);
 extern void nvt_read_mdata(uint32_t xdata_addr, uint32_t xdata_btn_addr);
 extern void nvt_get_mdata(int32_t *buf, uint8_t *m_x_num, uint8_t *m_y_num);
-extern void nvt_read_get_num_mdata(uint32_t xdata_addr, int32_t *buffer,
-				   uint32_t num);
+extern void nvt_read_get_num_mdata(uint32_t xdata_addr, int32_t *buffer, uint32_t num);
 int32_t nvt_mp_parse_dt(struct device_node *root, const char *node_compatible);
 #if LPWG_TEST
-int32_t nvt_mp_parse_lpwg_dt(struct device_node *root,
-			     const char *node_compatible);
+int32_t nvt_mp_parse_lpwg_dt(struct device_node *root, const char *node_compatible);
 #endif
 
-
 extern int touch_black_test;
-
+//extern ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos);
 
 /*******************************************************
 Description:
@@ -207,158 +204,123 @@ return:
 static int nvt_mp_buffer_init(void)
 {
 	size_t RecordResult_BufSize = X_Y_DIMENSION_MAX + IC_KEY_CFG_SIZE;
-	size_t RawData_BufSize = (X_Y_DIMENSION_MAX + IC_KEY_CFG_SIZE) * sizeof(
-					 int32_t);
+	size_t RawData_BufSize = (X_Y_DIMENSION_MAX + IC_KEY_CFG_SIZE) * sizeof(int32_t);
 	size_t Pen_RecordResult_BufSize = PEN_X_Y_DIMENSION_MAX;
 	size_t Pen_RawData_BufSize = PEN_X_Y_DIMENSION_MAX * sizeof(int32_t);
 
 #if DOZE_TEST
-	size_t RecordResult_Doze_BufSize = (X_Y_DIMENSION_MAX + IC_KEY_CFG_SIZE) *
-					   Doze_X_Channel;
-	size_t RawData_Doze_BufSize = (X_Y_DIMENSION_MAX + IC_KEY_CFG_SIZE) *
-				      Doze_X_Channel * sizeof(int32_t);
+	size_t RecordResult_Doze_BufSize = (X_Y_DIMENSION_MAX + IC_KEY_CFG_SIZE) * Doze_X_Channel;
+	size_t RawData_Doze_BufSize =  (X_Y_DIMENSION_MAX + IC_KEY_CFG_SIZE) * Doze_X_Channel * sizeof(int32_t);
 #endif
 #if (FDM_TEST && LPWG_TEST)
-	size_t RecordResult_FDM_BufSize = (X_Y_DIMENSION_MAX + IC_KEY_CFG_SIZE) *
-					  FDM_X_Channel;
-	size_t RawData_FDM_BufSize = (X_Y_DIMENSION_MAX + IC_KEY_CFG_SIZE) *
-				     FDM_X_Channel * sizeof(int32_t);
+	size_t RecordResult_FDM_BufSize = (X_Y_DIMENSION_MAX + IC_KEY_CFG_SIZE) * FDM_X_Channel;
+	size_t RawData_FDM_BufSize =  (X_Y_DIMENSION_MAX + IC_KEY_CFG_SIZE) * FDM_X_Channel * sizeof(int32_t);
 #endif
 
 	RecordResult_Short = (uint8_t *)kzalloc(RecordResult_BufSize, GFP_KERNEL);
-
 	if (!RecordResult_Short) {
 		NVT_ERR("kzalloc for RecordResult_Short failed!\n");
 		return -ENOMEM;
 	}
 
 	RecordResult_Open = (uint8_t *)kzalloc(RecordResult_BufSize, GFP_KERNEL);
-
 	if (!RecordResult_Open) {
 		NVT_ERR("kzalloc for RecordResult_Open failed!\n");
 		return -ENOMEM;
 	}
 
 	RecordResult_FW_Rawdata = (uint8_t *)kzalloc(RecordResult_BufSize, GFP_KERNEL);
-
 	if (!RecordResult_FW_Rawdata) {
 		NVT_ERR("kzalloc for RecordResult_FW_Rawdata failed!\n");
 		return -ENOMEM;
 	}
 
 	RecordResult_FW_CC = (uint8_t *)kzalloc(RecordResult_BufSize, GFP_KERNEL);
-
 	if (!RecordResult_FW_CC) {
 		NVT_ERR("kzalloc for RecordResult_FW_CC failed!\n");
 		return -ENOMEM;
 	}
 
 	RecordResult_FW_DiffMax = (uint8_t *)kzalloc(RecordResult_BufSize, GFP_KERNEL);
-
 	if (!RecordResult_FW_DiffMax) {
 		NVT_ERR("kzalloc for RecordResult_FW_DiffMax failed!\n");
 		return -ENOMEM;
 	}
 
 	RecordResult_FW_DiffMin = (uint8_t *)kzalloc(RecordResult_BufSize, GFP_KERNEL);
-
 	if (!RecordResult_FW_DiffMin) {
 		NVT_ERR("kzalloc for RecordResult_FW_DiffMin failed!\n");
 		return -ENOMEM;
 	}
 
 	if (ts->pen_support) {
-		RecordResult_PenTipX_Raw = (uint8_t *)kzalloc(Pen_RecordResult_BufSize,
-					   GFP_KERNEL);
-
+		RecordResult_PenTipX_Raw = (uint8_t *)kzalloc(Pen_RecordResult_BufSize, GFP_KERNEL);
 		if (!RecordResult_PenTipX_Raw) {
 			NVT_ERR("kzalloc for RecordResult_PenTipX_Raw failed!\n");
 			return -ENOMEM;
 		}
 
-		RecordResult_PenTipY_Raw = (uint8_t *)kzalloc(Pen_RecordResult_BufSize,
-					   GFP_KERNEL);
-
+		RecordResult_PenTipY_Raw = (uint8_t *)kzalloc(Pen_RecordResult_BufSize, GFP_KERNEL);
 		if (!RecordResult_PenTipY_Raw) {
 			NVT_ERR("kzalloc for RecordResult_PenTipY_Raw failed!\n");
 			return -ENOMEM;
 		}
 
-		RecordResult_PenRingX_Raw = (uint8_t *)kzalloc(Pen_RecordResult_BufSize,
-					    GFP_KERNEL);
-
+		RecordResult_PenRingX_Raw = (uint8_t *)kzalloc(Pen_RecordResult_BufSize, GFP_KERNEL);
 		if (!RecordResult_PenRingX_Raw) {
 			NVT_ERR("kzalloc for RecordResult_PenRingX_Raw failed!\n");
 			return -ENOMEM;
 		}
 
-		RecordResult_PenRingY_Raw = (uint8_t *)kzalloc(Pen_RecordResult_BufSize,
-					    GFP_KERNEL);
-
+		RecordResult_PenRingY_Raw = (uint8_t *)kzalloc(Pen_RecordResult_BufSize, GFP_KERNEL);
 		if (!RecordResult_PenRingY_Raw) {
 			NVT_ERR("kzalloc for RecordResult_PenRingY_Raw failed!\n");
 			return -ENOMEM;
 		}
 
-		RecordResult_PenTipX_DiffMax = (uint8_t *)kzalloc(Pen_RecordResult_BufSize,
-					       GFP_KERNEL);
-
+		RecordResult_PenTipX_DiffMax = (uint8_t *)kzalloc(Pen_RecordResult_BufSize, GFP_KERNEL);
 		if (!RecordResult_PenTipX_DiffMax) {
 			NVT_ERR("kzalloc for RecordResult_PenTipX_DiffMax failed!\n");
 			return -ENOMEM;
 		}
 
-		RecordResult_PenTipX_DiffMin = (uint8_t *)kzalloc(Pen_RecordResult_BufSize,
-					       GFP_KERNEL);
-
+		RecordResult_PenTipX_DiffMin = (uint8_t *)kzalloc(Pen_RecordResult_BufSize, GFP_KERNEL);
 		if (!RecordResult_PenTipX_DiffMin) {
 			NVT_ERR("kzalloc for RecordResult_PenTipX_DiffMin failed!\n");
 			return -ENOMEM;
 		}
 
-		RecordResult_PenTipY_DiffMax = (uint8_t *)kzalloc(Pen_RecordResult_BufSize,
-					       GFP_KERNEL);
-
+		RecordResult_PenTipY_DiffMax = (uint8_t *)kzalloc(Pen_RecordResult_BufSize, GFP_KERNEL);
 		if (!RecordResult_PenTipY_DiffMax) {
 			NVT_ERR("kzalloc for RecordResult_PenTipY_DiffMax failed!\n");
 			return -ENOMEM;
 		}
 
-		RecordResult_PenTipY_DiffMin = (uint8_t *)kzalloc(Pen_RecordResult_BufSize,
-					       GFP_KERNEL);
-
+		RecordResult_PenTipY_DiffMin = (uint8_t *)kzalloc(Pen_RecordResult_BufSize, GFP_KERNEL);
 		if (!RecordResult_PenTipY_DiffMin) {
 			NVT_ERR("kzalloc for RecordResult_PenTipY_DiffMin failed!\n");
 			return -ENOMEM;
 		}
 
-		RecordResult_PenRingX_DiffMax = (uint8_t *)kzalloc(Pen_RecordResult_BufSize,
-						GFP_KERNEL);
-
+		RecordResult_PenRingX_DiffMax = (uint8_t *)kzalloc(Pen_RecordResult_BufSize, GFP_KERNEL);
 		if (!RecordResult_PenRingX_DiffMax) {
 			NVT_ERR("kzalloc for RecordResult_PenRingX_DiffMax failed!\n");
 			return -ENOMEM;
 		}
 
-		RecordResult_PenRingX_DiffMin = (uint8_t *)kzalloc(Pen_RecordResult_BufSize,
-						GFP_KERNEL);
-
+		RecordResult_PenRingX_DiffMin = (uint8_t *)kzalloc(Pen_RecordResult_BufSize, GFP_KERNEL);
 		if (!RecordResult_PenRingX_DiffMin) {
 			NVT_ERR("kzalloc for RecordResult_PenRingX_DiffMin failed!\n");
 			return -ENOMEM;
 		}
 
-		RecordResult_PenRingY_DiffMax = (uint8_t *)kzalloc(Pen_RecordResult_BufSize,
-						GFP_KERNEL);
-
+		RecordResult_PenRingY_DiffMax = (uint8_t *)kzalloc(Pen_RecordResult_BufSize, GFP_KERNEL);
 		if (!RecordResult_PenRingY_DiffMax) {
 			NVT_ERR("kzalloc for RecordResult_PenRingY_DiffMax failed!\n");
 			return -ENOMEM;
 		}
 
-		RecordResult_PenRingY_DiffMin = (uint8_t *)kzalloc(Pen_RecordResult_BufSize,
-						GFP_KERNEL);
-
+		RecordResult_PenRingY_DiffMin = (uint8_t *)kzalloc(Pen_RecordResult_BufSize, GFP_KERNEL);
 		if (!RecordResult_PenRingY_DiffMin) {
 			NVT_ERR("kzalloc for RecordResult_PenRingY_DiffMin failed!\n");
 			return -ENOMEM;
@@ -366,108 +328,84 @@ static int nvt_mp_buffer_init(void)
 	} /* if (ts->pen_support) */
 
 #if DIGI_NOISE_TEST
-	RecordResult_FW_DigiDiffMax = (uint8_t *)kzalloc(RecordResult_BufSize,
-				      GFP_KERNEL);
-
+	RecordResult_FW_DigiDiffMax = (uint8_t *)kzalloc(RecordResult_BufSize, GFP_KERNEL);
 	if (!RecordResult_FW_DigiDiffMax) {
 		NVT_ERR("kzalloc for RecordResult_FW_DigiDiffMax failed!\n");
 		return -ENOMEM;
 	}
 
-	RecordResult_FW_DigiDiffMin = (uint8_t *)kzalloc(RecordResult_BufSize,
-				      GFP_KERNEL);
-
+	RecordResult_FW_DigiDiffMin = (uint8_t *)kzalloc(RecordResult_BufSize, GFP_KERNEL);
 	if (!RecordResult_FW_DigiDiffMin) {
 		NVT_ERR("kzalloc for RecordResult_FW_DigiDiffMin failed!\n");
 		return -ENOMEM;
 	}
-
 #endif
 
 #if DOZE_TEST
-	RecordResult_Doze_FWRawdata = (uint8_t *)kzalloc(RecordResult_Doze_BufSize,
-				      GFP_KERNEL);
-
+	RecordResult_Doze_FWRawdata = (uint8_t *)kzalloc(RecordResult_Doze_BufSize, GFP_KERNEL);
 	if (!RecordResult_Doze_FWRawdata) {
 		NVT_ERR("kzalloc for RecordResult_Doze_FWRawdata failed!\n");
 		return -ENOMEM;
 	}
 
-	RecordResult_Doze_FW_DiffMax = (uint8_t *)kzalloc(RecordResult_BufSize,
-				       GFP_KERNEL);
-
+	RecordResult_Doze_FW_DiffMax = (uint8_t *)kzalloc(RecordResult_BufSize, GFP_KERNEL);
 	if (!RecordResult_Doze_FW_DiffMax) {
 		NVT_ERR("kzalloc for RecordResult_Doze_FW_DiffMax failed!\n");
 		return -ENOMEM;
 	}
 
-	RecordResult_Doze_FW_DiffMin = (uint8_t *)kzalloc(RecordResult_BufSize,
-				       GFP_KERNEL);
-
+	RecordResult_Doze_FW_DiffMin = (uint8_t *)kzalloc(RecordResult_BufSize, GFP_KERNEL);
 	if (!RecordResult_Doze_FW_DiffMin) {
 		NVT_ERR("kzalloc for RecordResult_Doze_FW_DiffMin failed!\n");
 		return -ENOMEM;
 	}
-
 #endif
 
 #if (FDM_TEST && LPWG_TEST)
-	RecordResult_FDM_FWRawdata = (uint8_t *)kzalloc(RecordResult_FDM_BufSize,
-				     GFP_KERNEL);
-
+	RecordResult_FDM_FWRawdata = (uint8_t *)kzalloc(RecordResult_FDM_BufSize, GFP_KERNEL);
 	if (!RecordResult_FDM_FWRawdata) {
 		NVT_ERR("kzalloc for RecordResult_FDM_FWRawdata failed!\n");
 		return -ENOMEM;
 	}
 
-	RecordResult_FDM_FW_DiffMax = (uint8_t *)kzalloc(RecordResult_BufSize,
-				      GFP_KERNEL);
-
+	RecordResult_FDM_FW_DiffMax = (uint8_t *)kzalloc(RecordResult_BufSize, GFP_KERNEL);
 	if (!RecordResult_FDM_FW_DiffMax) {
 		NVT_ERR("kzalloc for RecordResult_FDM_FW_DiffMax failed!\n");
 		return -ENOMEM;
 	}
 
-	RecordResult_FDM_FW_DiffMin = (uint8_t *)kzalloc(RecordResult_BufSize,
-				      GFP_KERNEL);
-
+	RecordResult_FDM_FW_DiffMin = (uint8_t *)kzalloc(RecordResult_BufSize, GFP_KERNEL);
 	if (!RecordResult_FDM_FW_DiffMin) {
 		NVT_ERR("kzalloc for RecordResult_FDM_FW_DiffMin failed!\n");
 		return -ENOMEM;
 	}
-
 #endif
 
 	RawData_Short = (int32_t *)kzalloc(RawData_BufSize, GFP_KERNEL);
-
 	if (!RawData_Short) {
 		NVT_ERR("kzalloc for RawData_Short failed!\n");
 		return -ENOMEM;
 	}
 
 	RawData_Open = (int32_t *)kzalloc(RawData_BufSize, GFP_KERNEL);
-
 	if (!RawData_Open) {
 		NVT_ERR("kzalloc for RawData_Open failed!\n");
 		return -ENOMEM;
 	}
 
 	RawData_Diff = (int32_t *)kzalloc(RawData_BufSize, GFP_KERNEL);
-
 	if (!RawData_Diff) {
 		NVT_ERR("kzalloc for RawData_Diff failed!\n");
 		return -ENOMEM;
 	}
 
 	RawData_Diff_Min = (int32_t *)kzalloc(RawData_BufSize, GFP_KERNEL);
-
 	if (!RawData_Diff_Min) {
 		NVT_ERR("kzalloc for RawData_Diff_Min failed!\n");
 		return -ENOMEM;
 	}
 
 	RawData_Diff_Max = (int32_t *)kzalloc(RawData_BufSize, GFP_KERNEL);
-
 	if (!RawData_Diff_Max) {
 		NVT_ERR("kzalloc for RawData_Diff_Max failed!\n");
 		return -ENOMEM;
@@ -475,98 +413,82 @@ static int nvt_mp_buffer_init(void)
 
 #if DIGI_NOISE_TEST
 	RawData_DigiDiff = (int32_t *)kzalloc(RawData_BufSize, GFP_KERNEL);
-
 	if (!RawData_DigiDiff) {
 		NVT_ERR("kzalloc for RawData_DigiDiff failed!\n");
 		return -ENOMEM;
 	}
 
 	RawData_DigiDiff_Min = (int32_t *)kzalloc(RawData_BufSize, GFP_KERNEL);
-
 	if (!RawData_DigiDiff_Min) {
 		NVT_ERR("kzalloc for RawData_DigiDiff_Min failed!\n");
 		return -ENOMEM;
 	}
 
 	RawData_DigiDiff_Max = (int32_t *)kzalloc(RawData_BufSize, GFP_KERNEL);
-
 	if (!RawData_DigiDiff_Max) {
 		NVT_ERR("kzalloc for RawData_DigiDiff_Max failed!\n");
 		return -ENOMEM;
 	}
-
 #endif
 
 #if DOZE_TEST
 	RawData_Doze_Diff = (int32_t *)kzalloc(RawData_BufSize, GFP_KERNEL);
-
 	if (!RawData_Doze_Diff) {
 		NVT_ERR("kzalloc for RawData_Doze_Diff failed!\n");
 		return -ENOMEM;
 	}
 
 	RawData_Doze_Diff_Min = (int32_t *)kzalloc(RawData_BufSize, GFP_KERNEL);
-
 	if (!RawData_Doze_Diff_Min) {
 		NVT_ERR("kzalloc for RawData_Doze_Diff_Min failed!\n");
 		return -ENOMEM;
 	}
 
 	RawData_Doze_Diff_Max = (int32_t *)kzalloc(RawData_BufSize, GFP_KERNEL);
-
 	if (!RawData_Doze_Diff_Max) {
 		NVT_ERR("kzalloc for RawData_Doze_Diff_Max failed!\n");
 		return -ENOMEM;
 	}
 
 	RawData_Doze_FWRawdata = (int32_t *)kzalloc(RawData_Doze_BufSize, GFP_KERNEL);
-
 	if (!RawData_Doze_FWRawdata) {
 		NVT_ERR("kzalloc for RawData_Doze_FWRawdata failed!\n");
 		return -ENOMEM;
 	}
-
 #endif
 #if (FDM_TEST && LPWG_TEST)
 	RawData_FDM_Diff = (int32_t *)kzalloc(RawData_BufSize, GFP_KERNEL);
-
 	if (!RawData_FDM_Diff) {
 		NVT_ERR("kzalloc for RawData_FDM_Diff failed!\n");
 		return -ENOMEM;
 	}
 
 	RawData_FDM_Diff_Min = (int32_t *)kzalloc(RawData_BufSize, GFP_KERNEL);
-
 	if (!RawData_FDM_Diff_Min) {
 		NVT_ERR("kzalloc for RawData_FDM_Diff_Min failed!\n");
 		return -ENOMEM;
 	}
 
 	RawData_FDM_Diff_Max = (int32_t *)kzalloc(RawData_BufSize, GFP_KERNEL);
-
 	if (!RawData_FDM_Diff_Max) {
 		NVT_ERR("kzalloc for RawData_FDM_Diff_Max failed!\n");
 		return -ENOMEM;
 	}
 
 	RawData_FDM_FWRawdata = (int32_t *)kzalloc(RawData_FDM_BufSize, GFP_KERNEL);
-
 	if (!RawData_FDM_FWRawdata) {
 		NVT_ERR("kzalloc for RawData_FDM_FWRawdata failed!\n");
 		return -ENOMEM;
 	}
-
 #endif
 
 	RawData_FW_Rawdata = (int32_t *)kzalloc(RawData_BufSize, GFP_KERNEL);
-
 	if (!RawData_FW_Rawdata) {
 		NVT_ERR("kzalloc for RawData_FW_Rawdata failed!\n");
 		return -ENOMEM;
 	}
 
 	RawData_FW_CC = (int32_t *)kzalloc(RawData_BufSize, GFP_KERNEL);
-
 	if (!RawData_FW_CC) {
 		NVT_ERR("kzalloc for RawData_FW_CC failed!\n");
 		return -ENOMEM;
@@ -574,84 +496,72 @@ static int nvt_mp_buffer_init(void)
 
 	if (ts->pen_support) {
 		RawData_PenTipX_Raw = (int32_t *)kzalloc(Pen_RawData_BufSize, GFP_KERNEL);
-
 		if (!RawData_PenTipX_Raw) {
 			NVT_ERR("kzalloc for RawData_PenTipX_Raw failed!\n");
 			return -ENOMEM;
 		}
 
 		RawData_PenTipY_Raw = (int32_t *)kzalloc(Pen_RawData_BufSize, GFP_KERNEL);
-
 		if (!RawData_PenTipY_Raw) {
 			NVT_ERR("kzalloc for RawData_PenTipY_Raw failed!\n");
 			return -ENOMEM;
 		}
 
 		RawData_PenRingX_Raw = (int32_t *)kzalloc(Pen_RawData_BufSize, GFP_KERNEL);
-
 		if (!RawData_PenRingX_Raw) {
 			NVT_ERR("kzalloc for RawData_PenRingX_Raw failed!\n");
 			return -ENOMEM;
 		}
 
 		RawData_PenRingY_Raw = (int32_t *)kzalloc(Pen_RawData_BufSize, GFP_KERNEL);
-
 		if (!RawData_PenRingY_Raw) {
 			NVT_ERR("kzalloc for RawData_PenRingY_Raw failed!\n");
 			return -ENOMEM;
 		}
 
 		RawData_PenTipX_DiffMax = (int32_t *)kzalloc(Pen_RawData_BufSize, GFP_KERNEL);
-
 		if (!RawData_PenTipX_DiffMax) {
 			NVT_ERR("kzalloc for RawData_PenTipX_DiffMax failed!\n");
 			return -ENOMEM;
 		}
 
 		RawData_PenTipX_DiffMin = (int32_t *)kzalloc(Pen_RawData_BufSize, GFP_KERNEL);
-
 		if (!RawData_PenTipX_DiffMin) {
 			NVT_ERR("kzalloc for RawData_PenTipX_DiffMin failed!\n");
 			return -ENOMEM;
 		}
 
 		RawData_PenTipY_DiffMax = (int32_t *)kzalloc(Pen_RawData_BufSize, GFP_KERNEL);
-
 		if (!RawData_PenTipY_DiffMax) {
 			NVT_ERR("kzalloc for RawData_PenTipY_DiffMax failed!\n");
 			return -ENOMEM;
 		}
 
 		RawData_PenTipY_DiffMin = (int32_t *)kzalloc(Pen_RawData_BufSize, GFP_KERNEL);
-
 		if (!RawData_PenTipY_DiffMin) {
 			NVT_ERR("kzalloc for RawData_PenTipY_DiffMin failed!\n");
 			return -ENOMEM;
 		}
 
 		RawData_PenRingX_DiffMax = (int32_t *)kzalloc(Pen_RawData_BufSize, GFP_KERNEL);
-
 		if (!RawData_PenRingX_DiffMax) {
 			NVT_ERR("kzalloc for RawData_PenRingX_DiffMax failed!\n");
 			return -ENOMEM;
 		}
 
 		RawData_PenRingX_DiffMin = (int32_t *)kzalloc(Pen_RawData_BufSize, GFP_KERNEL);
-
 		if (!RawData_PenRingX_DiffMin) {
 			NVT_ERR("kzalloc for RawData_PenRingX_DiffMin failed!\n");
 			return -ENOMEM;
 		}
 
 		RawData_PenRingY_DiffMax = (int32_t *)kzalloc(Pen_RawData_BufSize, GFP_KERNEL);
-
 		if (!RawData_PenRingY_DiffMax) {
 			NVT_ERR("kzalloc for RawData_PenRingY_DiffMax failed!\n");
 			return -ENOMEM;
 		}
 
 		RawData_PenRingY_DiffMin = (int32_t *)kzalloc(Pen_RawData_BufSize, GFP_KERNEL);
-
 		if (!RawData_PenRingY_DiffMin) {
 			NVT_ERR("kzalloc for RawData_PenRingY_DiffMin failed!\n");
 			return -ENOMEM;
@@ -763,7 +673,6 @@ static void nvt_mp_buffer_deinit(void)
 	} /* if (ts->pen_support) */
 
 #if DIGI_NOISE_TEST
-
 	if (RecordResult_FW_DigiDiffMax) {
 		kfree(RecordResult_FW_DigiDiffMax);
 		RecordResult_FW_DigiDiffMax = NULL;
@@ -773,7 +682,6 @@ static void nvt_mp_buffer_deinit(void)
 		kfree(RecordResult_FW_DigiDiffMin);
 		RecordResult_FW_DigiDiffMin = NULL;
 	}
-
 #endif
 
 	if (RawData_Short) {
@@ -802,7 +710,6 @@ static void nvt_mp_buffer_deinit(void)
 	}
 
 #if DIGI_NOISE_TEST
-
 	if (RawData_DigiDiff) {
 		kfree(RawData_DigiDiff);
 		RawData_DigiDiff = NULL;
@@ -817,7 +724,6 @@ static void nvt_mp_buffer_deinit(void)
 		kfree(RawData_DigiDiff_Max);
 		RawData_DigiDiff_Max = NULL;
 	}
-
 #endif
 
 	if (RawData_FW_Rawdata) {
@@ -899,18 +805,16 @@ static void nvt_print_data_log_in_one_line(int32_t *data, int32_t data_num)
 	int32_t i = 0;
 
 	tmp_log = (char *)kzalloc(data_num * 7 + 1, GFP_KERNEL);
-
 	if (!tmp_log) {
 		NVT_ERR("kzalloc for tmp_log failed!\n ");
 		return;
 	}
 
-	for (i = 0; i < data_num; i++)
+	for (i = 0; i < data_num; i++) {
 		sprintf(tmp_log + i * 7, "%5d, ", data[i]);
-
+	}
 	tmp_log[data_num * 7] = '\0';
 	printk("%s", tmp_log);
-
 	if (tmp_log) {
 		kfree(tmp_log);
 		tmp_log = NULL;
@@ -919,25 +823,22 @@ static void nvt_print_data_log_in_one_line(int32_t *data, int32_t data_num)
 	return;
 }
 
-static void nvt_print_result_log_in_one_line(uint8_t *result,
-		int32_t result_num)
+static void nvt_print_result_log_in_one_line(uint8_t *result, int32_t result_num)
 {
 	char *tmp_log = NULL;
 	int32_t i = 0;
 
 	tmp_log = (char *)kzalloc(result_num * 6 + 1, GFP_KERNEL);
-
 	if (!tmp_log) {
 		NVT_ERR("kzalloc for tmp_log failed!\n ");
 		return;
 	}
 
-	for (i = 0; i < result_num; i++)
+	for (i = 0; i < result_num; i++) {
 		sprintf(tmp_log + i * 6, "0x%02X, ", result[i]);
-
+	}
 	tmp_log[result_num * 6] = '\0';
 	printk("%s", tmp_log);
-
 	if (tmp_log) {
 		kfree(tmp_log);
 		tmp_log = NULL;
@@ -961,7 +862,6 @@ static void nvt_print_lmt_array(int32_t *array, int32_t x_ch, int32_t y_ch)
 		nvt_print_data_log_in_one_line(array + j * x_ch, x_ch);
 		printk("\n");
 	}
-
 #if TOUCH_KEY_NUM > 0
 	nvt_print_data_log_in_one_line(array + y_ch * x_ch, Key_Channel);
 	printk("\n");
@@ -1041,19 +941,15 @@ static void nvt_print_criteria(void)
 
 		//---PS_Config_Lmt_PenRingX_FW_Diff---
 		printk("PS_Config_Lmt_PenRingX_FW_Diff_P:\n");
-		nvt_print_lmt_array(PS_Config_Lmt_PenRingX_FW_Diff_P, ts->x_num,
-				    ts->y_gang_num);
+		nvt_print_lmt_array(PS_Config_Lmt_PenRingX_FW_Diff_P, ts->x_num, ts->y_gang_num);
 		printk("PS_Config_Lmt_PenRingX_FW_Diff_N:\n");
-		nvt_print_lmt_array(PS_Config_Lmt_PenRingX_FW_Diff_N, ts->x_num,
-				    ts->y_gang_num);
+		nvt_print_lmt_array(PS_Config_Lmt_PenRingX_FW_Diff_N, ts->x_num, ts->y_gang_num);
 
 		//---PS_Config_Lmt_PenRingY_FW_Diff---
 		printk("PS_Config_Lmt_PenRingY_FW_Diff_P:\n");
-		nvt_print_lmt_array(PS_Config_Lmt_PenRingY_FW_Diff_P, ts->x_gang_num,
-				    ts->y_num);
+		nvt_print_lmt_array(PS_Config_Lmt_PenRingY_FW_Diff_P, ts->x_gang_num, ts->y_num);
 		printk("PS_Config_Lmt_PenRingY_FW_Diff_N:\n");
-		nvt_print_lmt_array(PS_Config_Lmt_PenRingY_FW_Diff_N, ts->x_gang_num,
-				    ts->y_num);
+		nvt_print_lmt_array(PS_Config_Lmt_PenRingY_FW_Diff_N, ts->x_gang_num, ts->y_num);
 	} /* if (ts->pen_support) */
 
 #if DOZE_TEST
@@ -1106,8 +1002,9 @@ static void nvt_print_criteria(void)
 	NVT_LOG("--\n");
 }
 
-static int32_t nvt_save_rawdata_to_csv(int32_t *rawdata, uint8_t x_ch,
-				       uint8_t y_ch, const char *file_path, uint32_t offset)
+//for GKI
+#if 0
+static int32_t nvt_save_rawdata_to_csv(int32_t *rawdata, uint8_t x_ch, uint8_t y_ch, const char *file_path, uint32_t offset)
 {
 	int32_t x = 0;
 	int32_t y = 0;
@@ -1125,7 +1022,6 @@ static int32_t nvt_save_rawdata_to_csv(int32_t *rawdata, uint8_t x_ch,
 
 	printk("%s:++\n", __func__);
 	fbufp = (char *)kzalloc(16384, GFP_KERNEL);
-
 	if (!fbufp) {
 		NVT_ERR("kzalloc for fbufp failed!\n");
 		return -ENOMEM;
@@ -1136,20 +1032,16 @@ static int32_t nvt_save_rawdata_to_csv(int32_t *rawdata, uint8_t x_ch,
 			iArrayIndex = y * x_ch + x;
 			sprintf(fbufp + iArrayIndex * 7 + y * 2, "%5d, ", rawdata[iArrayIndex]);
 		}
-
 		nvt_print_data_log_in_one_line(rawdata + y * x_ch, x_ch);
 		printk("\n");
-		sprintf(fbufp + (iArrayIndex + 1) * 7 + y * 2, "\r\n");
+		sprintf(fbufp + (iArrayIndex + 1) * 7 + y * 2,"\r\n");
 	}
-
 #if TOUCH_KEY_NUM > 0
 	keydata_output_offset = y_ch * x_ch * 7 + y_ch * 2;
-
 	for (k = 0; k < Key_Channel; k++) {
 		iArrayIndex = y_ch * x_ch + k;
 		sprintf(fbufp + keydata_output_offset + k * 7, "%5d, ", rawdata[iArrayIndex]);
 	}
-
 	nvt_print_data_log_in_one_line(rawdata + y_ch * x_ch, Key_Channel);
 	printk("\n");
 	sprintf(fbufp + y_ch * x_ch * 7 + y_ch * 2 + Key_Channel * 7, "\r\n");
@@ -1160,21 +1052,17 @@ static int32_t nvt_save_rawdata_to_csv(int32_t *rawdata, uint8_t x_ch,
 
 	if (offset == 0)
 		fp = filp_open(file_path, O_RDWR | O_CREAT | O_TRUNC, 0644);
-
 	else
 		fp = filp_open(file_path, O_RDWR | O_CREAT, 0644);
-
 	if (fp == NULL || IS_ERR(fp)) {
 		NVT_ERR("open %s failed\n", file_path);
 		set_fs(org_fs);
-
 		if (fbufp) {
 			kfree(fbufp);
 			fbufp = NULL;
 		}
-
 		return -1;
-	}
+	} 
 
 #if TOUCH_KEY_NUM > 0
 	output_len = y_ch * x_ch * 7 + y_ch * 2 + Key_Channel * 7 + 2;
@@ -1182,22 +1070,19 @@ static int32_t nvt_save_rawdata_to_csv(int32_t *rawdata, uint8_t x_ch,
 	output_len = y_ch * x_ch * 7 + y_ch * 2;
 #endif /* #if TOUCH_KEY_NUM > 0 */
 	pos = offset;
-	write_ret = vfs_write(fp, (char __user *)fbufp, output_len, &pos);
 
+	write_ret = vfs_write(fp, (char __user *)fbufp, output_len, &pos);
 	if (write_ret <= 0) {
 		NVT_ERR("write %s failed\n", file_path);
 		set_fs(org_fs);
-
 		if (fp) {
 			filp_close(fp, NULL);
 			fp = NULL;
 		}
-
 		if (fbufp) {
 			kfree(fbufp);
 			fbufp = NULL;
 		}
-
 		return -1;
 	}
 
@@ -1215,6 +1100,12 @@ static int32_t nvt_save_rawdata_to_csv(int32_t *rawdata, uint8_t x_ch,
 
 	printk("%s:--\n", __func__);
 
+	return 0;
+}
+#endif 
+static int32_t nvt_save_rawdata_to_csv(int32_t *rawdata, uint8_t x_ch, uint8_t y_ch, const char *file_path, uint32_t offset)
+{
+	NVT_ERR("%s:for GKI ,cancel save file!\n", __func__);
 	return 0;
 }
 
@@ -1254,16 +1145,13 @@ static int32_t nvt_polling_hand_shake_status(void)
 		buf[4] = 0x00;
 		buf[5] = 0x00;
 		CTP_SPI_READ(ts->client, buf, 6);
-		NVT_ERR("Read back 5 bytes from offset EVENT_MAP_HOST_CMD: 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X\n",
-			buf[1], buf[2], buf[3], buf[4], buf[5]);
+		NVT_ERR("Read back 5 bytes from offset EVENT_MAP_HOST_CMD: 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X\n", buf[1], buf[2], buf[3], buf[4], buf[5]);
 
 		nvt_read_fw_history(ts->mmap->MMAP_HISTORY_EVENT0);
 		nvt_read_fw_history(ts->mmap->MMAP_HISTORY_EVENT1);
 		return -1;
-
 	} else {
-		NVT_ERR("polling hand shake status done, retry = %d, buf[1]=0x%02X\n", i,
-			buf[1]);
+		NVT_ERR("polling hand shake status done, retry = %d, buf[1]=0x%02X\n", i, buf[1]);
 		return 0;
 	}
 }
@@ -1296,8 +1184,7 @@ static int8_t nvt_switch_FreqHopEnDis(uint8_t FreqHopEnDis)
 	}
 
 	if (unlikely(retry == 20)) {
-		NVT_ERR("switch FreqHopEnDis 0x%02X failed, buf[1]=0x%02X\n", FreqHopEnDis,
-			buf[1]);
+		NVT_ERR("switch FreqHopEnDis 0x%02X failed, buf[1]=0x%02X\n", FreqHopEnDis, buf[1]);
 		ret = -1;
 	}
 
@@ -1329,21 +1216,16 @@ static int32_t nvt_read_baseline(int32_t *xdata)
 			xdata[iArrayIndex] = (int16_t)xdata[iArrayIndex];
 		}
 	}
-
 #if TOUCH_KEY_NUM > 0
-
 	for (k = 0; k < Key_Channel; k++) {
 		iArrayIndex = Y_Channel * X_Channel + k;
 		xdata[iArrayIndex] = (int16_t)xdata[iArrayIndex];
 	}
-
 #endif /* #if TOUCH_KEY_NUM > 0 */
 
 	printk("%s:\n", __func__);
-
 	// Save Rawdata to CSV file
-	if (nvt_save_rawdata_to_csv(xdata, X_Channel, Y_Channel, FW_RAWDATA_CSV_FILE,
-				    0) < 0) {
+	if (nvt_save_rawdata_to_csv(xdata, X_Channel, Y_Channel, FW_RAWDATA_CSV_FILE, 0) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
@@ -1368,7 +1250,6 @@ static int32_t nvt_read_CC(int32_t *xdata)
 
 	if (nvt_get_fw_pipe() == 0)
 		nvt_read_mdata(ts->mmap->DIFF_PIPE1_ADDR, ts->mmap->DIFF_BTN_PIPE1_ADDR);
-
 	else
 		nvt_read_mdata(ts->mmap->DIFF_PIPE0_ADDR, ts->mmap->DIFF_BTN_PIPE0_ADDR);
 
@@ -1380,21 +1261,16 @@ static int32_t nvt_read_CC(int32_t *xdata)
 			xdata[iArrayIndex] = (int16_t)xdata[iArrayIndex];
 		}
 	}
-
 #if TOUCH_KEY_NUM > 0
-
 	for (k = 0; k < Key_Channel; k++) {
 		iArrayIndex = Y_Channel * X_Channel + k;
 		xdata[iArrayIndex] = (int16_t)xdata[iArrayIndex];
 	}
-
 #endif /* #if TOUCH_KEY_NUM > 0 */
 
 	printk("%s:\n", __func__);
-
 	// Save Rawdata to CSV file
-	if (nvt_save_rawdata_to_csv(xdata, X_Channel, Y_Channel, FW_CC_CSV_FILE,
-				    0) < 0) {
+	if (nvt_save_rawdata_to_csv(xdata, X_Channel, Y_Channel, FW_CC_CSV_FILE, 0) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
@@ -1410,47 +1286,32 @@ static int32_t nvt_read_pen_baseline(void)
 
 	NVT_LOG("++\n");
 
-	nvt_read_get_num_mdata(ts->mmap->PEN_2D_BL_TIP_X_ADDR, RawData_PenTipX_Raw,
-			       ts->x_num * ts->y_gang_num);
-	nvt_read_get_num_mdata(ts->mmap->PEN_2D_BL_TIP_Y_ADDR, RawData_PenTipY_Raw,
-			       ts->x_gang_num * ts->y_num);
-	nvt_read_get_num_mdata(ts->mmap->PEN_2D_BL_RING_X_ADDR, RawData_PenRingX_Raw,
-			       ts->x_num * ts->y_gang_num);
-	nvt_read_get_num_mdata(ts->mmap->PEN_2D_BL_RING_Y_ADDR, RawData_PenRingY_Raw,
-			       ts->x_gang_num * ts->y_num);
+	nvt_read_get_num_mdata(ts->mmap->PEN_2D_BL_TIP_X_ADDR, RawData_PenTipX_Raw, ts->x_num * ts->y_gang_num);
+	nvt_read_get_num_mdata(ts->mmap->PEN_2D_BL_TIP_Y_ADDR, RawData_PenTipY_Raw, ts->x_gang_num * ts->y_num);
+	nvt_read_get_num_mdata(ts->mmap->PEN_2D_BL_RING_X_ADDR, RawData_PenRingX_Raw, ts->x_num * ts->y_gang_num);
+	nvt_read_get_num_mdata(ts->mmap->PEN_2D_BL_RING_Y_ADDR, RawData_PenRingY_Raw, ts->x_gang_num * ts->y_num);
 
 	// Save Rawdata to CSV file
 	printk("%s:RawData_PenTipX_Raw\n", __func__);
-
-	if (nvt_save_rawdata_to_csv(RawData_PenTipX_Raw, ts->x_num, ts->y_gang_num,
-				    PEN_FW_RAW_TEST_CSV_FILE, csv_output_offset) < 0) {
+	if (nvt_save_rawdata_to_csv(RawData_PenTipX_Raw, ts->x_num, ts->y_gang_num, PEN_FW_RAW_TEST_CSV_FILE, csv_output_offset) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
-
 	csv_output_offset += ts->y_gang_num * ts->x_num * 7 + ts->y_gang_num * 2;
 	printk("%s:RawData_PenTipY_Raw\n", __func__);
-
-	if (nvt_save_rawdata_to_csv(RawData_PenTipY_Raw, ts->x_gang_num, ts->y_num,
-				    PEN_FW_RAW_TEST_CSV_FILE, csv_output_offset) < 0) {
+	if (nvt_save_rawdata_to_csv(RawData_PenTipY_Raw, ts->x_gang_num, ts->y_num, PEN_FW_RAW_TEST_CSV_FILE, csv_output_offset) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
-
 	csv_output_offset += ts->y_num * ts->x_gang_num * 7 + ts->y_num * 2;
 	printk("%s:RawData_PenRingX_Raw\n", __func__);
-
-	if (nvt_save_rawdata_to_csv(RawData_PenRingX_Raw, ts->x_num, ts->y_gang_num,
-				    PEN_FW_RAW_TEST_CSV_FILE, csv_output_offset) < 0) {
+	if (nvt_save_rawdata_to_csv(RawData_PenRingX_Raw, ts->x_num, ts->y_gang_num, PEN_FW_RAW_TEST_CSV_FILE, csv_output_offset) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
-
 	csv_output_offset += ts->y_gang_num * ts->x_num * 7 + ts->y_gang_num * 2;
 	printk("%s:RawData_PenRingY_Raw\n", __func__);
-
-	if (nvt_save_rawdata_to_csv(RawData_PenRingY_Raw, ts->x_gang_num, ts->y_num,
-				    PEN_FW_RAW_TEST_CSV_FILE, csv_output_offset) < 0) {
+	if (nvt_save_rawdata_to_csv(RawData_PenRingY_Raw, ts->x_gang_num, ts->y_num, PEN_FW_RAW_TEST_CSV_FILE, csv_output_offset) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
@@ -1493,25 +1354,24 @@ static int32_t nvt_read_fw_noise(int32_t *xdata)
 	NVT_LOG("++\n");
 
 	//---Enter Test Mode---
-	if (nvt_clear_fw_status())
+	if (nvt_clear_fw_status()) {
 		return -EAGAIN;
+	}
 
 	frame_num = PS_Config_Diff_Test_Frame / 10;
-
 	if (frame_num <= 0)
 		frame_num = 1;
-
 	printk("%s: frame_num=%d\n", __func__, frame_num);
 	nvt_enable_noise_collect(frame_num);
 	// need wait PS_Config_Diff_Test_Frame * 8.3ms
 	msleep(frame_num * 83);
 
-	if (nvt_polling_hand_shake_status())
+	if (nvt_polling_hand_shake_status()) {
 		return -EAGAIN;
+	}
 
 	if (nvt_get_fw_pipe() == 0)
 		nvt_read_mdata(ts->mmap->DIFF_PIPE0_ADDR, ts->mmap->DIFF_BTN_PIPE0_ADDR);
-
 	else
 		nvt_read_mdata(ts->mmap->DIFF_PIPE1_ADDR, ts->mmap->DIFF_BTN_PIPE1_ADDR);
 
@@ -1524,60 +1384,44 @@ static int32_t nvt_read_fw_noise(int32_t *xdata)
 			RawData_Diff_Min[iArrayIndex] = (int8_t)(xdata[iArrayIndex] & 0xFF);
 		}
 	}
-
 #if TOUCH_KEY_NUM > 0
-
 	for (k = 0; k < Key_Channel; k++) {
 		iArrayIndex = Y_Channel * X_Channel + k;
 		RawData_Diff_Max[iArrayIndex] = (int8_t)((xdata[iArrayIndex] >> 8) & 0xFF);
 		RawData_Diff_Min[iArrayIndex] = (int8_t)(xdata[iArrayIndex] & 0xFF);
 	}
-
 #endif /* #if TOUCH_KEY_NUM > 0 */
 
 	if (ts->pen_support) {
 		// get pen noise data
-		nvt_read_get_num_mdata(ts->mmap->PEN_2D_DIFF_TIP_X_ADDR,
-				       RawData_PenTipX_DiffMax, ts->x_num * ts->y_gang_num);
-		nvt_read_get_num_mdata(ts->mmap->PEN_2D_RAW_TIP_X_ADDR, RawData_PenTipX_DiffMin,
-				       ts->x_num * ts->y_gang_num);
-		nvt_read_get_num_mdata(ts->mmap->PEN_2D_DIFF_TIP_Y_ADDR,
-				       RawData_PenTipY_DiffMax, ts->x_gang_num * ts->y_num);
-		nvt_read_get_num_mdata(ts->mmap->PEN_2D_RAW_TIP_Y_ADDR, RawData_PenTipY_DiffMin,
-				       ts->x_gang_num * ts->y_num);
-		nvt_read_get_num_mdata(ts->mmap->PEN_2D_DIFF_RING_X_ADDR,
-				       RawData_PenRingX_DiffMax, ts->x_num * ts->y_gang_num);
-		nvt_read_get_num_mdata(ts->mmap->PEN_2D_RAW_RING_X_ADDR,
-				       RawData_PenRingX_DiffMin, ts->x_num * ts->y_gang_num);
-		nvt_read_get_num_mdata(ts->mmap->PEN_2D_DIFF_RING_Y_ADDR,
-				       RawData_PenRingY_DiffMax, ts->x_gang_num * ts->y_num);
-		nvt_read_get_num_mdata(ts->mmap->PEN_2D_RAW_RING_Y_ADDR,
-				       RawData_PenRingY_DiffMin, ts->x_gang_num * ts->y_num);
+		nvt_read_get_num_mdata(ts->mmap->PEN_2D_DIFF_TIP_X_ADDR, RawData_PenTipX_DiffMax, ts->x_num * ts->y_gang_num);
+		nvt_read_get_num_mdata(ts->mmap->PEN_2D_RAW_TIP_X_ADDR, RawData_PenTipX_DiffMin, ts->x_num * ts->y_gang_num);
+		nvt_read_get_num_mdata(ts->mmap->PEN_2D_DIFF_TIP_Y_ADDR, RawData_PenTipY_DiffMax, ts->x_gang_num * ts->y_num);
+		nvt_read_get_num_mdata(ts->mmap->PEN_2D_RAW_TIP_Y_ADDR, RawData_PenTipY_DiffMin, ts->x_gang_num * ts->y_num);
+		nvt_read_get_num_mdata(ts->mmap->PEN_2D_DIFF_RING_X_ADDR, RawData_PenRingX_DiffMax, ts->x_num * ts->y_gang_num);
+		nvt_read_get_num_mdata(ts->mmap->PEN_2D_RAW_RING_X_ADDR, RawData_PenRingX_DiffMin, ts->x_num * ts->y_gang_num);
+		nvt_read_get_num_mdata(ts->mmap->PEN_2D_DIFF_RING_Y_ADDR, RawData_PenRingY_DiffMax, ts->x_gang_num * ts->y_num);
+		nvt_read_get_num_mdata(ts->mmap->PEN_2D_RAW_RING_Y_ADDR, RawData_PenRingY_DiffMin, ts->x_gang_num * ts->y_num);
 	} /* if (ts->pen_support) */
 
 	//---Leave Test Mode---
 	nvt_change_mode(NORMAL_MODE);
 
 	printk("%s:RawData_Diff_Max:\n", __func__);
-
 	// Save Rawdata to CSV file
-	if (nvt_save_rawdata_to_csv(RawData_Diff_Max, X_Channel, Y_Channel,
-				    NOISE_TEST_CSV_FILE, 0) < 0) {
+	if (nvt_save_rawdata_to_csv(RawData_Diff_Max, X_Channel, Y_Channel, NOISE_TEST_CSV_FILE, 0) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
 
 #if TOUCH_KEY_NUM > 0
-	rawdata_diff_min_offset = Y_Channel * X_Channel * 7 + Y_Channel * 2 +
-				  Key_Channel * 7 + 2;
+	rawdata_diff_min_offset = Y_Channel * X_Channel * 7 + Y_Channel * 2 + Key_Channel * 7 + 2;
 #else
 	rawdata_diff_min_offset = Y_Channel * X_Channel * 7 + Y_Channel * 2;
 #endif /* #if TOUCH_KEY_NUM > 0 */
 	printk("%s:RawData_Diff_Min:\n", __func__);
-
 	// Save Rawdata to CSV file
-	if (nvt_save_rawdata_to_csv(RawData_Diff_Min, X_Channel, Y_Channel,
-				    NOISE_TEST_CSV_FILE, rawdata_diff_min_offset) < 0) {
+	if (nvt_save_rawdata_to_csv(RawData_Diff_Min, X_Channel, Y_Channel, NOISE_TEST_CSV_FILE, rawdata_diff_min_offset) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
@@ -1585,72 +1429,49 @@ static int32_t nvt_read_fw_noise(int32_t *xdata)
 	if (ts->pen_support) {
 		// save pen noise to csv
 		printk("%s:RawData_PenTipX_DiffMax:\n", __func__);
-
-		if (nvt_save_rawdata_to_csv(RawData_PenTipX_DiffMax, ts->x_num, ts->y_gang_num,
-					    PEN_NOISE_TEST_CSV_FILE, csv_pen_noise_offset) < 0) {
+		if (nvt_save_rawdata_to_csv(RawData_PenTipX_DiffMax, ts->x_num, ts->y_gang_num, PEN_NOISE_TEST_CSV_FILE, csv_pen_noise_offset) < 0) {
 			NVT_ERR("save rawdata to CSV file failed\n");
 			return -EAGAIN;
 		}
-
 		csv_pen_noise_offset += ts->y_gang_num * ts->x_num * 7 + ts->y_gang_num * 2;
 		printk("%s:RawData_PenTipX_DiffMin:\n", __func__);
-
-		if (nvt_save_rawdata_to_csv(RawData_PenTipX_DiffMin, ts->x_num, ts->y_gang_num,
-					    PEN_NOISE_TEST_CSV_FILE, csv_pen_noise_offset) < 0) {
+		if (nvt_save_rawdata_to_csv(RawData_PenTipX_DiffMin, ts->x_num, ts->y_gang_num, PEN_NOISE_TEST_CSV_FILE, csv_pen_noise_offset) < 0) {
 			NVT_ERR("save rawdata to CSV file failed\n");
 			return -EAGAIN;
 		}
-
 		csv_pen_noise_offset += ts->y_gang_num * ts->x_num * 7 + ts->y_gang_num * 2;
 		printk("%s:RawData_PenTipY_DiffMax:\n", __func__);
-
-		if (nvt_save_rawdata_to_csv(RawData_PenTipY_DiffMax, ts->x_gang_num, ts->y_num,
-					    PEN_NOISE_TEST_CSV_FILE, csv_pen_noise_offset) < 0) {
+		if (nvt_save_rawdata_to_csv(RawData_PenTipY_DiffMax, ts->x_gang_num, ts->y_num, PEN_NOISE_TEST_CSV_FILE, csv_pen_noise_offset) < 0) {
 			NVT_ERR("save rawdata to CSV file failed\n");
 			return -EAGAIN;
 		}
-
 		csv_pen_noise_offset += ts->y_num * ts->x_gang_num * 7 + ts->y_num * 2;
 		printk("%s:RawData_PenTipY_DiffMin:\n", __func__);
-
-		if (nvt_save_rawdata_to_csv(RawData_PenTipY_DiffMin, ts->x_gang_num, ts->y_num,
-					    PEN_NOISE_TEST_CSV_FILE, csv_pen_noise_offset) < 0) {
+		if (nvt_save_rawdata_to_csv(RawData_PenTipY_DiffMin, ts->x_gang_num, ts->y_num, PEN_NOISE_TEST_CSV_FILE, csv_pen_noise_offset) < 0) {
 			NVT_ERR("save rawdata to CSV file failed\n");
 			return -EAGAIN;
 		}
-
 		csv_pen_noise_offset += ts->y_num * ts->x_gang_num * 7 + ts->y_num * 2;
 		printk("%s:RawData_PenRingX_DiffMax:\n", __func__);
-
-		if (nvt_save_rawdata_to_csv(RawData_PenRingX_DiffMax, ts->x_num, ts->y_gang_num,
-					    PEN_NOISE_TEST_CSV_FILE, csv_pen_noise_offset) < 0) {
+		if (nvt_save_rawdata_to_csv(RawData_PenRingX_DiffMax, ts->x_num, ts->y_gang_num, PEN_NOISE_TEST_CSV_FILE, csv_pen_noise_offset) < 0) {
 			NVT_ERR("save rawdata to CSV file failed\n");
 			return -EAGAIN;
 		}
-
 		csv_pen_noise_offset += ts->y_gang_num * ts->x_num * 7 + ts->y_gang_num * 2;
 		printk("%s:RawData_PenRingX_DiffMin:\n", __func__);
-
-		if (nvt_save_rawdata_to_csv(RawData_PenRingX_DiffMin, ts->x_num, ts->y_gang_num,
-					    PEN_NOISE_TEST_CSV_FILE, csv_pen_noise_offset) < 0) {
+		if (nvt_save_rawdata_to_csv(RawData_PenRingX_DiffMin, ts->x_num, ts->y_gang_num, PEN_NOISE_TEST_CSV_FILE, csv_pen_noise_offset) < 0) {
 			NVT_ERR("save rawdata to CSV file failed\n");
 			return -EAGAIN;
 		}
-
 		csv_pen_noise_offset += ts->y_gang_num * ts->x_num * 7 + ts->y_gang_num * 2;
 		printk("%s:RawData_PenRingY_DiffMax:\n", __func__);
-
-		if (nvt_save_rawdata_to_csv(RawData_PenRingY_DiffMax, ts->x_gang_num, ts->y_num,
-					    PEN_NOISE_TEST_CSV_FILE, csv_pen_noise_offset) < 0) {
+		if (nvt_save_rawdata_to_csv(RawData_PenRingY_DiffMax, ts->x_gang_num, ts->y_num, PEN_NOISE_TEST_CSV_FILE, csv_pen_noise_offset) < 0) {
 			NVT_ERR("save rawdata to CSV file failed\n");
 			return -EAGAIN;
 		}
-
 		csv_pen_noise_offset += ts->y_num * ts->x_gang_num * 7 + ts->y_num * 2;
 		printk("%s:RawData_PenRingY_DiffMin:\n", __func__);
-
-		if (nvt_save_rawdata_to_csv(RawData_PenRingY_DiffMin, ts->x_gang_num, ts->y_num,
-					    PEN_NOISE_TEST_CSV_FILE, csv_pen_noise_offset) < 0) {
+		if (nvt_save_rawdata_to_csv(RawData_PenRingY_DiffMin, ts->x_gang_num, ts->y_num, PEN_NOISE_TEST_CSV_FILE, csv_pen_noise_offset) < 0) {
 			NVT_ERR("save rawdata to CSV file failed\n");
 			return -EAGAIN;
 		}
@@ -1678,28 +1499,28 @@ static int32_t nvt_read_fw_digital_noise(int32_t *xdata)
 	NVT_LOG("++\n");
 
 	//---Enter Test Mode---
-	if (nvt_clear_fw_status())
+	if (nvt_clear_fw_status()) {
 		return -EAGAIN;
+	}
 
 	frame_num = PS_Config_Diff_Test_Frame / 10;
-
 	if (frame_num <= 0)
 		frame_num = 1;
-
 	printk("%s: frame_num=%d\n", __func__, frame_num);
 	nvt_enable_noise_collect(frame_num);
 	// need wait PS_Config_Diff_Test_Frame * 8.3ms
 	msleep(frame_num * 83);
 
-	if (nvt_polling_hand_shake_status())
+	if (nvt_polling_hand_shake_status()) {
 		return -EAGAIN;
+	}
 
-	if (nvt_get_fw_info())
+	if (nvt_get_fw_info()) {
 		return -EAGAIN;
+	}
 
 	if (nvt_get_fw_pipe() == 0)
 		nvt_read_mdata(ts->mmap->DIFF_PIPE0_ADDR, ts->mmap->DIFF_BTN_PIPE0_ADDR);
-
 	else
 		nvt_read_mdata(ts->mmap->DIFF_PIPE1_ADDR, ts->mmap->DIFF_BTN_PIPE1_ADDR);
 
@@ -1712,40 +1533,32 @@ static int32_t nvt_read_fw_digital_noise(int32_t *xdata)
 			RawData_DigiDiff_Min[iArrayIndex] = (int8_t)(xdata[iArrayIndex] & 0xFF);
 		}
 	}
-
 #if TOUCH_KEY_NUM > 0
-
 	for (k = 0; k < Key_Channel; k++) {
 		iArrayIndex = Y_Channel * X_Channel + k;
 		RawData_DigiDiff_Max[iArrayIndex] = (int8_t)((xdata[iArrayIndex] >> 8) & 0xFF);
 		RawData_DigiDiff_Min[iArrayIndex] = (int8_t)(xdata[iArrayIndex] & 0xFF);
 	}
-
 #endif /* #if TOUCH_KEY_NUM > 0 */
 
 	//---Leave Test Mode---
 	nvt_change_mode(NORMAL_MODE);
 
 	printk("%s:RawData_Diff_Max:\n", __func__);
-
 	// Save Rawdata to CSV file
-	if (nvt_save_rawdata_to_csv(RawData_DigiDiff_Max, X_Channel, Y_Channel,
-				    DIGI_NOISE_TEST_CSV_FILE, 0) < 0) {
+	if (nvt_save_rawdata_to_csv(RawData_DigiDiff_Max, X_Channel, Y_Channel, DIGI_NOISE_TEST_CSV_FILE, 0) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
 
 #if TOUCH_KEY_NUM > 0
-	rawdata_diff_min_offset = Y_Channel * X_Channel * 7 + Y_Channel * 2 +
-				  Key_Channel * 7 + 2;
+	rawdata_diff_min_offset = Y_Channel * X_Channel * 7 + Y_Channel * 2 + Key_Channel * 7 + 2;
 #else
 	rawdata_diff_min_offset = Y_Channel * X_Channel * 7 + Y_Channel * 2;
 #endif /* #if TOUCH_KEY_NUM > 0 */
 	printk("%s:RawData_Diff_Min:\n", __func__);
-
 	// Save Rawdata to CSV file
-	if (nvt_save_rawdata_to_csv(RawData_DigiDiff_Min, X_Channel, Y_Channel,
-				    DIGI_NOISE_TEST_CSV_FILE, rawdata_diff_min_offset) < 0) {
+	if (nvt_save_rawdata_to_csv(RawData_DigiDiff_Min, X_Channel, Y_Channel, DIGI_NOISE_TEST_CSV_FILE, rawdata_diff_min_offset) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
@@ -1772,7 +1585,6 @@ static int32_t nvt_read_lpwg_rawdata(int32_t *xdata)
 
 	if (nvt_get_fw_pipe() == 0)
 		nvt_read_mdata(ts->mmap->RAW_PIPE0_ADDR, ts->mmap->RAW_BTN_PIPE0_ADDR);
-
 	else
 		nvt_read_mdata(ts->mmap->RAW_PIPE1_ADDR, ts->mmap->RAW_BTN_PIPE1_ADDR);
 
@@ -1784,21 +1596,16 @@ static int32_t nvt_read_lpwg_rawdata(int32_t *xdata)
 			xdata[iArrayIndex] = (int16_t)xdata[iArrayIndex];
 		}
 	}
-
 #if TOUCH_KEY_NUM > 0
-
 	for (k = 0; k < Key_Channel; k++) {
 		iArrayIndex = Y_Channel * X_Channel + k;
 		xdata[iArrayIndex] = (int16_t)xdata[iArrayIndex];
 	}
-
 #endif /* #if TOUCH_KEY_NUM > 0 */
 
 	printk("%s:\n", __func__);
-
 	// Save Rawdata to CSV file
-	if (nvt_save_rawdata_to_csv(xdata, X_Channel, Y_Channel, LPWG_RAWDATA_CSV_FILE,
-				    0) < 0) {
+	if (nvt_save_rawdata_to_csv(xdata, X_Channel, Y_Channel, LPWG_RAWDATA_CSV_FILE, 0) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
@@ -1824,28 +1631,28 @@ static int32_t nvt_read_fw_lpwg_noise(int32_t *xdata)
 	NVT_LOG("++\n");
 
 	//---Enter Test Mode---
-	if (nvt_clear_fw_status())
+	if (nvt_clear_fw_status()) {
 		return -EAGAIN;
+	}
 
 	frame_num = PS_Config_Diff_Test_Frame / 10;
-
 	if (frame_num <= 0)
 		frame_num = 1;
-
 	printk("%s: frame_num=%d\n", __func__, frame_num);
 	nvt_enable_noise_collect(frame_num);
 	// need wait PS_Config_Diff_Test_Frame * 8.3ms
 	msleep(frame_num * 83);
 
-	if (nvt_polling_hand_shake_status())
+	if (nvt_polling_hand_shake_status()) {
 		return -EAGAIN;
+	}
 
-	if (nvt_get_fw_info())
+	if (nvt_get_fw_info()) {
 		return -EAGAIN;
+	}
 
 	if (nvt_get_fw_pipe() == 0)
 		nvt_read_mdata(ts->mmap->DIFF_PIPE0_ADDR, ts->mmap->DIFF_BTN_PIPE0_ADDR);
-
 	else
 		nvt_read_mdata(ts->mmap->DIFF_PIPE1_ADDR, ts->mmap->DIFF_BTN_PIPE1_ADDR);
 
@@ -1858,40 +1665,32 @@ static int32_t nvt_read_fw_lpwg_noise(int32_t *xdata)
 			RawData_Diff_Min[iArrayIndex] = (int8_t)(xdata[iArrayIndex] & 0xFF);
 		}
 	}
-
 #if TOUCH_KEY_NUM > 0
-
 	for (k = 0; k < Key_Channel; k++) {
 		iArrayIndex = Y_Channel * X_Channel + k;
 		RawData_Diff_Max[iArrayIndex] = (int8_t)((xdata[iArrayIndex] >> 8) & 0xFF);
 		RawData_Diff_Min[iArrayIndex] = (int8_t)(xdata[iArrayIndex] & 0xFF);
 	}
-
 #endif /* #if TOUCH_KEY_NUM > 0 */
 
 	//---Leave Test Mode---
 	nvt_change_mode(NORMAL_MODE);
 
 	printk("%s:RawData_Diff_Max:\n", __func__);
-
 	// Save Rawdata to CSV file
-	if (nvt_save_rawdata_to_csv(RawData_Diff_Max, X_Channel, Y_Channel,
-				    LPWG_NOISE_CSV_FILE, 0) < 0) {
+	if (nvt_save_rawdata_to_csv(RawData_Diff_Max, X_Channel, Y_Channel, LPWG_NOISE_CSV_FILE, 0) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
 
 #if TOUCH_KEY_NUM > 0
-	rawdata_diff_min_offset = Y_Channel * X_Channel * 7 + Y_Channel * 2 +
-				  Key_Channel * 7 + 2;
+	rawdata_diff_min_offset = Y_Channel * X_Channel * 7 + Y_Channel * 2 + Key_Channel * 7 + 2;
 #else
 	rawdata_diff_min_offset = Y_Channel * X_Channel * 7 + Y_Channel * 2;
 #endif /* #if TOUCH_KEY_NUM > 0 */
 	printk("%s:RawData_Diff_Min:\n", __func__);
-
 	// Save Rawdata to CSV file
-	if (nvt_save_rawdata_to_csv(RawData_Diff_Min, X_Channel, Y_Channel,
-				    LPWG_NOISE_CSV_FILE, rawdata_diff_min_offset) < 0) {
+	if (nvt_save_rawdata_to_csv(RawData_Diff_Min, X_Channel, Y_Channel, LPWG_NOISE_CSV_FILE, rawdata_diff_min_offset) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
@@ -1934,21 +1733,21 @@ static int32_t nvt_read_doze_fw_noise(int32_t *xdata)
 	NVT_LOG("++\n");
 
 	//---Enter Test Mode---
-	if (nvt_clear_fw_status())
+	if (nvt_clear_fw_status()) {
 		return -EAGAIN;
+	}
 
 	frame_num = PS_Config_Doze_Noise_Test_Frame / 10;
-
 	if (frame_num <= 0)
 		frame_num = 1;
-
 	printk("%s: frame_num=%d\n", __func__, frame_num);
 	nvt_enable_doze_noise_collect(frame_num);
 	// need wait PS_Config_Doze_Noise_Test_Frame * 8.3ms
 	msleep(frame_num * 83 * 2);
 
-	if (nvt_polling_hand_shake_status())
+	if (nvt_polling_hand_shake_status()) {
 		return -EAGAIN;
+	}
 
 	for (x = 0; x < Doze_X_Channel; x++) {
 		//---change xdata index---
@@ -1958,16 +1757,15 @@ static int32_t nvt_read_doze_fw_noise(int32_t *xdata)
 		buf[0] = (ts->mmap->DIFF_PIPE0_ADDR + Y_Channel * 2 * x) & 0xFF;
 		CTP_SPI_READ(ts->client, buf, Y_Channel * 2 + 1);
 
-		for (y = 0; y < Y_Channel; y++)
-			xdata[y * Doze_X_Channel + x] = (uint16_t)(buf[y * 2 + 1] + 256 * buf[y * 2 +
-							2]);
+		for (y = 0; y < Y_Channel; y++) {
+			xdata[y * Doze_X_Channel + x] = (uint16_t)(buf[y * 2 + 1] + 256 * buf[y * 2 + 2]);
+		}
 	}
 
 	for (y = 0; y < Y_Channel; y++) {
 		for (x = 0; x < Doze_X_Channel; x++) {
 			iArrayIndex = y * Doze_X_Channel + x;
-			RawData_Doze_Diff_Max[iArrayIndex] = (int8_t)((xdata[iArrayIndex] >> 8) & 0xFF)
-							     * 4;	//scaling up
+			RawData_Doze_Diff_Max[iArrayIndex] = (int8_t)((xdata[iArrayIndex] >> 8) & 0xFF) * 4;	//scaling up
 			RawData_Doze_Diff_Min[iArrayIndex] = (int8_t)(xdata[iArrayIndex] & 0xFF) * 4;
 		}
 	}
@@ -1976,25 +1774,22 @@ static int32_t nvt_read_doze_fw_noise(int32_t *xdata)
 	//nvt_change_mode(NORMAL_MODE);	//No return to normal mode. Continuous to get doze rawdata
 
 	printk("%s:RawData_Doze_Diff_Max:\n", __func__);
-
 	// Save Rawdata to CSV file
 	if (nvt_save_rawdata_to_csv(RawData_Doze_Diff_Max, Doze_X_Channel, Y_Channel,
-				    DOZE_NOISE_TEST_CSV_FILE, 0) < 0) {
+				DOZE_NOISE_TEST_CSV_FILE, 0) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
 
 #if TOUCH_KEY_NUM > 0
-	rawdata_diff_min_offset = Y_Channel * Doze_X_Channel * 7 + Y_Channel * 2 +
-				  Key_Channel * 7 + 2;
+	rawdata_diff_min_offset = Y_Channel * Doze_X_Channel * 7 + Y_Channel * 2 + Key_Channel * 7 + 2;
 #else
 	rawdata_diff_min_offset = Y_Channel * Doze_X_Channel * 7 + Y_Channel * 2;
 #endif /* #if TOUCH_KEY_NUM > 0 */
 	printk("%s:RawData_Doze_Diff_Min:\n", __func__);
-
 	// Save Rawdata to CSV file
 	if (nvt_save_rawdata_to_csv(RawData_Doze_Diff_Min, 2, Y_Channel,
-				    DOZE_NOISE_TEST_CSV_FILE, rawdata_diff_min_offset) < 0) {
+				DOZE_NOISE_TEST_CSV_FILE, rawdata_diff_min_offset) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
@@ -2030,10 +1825,9 @@ static int32_t nvt_read_doze_baseline(int32_t *xdata)
 		//---read data---
 		buf[0] = (ts->mmap->DOZE_GM_S1D_SCAN_RAW_ADDR + Y_Channel * 2 * x) & 0xFF;
 		CTP_SPI_READ(ts->client, buf, Y_Channel * 2 + 1);
-
-		for (y = 0; y < Y_Channel; y++)
-			xdata[y * Doze_X_Channel + x] = (uint16_t)(buf[y * 2 + 1] + 256 * buf[y * 2 +
-							2]);
+		for (y = 0; y < Y_Channel; y++) {
+			xdata[y * Doze_X_Channel + x] = (uint16_t)(buf[y * 2 + 1] + 256 * buf[y * 2 + 2]);
+		}
 	}
 
 	for (y = 0; y < Y_Channel; y++) {
@@ -2047,10 +1841,8 @@ static int32_t nvt_read_doze_baseline(int32_t *xdata)
 	nvt_change_mode(NORMAL_MODE);
 
 	printk("%s:\n", __func__);
-
 	// Save Rawdata to CSV file
-	if (nvt_save_rawdata_to_csv(xdata, Doze_X_Channel, Y_Channel,
-				    DOZE_FW_RAWDATA_CSV_FILE, 0) < 0) {
+	if (nvt_save_rawdata_to_csv(xdata, Doze_X_Channel, Y_Channel, DOZE_FW_RAWDATA_CSV_FILE, 0) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
@@ -2093,21 +1885,21 @@ static int32_t nvt_read_fdm_fw_noise(int32_t *xdata)
 	NVT_LOG("++\n");
 
 	//---Enter Test Mode---
-	if (nvt_clear_fw_status())
+	if (nvt_clear_fw_status()) {
 		return -EAGAIN;
+	}
 
 	frame_num = PS_Config_FDM_Noise_Test_Frame / 10;
-
 	if (frame_num <= 0)
 		frame_num = 1;
-
 	printk("%s: frame_num=%d\n", __func__, frame_num);
 	nvt_enable_fdm_noise_collect(frame_num);
 	// need wait PS_Config_FDM_Noise_Test_Frame * 8.3ms
 	msleep(frame_num * 83 * 2);
 
-	if (nvt_polling_hand_shake_status())
+	if (nvt_polling_hand_shake_status()) {
 		return -EAGAIN;
+	}
 
 	for (x = 0; x < FDM_X_Channel; x++) {
 		//---change xdata index---
@@ -2117,16 +1909,15 @@ static int32_t nvt_read_fdm_fw_noise(int32_t *xdata)
 		buf[0] = (ts->mmap->DIFF_PIPE0_ADDR + Y_Channel * FDM_X_Channel * x) & 0xFF;
 		CTP_SPI_READ(ts->client, buf, Y_Channel * 2 + 1);
 
-		for (y = 0; y < Y_Channel; y++)
-			xdata[y * FDM_X_Channel + x] = (uint16_t)(buf[y * FDM_X_Channel + 1] + 256 *
-						       buf[y * FDM_X_Channel + 2]);
+		for (y = 0; y < Y_Channel; y++) {
+			xdata[y * FDM_X_Channel + x] = (uint16_t)(buf[y * FDM_X_Channel + 1] + 256 * buf[y * FDM_X_Channel + 2]);
+		}
 	}
 
 	for (y = 0; y < Y_Channel; y++) {
 		for (x = 0; x < FDM_X_Channel; x++) {
 			iArrayIndex = y * FDM_X_Channel + x;
-			RawData_FDM_Diff_Max[iArrayIndex] = (int8_t)((xdata[iArrayIndex] >> 8) & 0xFF) *
-							    4;	//scaling up
+			RawData_FDM_Diff_Max[iArrayIndex] = (int8_t)((xdata[iArrayIndex] >> 8) & 0xFF) * 4;	//scaling up
 			RawData_FDM_Diff_Min[iArrayIndex] = (int8_t)(xdata[iArrayIndex] & 0xFF) * 4;
 		}
 	}
@@ -2135,25 +1926,22 @@ static int32_t nvt_read_fdm_fw_noise(int32_t *xdata)
 	//nvt_change_mode(NORMAL_MODE);	//No return to normal mode. Continuous to get fdm rawdata
 
 	printk("%s:RawData_FDM_Diff_Max:\n", __func__);
-
 	// Save Rawdata to CSV file
 	if (nvt_save_rawdata_to_csv(RawData_FDM_Diff_Max, FDM_X_Channel, Y_Channel,
-				    FDM_NOISE_TEST_CSV_FILE, 0) < 0) {
+				FDM_NOISE_TEST_CSV_FILE, 0) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
 
 #if TOUCH_KEY_NUM > 0
-	rawdata_diff_min_offset = Y_Channel * FDM_X_Channel * 7 + Y_Channel * 2 +
-				  Key_Channel * 7 + 2;
+	rawdata_diff_min_offset = Y_Channel * FDM_X_Channel * 7 + Y_Channel * 2 + Key_Channel * 7 + 2;
 #else
 	rawdata_diff_min_offset = Y_Channel * FDM_X_Channel * 7 + Y_Channel * 2;
 #endif /* #if TOUCH_KEY_NUM > 0 */
 	printk("%s:RawData_FDM_Diff_Min:\n", __func__);
-
 	// Save Rawdata to CSV file
 	if (nvt_save_rawdata_to_csv(RawData_FDM_Diff_Min, 2, Y_Channel,
-				    FDM_NOISE_TEST_CSV_FILE, rawdata_diff_min_offset) < 0) {
+				FDM_NOISE_TEST_CSV_FILE, rawdata_diff_min_offset) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
@@ -2184,16 +1972,14 @@ static int32_t nvt_read_fdm_baseline(int32_t *xdata)
 
 	for (x = 0; x < FDM_X_Channel; x++) {
 		//---set xdata index---
-		nvt_set_page(ts->mmap->DOZE_GM_S1D_SCAN_RAW_ADDR + Y_Channel * FDM_X_Channel *
-			     x);
+		nvt_set_page(ts->mmap->DOZE_GM_S1D_SCAN_RAW_ADDR + Y_Channel * FDM_X_Channel * x);
 
 		//---read data---
-		buf[0] = (ts->mmap->DOZE_GM_S1D_SCAN_RAW_ADDR + Y_Channel * FDM_X_Channel * x) &
-			 0xFF;
+		buf[0] = (ts->mmap->DOZE_GM_S1D_SCAN_RAW_ADDR + Y_Channel * FDM_X_Channel * x) & 0xFF;
 		CTP_SPI_READ(ts->client, buf, Y_Channel * 2 + 1);
-
-		for (y = 0; y < Y_Channel; y++)
+		for (y = 0; y < Y_Channel; y++) {
 			xdata[y * 2 + x] = (uint16_t)(buf[y * 2 + 1] + 256 * buf[y * 2 + 2]);
+		}
 	}
 
 	for (y = 0; y < Y_Channel; y++) {
@@ -2207,10 +1993,8 @@ static int32_t nvt_read_fdm_baseline(int32_t *xdata)
 	nvt_change_mode(NORMAL_MODE);
 
 	printk("%s:\n", __func__);
-
 	// Save Rawdata to CSV file
-	if (nvt_save_rawdata_to_csv(xdata, FDM_X_Channel, Y_Channel,
-				    FDM_FW_RAWDATA_CSV_FILE, 0) < 0) {
+	if (nvt_save_rawdata_to_csv(xdata, FDM_X_Channel, Y_Channel, FDM_FW_RAWDATA_CSV_FILE, 0) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
@@ -2239,7 +2023,6 @@ static int8_t nvt_enter_digital_test(uint8_t enter_mode)
 		buf[3] = 0x08;
 		buf[4] = 0x01;
 		CTP_SPI_WRITE(ts->client, buf, 5);
-
 	} else {
 		buf[0] = EVENT_MAP_HOST_CMD;
 		buf[1] = 0x32;
@@ -2276,11 +2059,9 @@ static int8_t nvt_enter_digital_test(uint8_t enter_mode)
 		buf[4] = 0x00;
 		buf[5] = 0x00;
 		CTP_SPI_READ(ts->client, buf, 6);
-		NVT_ERR("Read back 5 bytes from offset EVENT_MAP_HOST_CMD: 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X\n",
-			buf[1], buf[2], buf[3], buf[4], buf[5]);
+		NVT_ERR("Read back 5 bytes from offset EVENT_MAP_HOST_CMD: 0x%02X, 0x%02X, 0x%02X, 0x%02X, 0x%02X\n", buf[1], buf[2], buf[3], buf[4], buf[5]);
 
 		return -1;
-
 	} else {
 		buf[0] = EVENT_MAP_HANDSHAKING_or_SUB_CMD_BYTE;
 		buf[1] = 0xCC;
@@ -2341,21 +2122,21 @@ static int32_t nvt_read_fw_open(int32_t *xdata)
 	NVT_LOG("++\n");
 
 	//---Enter Test Mode---
-	if (nvt_clear_fw_status())
+	if (nvt_clear_fw_status()) {
 		return -EAGAIN;
+	}
 
 	nvt_enable_open_test();
 
-	if (nvt_polling_hand_shake_status())
+	if (nvt_polling_hand_shake_status()) {
 		return -EAGAIN;
+	}
 
 #if TOUCH_KEY_NUM > 0
-	rawdata_buf = (uint8_t *)kzalloc((IC_X_CFG_SIZE * IC_Y_CFG_SIZE +
-					  IC_KEY_CFG_SIZE) * 2, GFP_KERNEL);
+	rawdata_buf = (uint8_t *)kzalloc((IC_X_CFG_SIZE * IC_Y_CFG_SIZE + IC_KEY_CFG_SIZE) * 2, GFP_KERNEL);
 #else
 	rawdata_buf = (uint8_t *)kzalloc(IC_X_CFG_SIZE * IC_Y_CFG_SIZE * 2, GFP_KERNEL);
 #endif /* #if TOUCH_KEY_NUM > 0 */
-
 	if (!rawdata_buf) {
 		NVT_ERR("kzalloc for rawdata_buf failed!\n");
 		return -ENOMEM;
@@ -2363,7 +2144,6 @@ static int32_t nvt_read_fw_open(int32_t *xdata)
 
 	if (nvt_get_fw_pipe() == 0)
 		raw_pipe_addr = ts->mmap->RAW_PIPE0_ADDR;
-
 	else
 		raw_pipe_addr = ts->mmap->RAW_PIPE1_ADDR;
 
@@ -2374,12 +2154,9 @@ static int32_t nvt_read_fw_open(int32_t *xdata)
 		CTP_SPI_READ(ts->client, buf, IC_X_CFG_SIZE * 2 + 1);
 		memcpy(rawdata_buf + y * IC_X_CFG_SIZE * 2, buf + 1, IC_X_CFG_SIZE * 2);
 	}
-
 #if TOUCH_KEY_NUM > 0
-
 	if (nvt_get_fw_pipe() == 0)
 		raw_btn_pipe_addr = ts->mmap->RAW_BTN_PIPE0_ADDR;
-
 	else
 		raw_btn_pipe_addr = ts->mmap->RAW_BTN_PIPE1_ADDR;
 
@@ -2387,27 +2164,21 @@ static int32_t nvt_read_fw_open(int32_t *xdata)
 	nvt_set_page(raw_btn_pipe_addr);
 	buf[0] = (uint8_t)(raw_btn_pipe_addr & 0xFF);
 	CTP_SPI_READ(ts->client, buf, IC_KEY_CFG_SIZE * 2 + 1);
-	memcpy(rawdata_buf + IC_Y_CFG_SIZE * IC_X_CFG_SIZE * 2, buf + 1,
-	       IC_KEY_CFG_SIZE * 2);
+	memcpy(rawdata_buf + IC_Y_CFG_SIZE * IC_X_CFG_SIZE * 2, buf + 1, IC_KEY_CFG_SIZE * 2);
 #endif /* #if TOUCH_KEY_NUM > 0 */
 
 	for (y = 0; y < IC_Y_CFG_SIZE; y++) {
 		for (x = 0; x < IC_X_CFG_SIZE; x++) {
-			if ((AIN_Y[y] != 0xFF) && (AIN_X[x] != 0xFF))
-				xdata[AIN_Y[y] * X_Channel + AIN_X[x]] = (int16_t)((rawdata_buf[(y *
-						IC_X_CFG_SIZE + x) * 2] + 256 * rawdata_buf[(y * IC_X_CFG_SIZE + x) * 2 + 1]));
+			if ((AIN_Y[y] != 0xFF) && (AIN_X[x] != 0xFF)) {
+				xdata[AIN_Y[y] * X_Channel + AIN_X[x]] = (int16_t)((rawdata_buf[(y * IC_X_CFG_SIZE + x) * 2] + 256 * rawdata_buf[(y * IC_X_CFG_SIZE + x) * 2 + 1]));
+			}
 		}
 	}
-
 #if TOUCH_KEY_NUM > 0
-
 	for (k = 0; k < IC_KEY_CFG_SIZE; k++) {
 		if (AIN_KEY[k] != 0xFF)
-			xdata[Y_Channel * X_Channel + AIN_KEY[k]] = (int16_t)(rawdata_buf[(IC_Y_CFG_SIZE
-					* IC_X_CFG_SIZE + k) * 2] + 256 * rawdata_buf[(IC_Y_CFG_SIZE * IC_X_CFG_SIZE +
-							k) * 2 + 1]);
+			xdata[Y_Channel * X_Channel + AIN_KEY[k]] = (int16_t)(rawdata_buf[(IC_Y_CFG_SIZE * IC_X_CFG_SIZE + k) * 2] + 256 * rawdata_buf[(IC_Y_CFG_SIZE * IC_X_CFG_SIZE + k) * 2 + 1]);
 	}
-
 #endif /* #if TOUCH_KEY_NUM > 0 */
 
 	if (rawdata_buf) {
@@ -2420,10 +2191,8 @@ static int32_t nvt_read_fw_open(int32_t *xdata)
 
 
 	printk("%s:RawData_Open\n", __func__);
-
 	// Save RawData to CSV file
-	if (nvt_save_rawdata_to_csv(xdata, X_Channel, Y_Channel, OPEN_TEST_CSV_FILE,
-				    0) < 0) {
+	if (nvt_save_rawdata_to_csv(xdata, X_Channel, Y_Channel, OPEN_TEST_CSV_FILE, 0) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
@@ -2449,21 +2218,21 @@ static int32_t nvt_read_fw_short(int32_t *xdata)
 	NVT_LOG("dfy_short++\n");
 
 	//---Enter Test Mode---
-	if (nvt_clear_fw_status())
+	if (nvt_clear_fw_status()) {
 		return -EAGAIN;
+	}
 
 	nvt_enable_short_test();
 
-	if (nvt_polling_hand_shake_status())
+	if (nvt_polling_hand_shake_status()) {
 		return -EAGAIN;
+	}
 
 #if TOUCH_KEY_NUM > 0
-	rawdata_buf = (uint8_t *)kzalloc((X_Channel * Y_Channel + Key_Channel) * 2,
-					 GFP_KERNEL);
+    rawdata_buf = (uint8_t *)kzalloc((X_Channel * Y_Channel + Key_Channel) * 2, GFP_KERNEL);
 #else
-	rawdata_buf = (uint8_t *)kzalloc(X_Channel * Y_Channel * 2, GFP_KERNEL);
+    rawdata_buf = (uint8_t *)kzalloc(X_Channel * Y_Channel * 2, GFP_KERNEL);
 #endif /* #if TOUCH_KEY_NUM > 0 */
-
 	if (!rawdata_buf) {
 		NVT_ERR("kzalloc for rawdata_buf failed!\n");
 		return -ENOMEM;
@@ -2471,7 +2240,6 @@ static int32_t nvt_read_fw_short(int32_t *xdata)
 
 	if (nvt_get_fw_pipe() == 0)
 		raw_pipe_addr = ts->mmap->RAW_PIPE0_ADDR;
-
 	else
 		raw_pipe_addr = ts->mmap->RAW_PIPE1_ADDR;
 
@@ -2482,16 +2250,13 @@ static int32_t nvt_read_fw_short(int32_t *xdata)
 		CTP_SPI_READ(ts->client, buf, X_Channel * 2 + 1);
 		memcpy(rawdata_buf + y * X_Channel * 2, buf + 1, X_Channel * 2);
 	}
-
 #if TOUCH_KEY_NUM > 0
-
 	if (nvt_get_fw_pipe() == 0)
 		raw_btn_pipe_addr = ts->mmap->RAW_BTN_PIPE0_ADDR;
-
 	else
 		raw_btn_pipe_addr = ts->mmap->RAW_BTN_PIPE1_ADDR;
 
-	//---change xdata index---
+    //---change xdata index---
 	nvt_set_page(raw_btn_pipe_addr);
 	buf[0] = (uint8_t)(raw_btn_pipe_addr & 0xFF);
 	CTP_SPI_READ(ts->client, buf, Key_Channel * 2 + 1);
@@ -2501,19 +2266,14 @@ static int32_t nvt_read_fw_short(int32_t *xdata)
 	for (y = 0; y < Y_Channel; y++) {
 		for (x = 0; x < X_Channel; x++) {
 			iArrayIndex = y * X_Channel + x;
-			xdata[iArrayIndex] = (int16_t)(rawdata_buf[iArrayIndex * 2] + 256 *
-						       rawdata_buf[iArrayIndex * 2 + 1]);
+			xdata[iArrayIndex] = (int16_t)(rawdata_buf[iArrayIndex * 2] + 256 * rawdata_buf[iArrayIndex * 2 + 1]);
 		}
 	}
-
 #if TOUCH_KEY_NUM > 0
-
 	for (k = 0; k < Key_Channel; k++) {
 		iArrayIndex = Y_Channel * X_Channel + k;
-		xdata[iArrayIndex] = (int16_t)(rawdata_buf[iArrayIndex * 2] + 256 *
-					       rawdata_buf[iArrayIndex * 2 + 1]);
+		xdata[iArrayIndex] = (int16_t)(rawdata_buf[iArrayIndex * 2] + 256 * rawdata_buf[iArrayIndex * 2 + 1]);
 	}
-
 #endif /* #if TOUCH_KEY_NUM > 0 */
 
 	if (rawdata_buf) {
@@ -2525,10 +2285,8 @@ static int32_t nvt_read_fw_short(int32_t *xdata)
 	nvt_change_mode(NORMAL_MODE);
 
 	printk("%s:RawData_Short\n", __func__);
-
 	// Save Rawdata to CSV file
-	if (nvt_save_rawdata_to_csv(xdata, X_Channel, Y_Channel, SHORT_TEST_CSV_FILE,
-				    0) < 0) {
+	if (nvt_save_rawdata_to_csv(xdata, X_Channel, Y_Channel, SHORT_TEST_CSV_FILE, 0) < 0) {
 		NVT_ERR("save rawdata to CSV file failed\n");
 		return -EAGAIN;
 	}
@@ -2545,14 +2303,12 @@ Description:
 return:
 	Executive outcomes. 0---passed. negative---failed.
 *******************************************************/
-static int32_t RawDataTest_SinglePoint_Sub(int32_t rawdata[],
-		uint8_t RecordResult[], uint8_t x_ch, uint8_t y_ch,
-		int32_t Rawdata_Limit_Postive[], int32_t Rawdata_Limit_Negative[])
+static int32_t RawDataTest_SinglePoint_Sub(int32_t rawdata[], uint8_t RecordResult[], uint8_t x_ch, uint8_t y_ch, int32_t Rawdata_Limit_Postive[], int32_t Rawdata_Limit_Negative[])
 {
 	int32_t i = 0;
 	int32_t j = 0;
 #if TOUCH_KEY_NUM > 0
-	int32_t k = 0;
+    int32_t k = 0;
 #endif /* #if TOUCH_KEY_NUM > 0 */
 	int32_t iArrayIndex = 0;
 	bool isPass = true;
@@ -2563,28 +2319,25 @@ static int32_t RawDataTest_SinglePoint_Sub(int32_t rawdata[],
 
 			RecordResult[iArrayIndex] = 0x00; // default value for PASS
 
-			if (rawdata[iArrayIndex] > Rawdata_Limit_Postive[iArrayIndex])
+			if(rawdata[iArrayIndex] > Rawdata_Limit_Postive[iArrayIndex])
 				RecordResult[iArrayIndex] |= 0x01;
 
-			if (rawdata[iArrayIndex] < Rawdata_Limit_Negative[iArrayIndex])
+			if(rawdata[iArrayIndex] < Rawdata_Limit_Negative[iArrayIndex])
 				RecordResult[iArrayIndex] |= 0x02;
 		}
 	}
-
 #if TOUCH_KEY_NUM > 0
-
 	for (k = 0; k < Key_Channel; k++) {
 		iArrayIndex = y_ch * x_ch + k;
 
 		RecordResult[iArrayIndex] = 0x00; // default value for PASS
 
-		if (rawdata[iArrayIndex] > Rawdata_Limit_Postive[iArrayIndex])
+		if(rawdata[iArrayIndex] > Rawdata_Limit_Postive[iArrayIndex])
 			RecordResult[iArrayIndex] |= 0x01;
 
-		if (rawdata[iArrayIndex] < Rawdata_Limit_Negative[iArrayIndex])
+		if(rawdata[iArrayIndex] < Rawdata_Limit_Negative[iArrayIndex])
 			RecordResult[iArrayIndex] |= 0x02;
 	}
-
 #endif /* #if TOUCH_KEY_NUM > 0 */
 
 	//---Check RecordResult---
@@ -2596,23 +2349,18 @@ static int32_t RawDataTest_SinglePoint_Sub(int32_t rawdata[],
 			}
 		}
 	}
-
 #if TOUCH_KEY_NUM > 0
-
 	for (k = 0; k < Key_Channel; k++) {
 		iArrayIndex = y_ch * x_ch + k;
-
 		if (RecordResult[iArrayIndex] != 0) {
 			isPass = false;
 			break;
 		}
 	}
-
 #endif /* #if TOUCH_KEY_NUM > 0 */
 
 	if (isPass == false) {
 		return -1; // FAIL
-
 	} else {
 		return 0; // PASS
 	}
@@ -2625,8 +2373,7 @@ Description:
 return:
 	n.a.
 *******************************************************/
-void print_selftest_result(struct seq_file *m, int32_t TestResult,
-			   uint8_t RecordResult[], int32_t rawdata[], uint8_t x_len, uint8_t y_len)
+void print_selftest_result(struct seq_file *m, int32_t TestResult, uint8_t RecordResult[], int32_t rawdata[], uint8_t x_len, uint8_t y_len)
 {
 	int32_t i = 0;
 	int32_t j = 0;
@@ -2636,71 +2383,56 @@ void print_selftest_result(struct seq_file *m, int32_t TestResult,
 #endif /* #if TOUCH_KEY_NUM > 0 */
 
 	switch (TestResult) {
-	case 0:
-		nvt_mp_seq_printf(m, " PASS!\n");
-		break;
+		case 0:
+			nvt_mp_seq_printf(m, " PASS!\n");
+			break;
 
-	case 1:
-		nvt_mp_seq_printf(m, " ERROR! Read Data FAIL!\n");
-		break;
+		case 1:
+			nvt_mp_seq_printf(m, " ERROR! Read Data FAIL!\n");
+			break;
 
-	case -1:
-		nvt_mp_seq_printf(m, " FAIL!\n");
-		nvt_mp_seq_printf(m, "RecordResult:\n");
-
-		for (i = 0; i < y_len; i++) {
-			for (j = 0; j < x_len; j++) {
-				iArrayIndex = i * x_len + j;
+		case -1:
+			nvt_mp_seq_printf(m, " FAIL!\n");
+			nvt_mp_seq_printf(m, "RecordResult:\n");
+			for (i = 0; i < y_len; i++) {
+				for (j = 0; j < x_len; j++) {
+					iArrayIndex = i * x_len + j;
+					seq_printf(m, "0x%02X, ", RecordResult[iArrayIndex]);
+				}
+				if (!nvt_mp_test_result_printed)
+					nvt_print_result_log_in_one_line(RecordResult + i * x_len, x_len);
+				nvt_mp_seq_printf(m, "\n");
+			}
+#if TOUCH_KEY_NUM > 0
+			for (k = 0; k < Key_Channel; k++) {
+				iArrayIndex = y_len * x_len + k;
 				seq_printf(m, "0x%02X, ", RecordResult[iArrayIndex]);
 			}
-
 			if (!nvt_mp_test_result_printed)
-				nvt_print_result_log_in_one_line(RecordResult + i * x_len, x_len);
-
+				nvt_print_result_log_in_one_line(RecordResult + y_len * x_len, Key_Channel);
 			nvt_mp_seq_printf(m, "\n");
-		}
-
-#if TOUCH_KEY_NUM > 0
-
-		for (k = 0; k < Key_Channel; k++) {
-			iArrayIndex = y_len * x_len + k;
-			seq_printf(m, "0x%02X, ", RecordResult[iArrayIndex]);
-		}
-
-		if (!nvt_mp_test_result_printed)
-			nvt_print_result_log_in_one_line(RecordResult + y_len * x_len, Key_Channel);
-
-		nvt_mp_seq_printf(m, "\n");
 #endif /* #if TOUCH_KEY_NUM > 0 */
-		nvt_mp_seq_printf(m, "ReadData:\n");
-
-		for (i = 0; i < y_len; i++) {
-			for (j = 0; j < x_len; j++) {
-				iArrayIndex = i * x_len + j;
+			nvt_mp_seq_printf(m, "ReadData:\n");
+			for (i = 0; i < y_len; i++) {
+				for (j = 0; j < x_len; j++) {
+					iArrayIndex = i * x_len + j;
+					seq_printf(m, "%5d, ", rawdata[iArrayIndex]);
+				}
+				if (!nvt_mp_test_result_printed)
+					nvt_print_data_log_in_one_line(rawdata + i * x_len, x_len);
+				nvt_mp_seq_printf(m, "\n");
+			}
+#if TOUCH_KEY_NUM > 0
+			for (k = 0; k < Key_Channel; k++) {
+				iArrayIndex = y_len * x_len + k;
 				seq_printf(m, "%5d, ", rawdata[iArrayIndex]);
 			}
-
 			if (!nvt_mp_test_result_printed)
-				nvt_print_data_log_in_one_line(rawdata + i * x_len, x_len);
-
+				nvt_print_data_log_in_one_line(rawdata + y_len * x_len, Key_Channel);
 			nvt_mp_seq_printf(m, "\n");
-		}
-
-#if TOUCH_KEY_NUM > 0
-
-		for (k = 0; k < Key_Channel; k++) {
-			iArrayIndex = y_len * x_len + k;
-			seq_printf(m, "%5d, ", rawdata[iArrayIndex]);
-		}
-
-		if (!nvt_mp_test_result_printed)
-			nvt_print_data_log_in_one_line(rawdata + y_len * x_len, Key_Channel);
-
-		nvt_mp_seq_printf(m, "\n");
 #endif /* #if TOUCH_KEY_NUM > 0 */
-		break;
+			break;
 	}
-
 	nvt_mp_seq_printf(m, "\n");
 }
 
@@ -2717,228 +2449,168 @@ static int32_t c_show_selftest(struct seq_file *m, void *v)
 	uint8_t err_cnt = 0;
 
 	NVT_LOG("++\n");
-
+	
 
 	nvt_mp_seq_printf(m, "FW Version: %d\n", fw_ver);
 	nvt_mp_seq_printf(m, "\n");
 
 	nvt_mp_seq_printf(m, "Short Test");
-	print_selftest_result(m, TestResult_Short, RecordResult_Short, RawData_Short,
-			      X_Channel, Y_Channel);
+	print_selftest_result(m, TestResult_Short, RecordResult_Short, RawData_Short, X_Channel, Y_Channel);
 
 	nvt_mp_seq_printf(m, "Open Test");
-	print_selftest_result(m, TestResult_Open, RecordResult_Open, RawData_Open,
-			      X_Channel, Y_Channel);
+	print_selftest_result(m, TestResult_Open, RecordResult_Open, RawData_Open, X_Channel, Y_Channel);
 
 	nvt_mp_seq_printf(m, "FW Rawdata Test");
-	print_selftest_result(m, TestResult_FW_Rawdata, RecordResult_FW_Rawdata,
-			      RawData_FW_Rawdata, X_Channel, Y_Channel);
+	print_selftest_result(m, TestResult_FW_Rawdata, RecordResult_FW_Rawdata, RawData_FW_Rawdata, X_Channel, Y_Channel);
 
 	nvt_mp_seq_printf(m, "FW CC Test");
-	print_selftest_result(m, TestResult_FW_CC, RecordResult_FW_CC, RawData_FW_CC,
-			      X_Channel, Y_Channel);
+	print_selftest_result(m, TestResult_FW_CC, RecordResult_FW_CC, RawData_FW_CC, X_Channel, Y_Channel);
 
 	nvt_mp_seq_printf(m, "Noise Test");
-
-	if ((TestResult_Noise == 0) || (TestResult_Noise == 1))
-		print_selftest_result(m, TestResult_FW_DiffMax, RecordResult_FW_DiffMax,
-				      RawData_Diff_Max, X_Channel, Y_Channel);
-
-	else { // TestResult_Noise is -1
+	if ((TestResult_Noise == 0) || (TestResult_Noise == 1)) {
+		print_selftest_result(m, TestResult_FW_DiffMax, RecordResult_FW_DiffMax, RawData_Diff_Max, X_Channel, Y_Channel);
+	} else { // TestResult_Noise is -1
 		nvt_mp_seq_printf(m, " FAIL!\n");
-
 		if (TestResult_FW_DiffMax == -1) {
 			nvt_mp_seq_printf(m, "FW Diff Max");
-			print_selftest_result(m, TestResult_FW_DiffMax, RecordResult_FW_DiffMax,
-					      RawData_Diff_Max, X_Channel, Y_Channel);
+			print_selftest_result(m, TestResult_FW_DiffMax, RecordResult_FW_DiffMax, RawData_Diff_Max, X_Channel, Y_Channel);
 		}
-
 		if (TestResult_FW_DiffMin == -1) {
 			nvt_mp_seq_printf(m, "FW Diff Min");
-			print_selftest_result(m, TestResult_FW_DiffMin, RecordResult_FW_DiffMin,
-					      RawData_Diff_Min, X_Channel, Y_Channel);
+			print_selftest_result(m, TestResult_FW_DiffMin, RecordResult_FW_DiffMin, RawData_Diff_Min, X_Channel, Y_Channel);
 		}
 	}
 
 	if (ts->pen_support) {
 		nvt_mp_seq_printf(m, "Pen FW Rawdata Test");
-
-		if ((TestResult_Pen_FW_Raw == 0) || (TestResult_Pen_FW_Raw == 1))
-			print_selftest_result(m, TestResult_Pen_FW_Raw, RecordResult_PenTipX_Raw,
-					      RawData_PenTipX_Raw, ts->x_num, ts->y_gang_num);
-
-		else { // TestResult_Pen_FW_Raw is -1
+		if ((TestResult_Pen_FW_Raw == 0) || (TestResult_Pen_FW_Raw == 1)) {
+			print_selftest_result(m, TestResult_Pen_FW_Raw, RecordResult_PenTipX_Raw, RawData_PenTipX_Raw, ts->x_num, ts->y_gang_num);
+		} else { // TestResult_Pen_FW_Raw is -1
 			nvt_mp_seq_printf(m, " FAIL!\n");
-
 			if (TestResult_PenTipX_Raw == -1) {
 				nvt_mp_seq_printf(m, "Pen Tip X Raw");
-				print_selftest_result(m, TestResult_PenTipX_Raw, RecordResult_PenTipX_Raw,
-						      RawData_PenTipX_Raw, ts->x_num, ts->y_gang_num);
+				print_selftest_result(m, TestResult_PenTipX_Raw, RecordResult_PenTipX_Raw, RawData_PenTipX_Raw, ts->x_num, ts->y_gang_num);
 			}
-
 			if (TestResult_PenTipY_Raw == -1) {
 				nvt_mp_seq_printf(m, "Pen Tip Y Raw");
-				print_selftest_result(m, TestResult_PenTipY_Raw, RecordResult_PenTipY_Raw,
-						      RawData_PenTipY_Raw, ts->x_gang_num, ts->y_num);
+				print_selftest_result(m, TestResult_PenTipY_Raw, RecordResult_PenTipY_Raw, RawData_PenTipY_Raw, ts->x_gang_num, ts->y_num);
 			}
-
 			if (TestResult_PenRingX_Raw == -1) {
 				nvt_mp_seq_printf(m, "Pen Ring X Raw");
-				print_selftest_result(m, TestResult_PenRingX_Raw, RecordResult_PenRingX_Raw,
-						      RawData_PenRingX_Raw, ts->x_num, ts->y_gang_num);
+				print_selftest_result(m, TestResult_PenRingX_Raw, RecordResult_PenRingX_Raw, RawData_PenRingX_Raw, ts->x_num, ts->y_gang_num);
 			}
-
 			if (TestResult_PenRingY_Raw == -1) {
 				nvt_mp_seq_printf(m, "Pen Ring Y Raw");
-				print_selftest_result(m, TestResult_PenRingY_Raw, RecordResult_PenRingY_Raw,
-						      RawData_PenRingY_Raw, ts->x_gang_num, ts->y_num);
+				print_selftest_result(m, TestResult_PenRingY_Raw, RecordResult_PenRingY_Raw, RawData_PenRingY_Raw, ts->x_gang_num, ts->y_num);
 			}
 		}
 
 		nvt_mp_seq_printf(m, "Pen Noise Test");
-
-		if ((TestResult_Pen_Noise == 0) || (TestResult_Pen_Noise == 1))
-			print_selftest_result(m, TestResult_Pen_Noise, RecordResult_PenTipX_DiffMax,
-					      RawData_PenTipX_DiffMax, ts->x_num, ts->y_gang_num);
-
-		else { // TestResult_Pen_Noise is -1
+		if ((TestResult_Pen_Noise == 0) || (TestResult_Pen_Noise == 1)) {
+			print_selftest_result(m, TestResult_Pen_Noise, RecordResult_PenTipX_DiffMax, RawData_PenTipX_DiffMax, ts->x_num, ts->y_gang_num);
+		} else { // TestResult_Pen_Noise is -1
 			nvt_mp_seq_printf(m, " FAIL!\n");
-
 			if (TestResult_PenTipX_DiffMax == -1) {
 				nvt_mp_seq_printf(m, "Pen Tip X Diff Max");
-				print_selftest_result(m, TestResult_PenTipX_DiffMax,
-						      RecordResult_PenTipX_DiffMax, RawData_PenTipX_DiffMax, ts->x_num,
-						      ts->y_gang_num);
+				print_selftest_result(m, TestResult_PenTipX_DiffMax, RecordResult_PenTipX_DiffMax, RawData_PenTipX_DiffMax, ts->x_num, ts->y_gang_num);
 			}
-
 			if (TestResult_PenTipX_DiffMin == -1) {
 				nvt_mp_seq_printf(m, "Pen Tip X Diff Min");
-				print_selftest_result(m, TestResult_PenTipX_DiffMin,
-						      RecordResult_PenTipX_DiffMin, RawData_PenTipX_DiffMin, ts->x_num,
-						      ts->y_gang_num);
+				print_selftest_result(m, TestResult_PenTipX_DiffMin, RecordResult_PenTipX_DiffMin, RawData_PenTipX_DiffMin, ts->x_num, ts->y_gang_num);
 			}
-
 			if (TestResult_PenTipY_DiffMax == -1) {
 				nvt_mp_seq_printf(m, "Pen Tip Y Diff Max");
-				print_selftest_result(m, TestResult_PenTipY_DiffMax,
-						      RecordResult_PenTipY_DiffMax, RawData_PenTipY_DiffMax, ts->x_gang_num,
-						      ts->y_num);
+				print_selftest_result(m, TestResult_PenTipY_DiffMax, RecordResult_PenTipY_DiffMax, RawData_PenTipY_DiffMax, ts->x_gang_num, ts->y_num);
 			}
-
 			if (TestResult_PenTipY_DiffMin == -1) {
 				nvt_mp_seq_printf(m, "Pen Tip Y Diff Min");
-				print_selftest_result(m, TestResult_PenTipY_DiffMin,
-						      RecordResult_PenTipY_DiffMin, RawData_PenTipY_DiffMin, ts->x_gang_num,
-						      ts->y_num);
+				print_selftest_result(m, TestResult_PenTipY_DiffMin, RecordResult_PenTipY_DiffMin, RawData_PenTipY_DiffMin, ts->x_gang_num, ts->y_num);
 			}
-
 			if (TestResult_PenRingX_DiffMax == -1) {
 				nvt_mp_seq_printf(m, "Pen Ring X Diff Max");
-				print_selftest_result(m, TestResult_PenRingX_DiffMax,
-						      RecordResult_PenRingX_DiffMax, RawData_PenRingX_DiffMax, ts->x_num,
-						      ts->y_gang_num);
+				print_selftest_result(m, TestResult_PenRingX_DiffMax, RecordResult_PenRingX_DiffMax, RawData_PenRingX_DiffMax, ts->x_num, ts->y_gang_num);
 			}
-
 			if (TestResult_PenRingX_DiffMin == -1) {
 				nvt_mp_seq_printf(m, "Pen Ring X Diff Min");
-				print_selftest_result(m, TestResult_PenRingX_DiffMin,
-						      RecordResult_PenRingX_DiffMin, RawData_PenRingX_DiffMin, ts->x_num,
-						      ts->y_gang_num);
+				print_selftest_result(m, TestResult_PenRingX_DiffMin, RecordResult_PenRingX_DiffMin, RawData_PenRingX_DiffMin, ts->x_num, ts->y_gang_num);
 			}
-
 			if (TestResult_PenRingY_DiffMax == -1) {
 				nvt_mp_seq_printf(m, "Pen Ring Y Diff Max");
-				print_selftest_result(m, TestResult_PenRingY_DiffMax,
-						      RecordResult_PenRingY_DiffMax, RawData_PenRingY_DiffMax, ts->x_gang_num,
-						      ts->y_num);
+				print_selftest_result(m, TestResult_PenRingY_DiffMax, RecordResult_PenRingY_DiffMax, RawData_PenRingY_DiffMax, ts->x_gang_num, ts->y_num);
 			}
-
 			if (TestResult_PenRingY_DiffMin == -1) {
 				nvt_mp_seq_printf(m, "Pen Ring Y Diff Min");
-				print_selftest_result(m, TestResult_PenRingY_DiffMin,
-						      RecordResult_PenRingY_DiffMin, RawData_PenRingY_DiffMin, ts->x_gang_num,
-						      ts->y_num);
+				print_selftest_result(m, TestResult_PenRingY_DiffMin, RecordResult_PenRingY_DiffMin, RawData_PenRingY_DiffMin, ts->x_gang_num, ts->y_num);
 			}
 		}
 	} /* if (ts->pen_support) */
 
 #if DOZE_TEST
 	nvt_mp_seq_printf(m, "Doze FW Rawdata Test");
-
 	if ((TestResult_Doze_FWRawdata == 0) || (TestResult_Doze_FWRawdata == 1)) {
 		print_selftest_result(m, TestResult_Doze_FWRawdata,
-				      RecordResult_Doze_FWRawdata, RawData_Doze_FWRawdata,
-				      Doze_X_Channel, Y_Channel);
-
+				RecordResult_Doze_FWRawdata, RawData_Doze_FWRawdata,
+				Doze_X_Channel, Y_Channel);
 	} else { // TestResult_Doze_FWRawdata is -1
 		nvt_mp_seq_printf(m, " FAIL!\n");
-
 		if (TestResult_Doze_FWRawdata == -1) {
 			nvt_mp_seq_printf(m, "Doze FW Rawdata");
 			print_selftest_result(m, TestResult_Doze_FWRawdata,
-					      RecordResult_Doze_FWRawdata, RawData_Doze_FWRawdata,
-					      Doze_X_Channel, Y_Channel);
+					RecordResult_Doze_FWRawdata, RawData_Doze_FWRawdata,
+					Doze_X_Channel, Y_Channel);
 		}
 	}
 
 	nvt_mp_seq_printf(m, "Doze Noise Test");
-
 	if ((TestResult_Doze_Noise == 0) || (TestResult_Doze_Noise == 1)) {
 		print_selftest_result(m, TestResult_Doze_FW_DiffMax,
-				      RecordResult_Doze_FW_DiffMax, RawData_Doze_Diff_Max,
-				      Doze_X_Channel, Y_Channel);
-
+				RecordResult_Doze_FW_DiffMax, RawData_Doze_Diff_Max,
+				Doze_X_Channel, Y_Channel);
 	} else { // TestResult_Doze_Noise is -1
 		nvt_mp_seq_printf(m, " FAIL!\n");
 
 		if (TestResult_Doze_FW_DiffMax == -1) {
 			nvt_mp_seq_printf(m, "Doze FW Diff Max");
 			print_selftest_result(m, TestResult_Doze_FW_DiffMax,
-					      RecordResult_Doze_FW_DiffMax, RawData_Doze_Diff_Max,
-					      Doze_X_Channel, Y_Channel);
+					RecordResult_Doze_FW_DiffMax, RawData_Doze_Diff_Max,
+					Doze_X_Channel, Y_Channel);
 		}
-
 		if (TestResult_Doze_FW_DiffMin == -1) {
 			nvt_mp_seq_printf(m, "Doze FW Diff Min");
 			print_selftest_result(m, TestResult_Doze_FW_DiffMin,
-					      RecordResult_Doze_FW_DiffMin, RawData_Doze_Diff_Min,
-					      Doze_X_Channel, Y_Channel);
+					RecordResult_Doze_FW_DiffMin, RawData_Doze_Diff_Min,
+					Doze_X_Channel, Y_Channel);
 		}
 	}
-
 #endif
 
 #if DIGI_NOISE_TEST
 	nvt_mp_seq_printf(m, "Digital Noise Test");
-
 	if ((TestResult_DigiNoise == 0) || (TestResult_DigiNoise == 1)) {
 		print_selftest_result(m, TestResult_FW_DigiDiffMax,
-				      RecordResult_FW_DigiDiffMax, RawData_DigiDiff_Max,
-				      X_Channel, Y_Channel);
-
+				RecordResult_FW_DigiDiffMax, RawData_DigiDiff_Max,
+				X_Channel, Y_Channel);
 	} else { // TestResult_DigiNoise is -1
 		nvt_mp_seq_printf(m, " FAIL!\n");
 
 		if (TestResult_FW_DigiDiffMax == -1) {
 			nvt_mp_seq_printf(m, "FW Diff Max");
 			print_selftest_result(m, TestResult_FW_DigiDiffMax,
-					      RecordResult_FW_DigiDiffMax, RawData_DigiDiff_Max,
-					      X_Channel, Y_Channel);
+					RecordResult_FW_DigiDiffMax, RawData_DigiDiff_Max,
+					X_Channel, Y_Channel);
 		}
-
 		if (TestResult_FW_DigiDiffMin == -1) {
 			nvt_mp_seq_printf(m, "FW Diff Min");
 			print_selftest_result(m, TestResult_FW_DigiDiffMin,
-					      RecordResult_FW_DigiDiffMin, RawData_DigiDiff_Min,
-					      X_Channel, Y_Channel);
+					RecordResult_FW_DigiDiffMin, RawData_DigiDiff_Min,
+					X_Channel, Y_Channel);
 		}
 	}
-
 #endif
 
-	/* oppo format */
+	/* oplus format */
 	err_cnt = TestResult_Short + TestResult_Open + TestResult_FW_Rawdata \
-		  + TestResult_FW_CC + TestResult_Noise;
+		+ TestResult_FW_CC + TestResult_Noise;
 #if DIGI_NOISE_TEST
 	err_cnt += TestResult_DigiNoise;
 #endif
@@ -2946,15 +2618,14 @@ static int32_t c_show_selftest(struct seq_file *m, void *v)
 	err_cnt += TestResult_Doze_FWRawdata + TestResult_Doze_Noise;
 #endif
 
-	nvt_mp_seq_printf(m, "FW:0x%x\n", ts->fw_ver);
-	nvt_mp_seq_printf(m, "%d error(s). %s\n", err_cnt,
-			  err_cnt ? "" : "All test passed.");
+    nvt_mp_seq_printf(m, "FW:0x%x\n", ts->fw_ver);
+    nvt_mp_seq_printf(m, "%d error(s). %s\n", err_cnt, err_cnt ? "" : "All test passed.");
 
 	nvt_mp_test_result_printed = 1;
 
 	NVT_LOG("--\n");
 
-	return 0;
+    return 0;
 }
 
 /*******************************************************
@@ -3018,7 +2689,7 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 {
 	struct device_node *np = ts->client->dev.of_node;
 	unsigned char mpcriteria[32] = {0};	//novatek-mp-criteria-default
-	touch_black_test = 1;
+    touch_black_test = 1;
 	TestResult_Short = 0;
 	TestResult_Open = 0;
 	TestResult_FW_Rawdata = 0;
@@ -3026,7 +2697,6 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 	TestResult_Noise = 0;
 	TestResult_FW_DiffMax = 0;
 	TestResult_FW_DiffMin = 0;
-
 	if (ts->pen_support) {
 		TestResult_Pen_FW_Raw = 0;
 		TestResult_PenTipX_Raw = 0;
@@ -3043,7 +2713,6 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 		TestResult_PenRingY_DiffMax = 0;
 		TestResult_PenRingY_DiffMin = 0;
 	} /* if (ts->pen_support) */
-
 #if DIGI_NOISE_TEST
 	TestResult_DigiNoise = 0;
 	TestResult_FW_DigiDiffMax = 0;
@@ -3058,8 +2727,9 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 
 	NVT_LOG("++\n");
 
-	if (mutex_lock_interruptible(&ts->lock))
+	if (mutex_lock_interruptible(&ts->lock)) {
 		return -ERESTARTSYS;
+	}
 
 #if NVT_TOUCH_ESD_PROTECT
 	nvt_esd_check_enable(false);
@@ -3077,7 +2747,7 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 	fw_ver = ts->fw_ver;
 
 	/* Parsing criteria from dts */
-	if (of_property_read_bool(np, "novatek,mp-support-dt")) {
+	if(of_property_read_bool(np, "novatek,mp-support-dt")) {
 		/*
 		 * Parsing Criteria by Novatek PID
 		 * The string rule is "novatek-mp-criteria-<nvt_pid>"
@@ -3096,7 +2766,6 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 			NVT_ERR("mp parse device tree failed!\n");
 			return -EINVAL;
 		}
-
 	} else {
 		NVT_LOG("Not found novatek,mp-support-dt, use default setting\n");
 		//---Print Test Criteria---
@@ -3140,47 +2809,36 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 
 
 	//---FW Rawdata Test---
-	if (nvt_read_baseline(RawData_FW_Rawdata) != 0)
+	if (nvt_read_baseline(RawData_FW_Rawdata) != 0) {
 		TestResult_FW_Rawdata = 1;
-
-	else {
-		TestResult_FW_Rawdata = RawDataTest_SinglePoint_Sub(RawData_FW_Rawdata,
-					RecordResult_FW_Rawdata, X_Channel, Y_Channel,
-					PS_Config_Lmt_FW_Rawdata_P, PS_Config_Lmt_FW_Rawdata_N);
+	} else {
+		TestResult_FW_Rawdata = RawDataTest_SinglePoint_Sub(RawData_FW_Rawdata, RecordResult_FW_Rawdata, X_Channel, Y_Channel,
+												PS_Config_Lmt_FW_Rawdata_P, PS_Config_Lmt_FW_Rawdata_N);
 	}
 
-	if (nvt_read_CC(RawData_FW_CC) != 0)
+	if (nvt_read_CC(RawData_FW_CC) != 0) {
 		TestResult_FW_CC = 1;
-
-	else {
-		TestResult_FW_CC = RawDataTest_SinglePoint_Sub(RawData_FW_CC,
-				   RecordResult_FW_CC, X_Channel, Y_Channel,
-				   PS_Config_Lmt_FW_CC_P, PS_Config_Lmt_FW_CC_N);
+	} else {
+		TestResult_FW_CC = RawDataTest_SinglePoint_Sub(RawData_FW_CC, RecordResult_FW_CC, X_Channel, Y_Channel,
+											PS_Config_Lmt_FW_CC_P, PS_Config_Lmt_FW_CC_N);
 	}
 
 	if (ts->pen_support) {
 		//---Pen FW Rawdata Test---
-		if (nvt_read_pen_baseline() != 0)
+		if (nvt_read_pen_baseline() != 0) {
 			TestResult_Pen_FW_Raw = 1;
+		} else {
+			TestResult_PenTipX_Raw = RawDataTest_SinglePoint_Sub(RawData_PenTipX_Raw, RecordResult_PenTipX_Raw, ts->x_num, ts->y_gang_num,
+											PS_Config_Lmt_PenTipX_FW_Raw_P, PS_Config_Lmt_PenTipX_FW_Raw_N);
+			TestResult_PenTipY_Raw = RawDataTest_SinglePoint_Sub(RawData_PenTipY_Raw, RecordResult_PenTipY_Raw, ts->x_gang_num, ts->y_num,
+											PS_Config_Lmt_PenTipY_FW_Raw_P, PS_Config_Lmt_PenTipY_FW_Raw_N);
+			TestResult_PenRingX_Raw = RawDataTest_SinglePoint_Sub(RawData_PenRingX_Raw, RecordResult_PenRingX_Raw, ts->x_num, ts->y_gang_num,
+											PS_Config_Lmt_PenRingX_FW_Raw_P, PS_Config_Lmt_PenRingX_FW_Raw_N);
+			TestResult_PenRingY_Raw = RawDataTest_SinglePoint_Sub(RawData_PenRingY_Raw, RecordResult_PenRingY_Raw, ts->x_gang_num, ts->y_num,
+											PS_Config_Lmt_PenRingY_FW_Raw_P, PS_Config_Lmt_PenRingY_FW_Raw_N);
 
-		else {
-			TestResult_PenTipX_Raw = RawDataTest_SinglePoint_Sub(RawData_PenTipX_Raw,
-						 RecordResult_PenTipX_Raw, ts->x_num, ts->y_gang_num,
-						 PS_Config_Lmt_PenTipX_FW_Raw_P, PS_Config_Lmt_PenTipX_FW_Raw_N);
-			TestResult_PenTipY_Raw = RawDataTest_SinglePoint_Sub(RawData_PenTipY_Raw,
-						 RecordResult_PenTipY_Raw, ts->x_gang_num, ts->y_num,
-						 PS_Config_Lmt_PenTipY_FW_Raw_P, PS_Config_Lmt_PenTipY_FW_Raw_N);
-			TestResult_PenRingX_Raw = RawDataTest_SinglePoint_Sub(RawData_PenRingX_Raw,
-						  RecordResult_PenRingX_Raw, ts->x_num, ts->y_gang_num,
-						  PS_Config_Lmt_PenRingX_FW_Raw_P, PS_Config_Lmt_PenRingX_FW_Raw_N);
-			TestResult_PenRingY_Raw = RawDataTest_SinglePoint_Sub(RawData_PenRingY_Raw,
-						  RecordResult_PenRingY_Raw, ts->x_gang_num, ts->y_num,
-						  PS_Config_Lmt_PenRingY_FW_Raw_P, PS_Config_Lmt_PenRingY_FW_Raw_N);
-
-			if ((TestResult_PenTipX_Raw == -1) || (TestResult_PenTipY_Raw == -1)
-					|| (TestResult_PenRingX_Raw == -1) || (TestResult_PenRingY_Raw == -1))
+			if ((TestResult_PenTipX_Raw == -1) || (TestResult_PenTipY_Raw == -1) || (TestResult_PenRingX_Raw == -1) || (TestResult_PenRingY_Raw == -1))
 				TestResult_Pen_FW_Raw = -1;
-
 			else
 				TestResult_Pen_FW_Raw = 0;
 		}
@@ -3194,7 +2852,6 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 		TestResult_Noise = 1;	// 1: ERROR
 		TestResult_FW_DiffMax = 1;
 		TestResult_FW_DiffMin = 1;
-
 		if (ts->pen_support) {
 			TestResult_Pen_Noise = 1;
 			TestResult_PenTipX_DiffMax = 1;
@@ -3206,116 +2863,84 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 			TestResult_PenRingY_DiffMax = 1;
 			TestResult_PenRingY_DiffMin = 1;
 		} /* if (ts->pen_support) */
-
 	} else {
-		TestResult_FW_DiffMax = RawDataTest_SinglePoint_Sub(RawData_Diff_Max,
-					RecordResult_FW_DiffMax, X_Channel, Y_Channel,
-					PS_Config_Lmt_FW_Diff_P, PS_Config_Lmt_FW_Diff_N);
+		TestResult_FW_DiffMax = RawDataTest_SinglePoint_Sub(RawData_Diff_Max, RecordResult_FW_DiffMax, X_Channel, Y_Channel,
+											PS_Config_Lmt_FW_Diff_P, PS_Config_Lmt_FW_Diff_N);
 
-		TestResult_FW_DiffMin = RawDataTest_SinglePoint_Sub(RawData_Diff_Min,
-					RecordResult_FW_DiffMin, X_Channel, Y_Channel,
-					PS_Config_Lmt_FW_Diff_P, PS_Config_Lmt_FW_Diff_N);
+		TestResult_FW_DiffMin = RawDataTest_SinglePoint_Sub(RawData_Diff_Min, RecordResult_FW_DiffMin, X_Channel, Y_Channel,
+											PS_Config_Lmt_FW_Diff_P, PS_Config_Lmt_FW_Diff_N);
 
 		if ((TestResult_FW_DiffMax == -1) || (TestResult_FW_DiffMin == -1))
 			TestResult_Noise = -1;
-
 		else
 			TestResult_Noise = 0;
 
 		if (ts->pen_support) {
-			TestResult_PenTipX_DiffMax = RawDataTest_SinglePoint_Sub(
-							     RawData_PenTipX_DiffMax, RecordResult_PenTipX_DiffMax, ts->x_num,
-							     ts->y_gang_num,
-							     PS_Config_Lmt_PenTipX_FW_Diff_P, PS_Config_Lmt_PenTipX_FW_Diff_N);
+			TestResult_PenTipX_DiffMax = RawDataTest_SinglePoint_Sub(RawData_PenTipX_DiffMax, RecordResult_PenTipX_DiffMax, ts->x_num, ts->y_gang_num,
+											PS_Config_Lmt_PenTipX_FW_Diff_P, PS_Config_Lmt_PenTipX_FW_Diff_N);
 
-			TestResult_PenTipX_DiffMin = RawDataTest_SinglePoint_Sub(
-							     RawData_PenTipX_DiffMin, RecordResult_PenTipX_DiffMin, ts->x_num,
-							     ts->y_gang_num,
-							     PS_Config_Lmt_PenTipX_FW_Diff_P, PS_Config_Lmt_PenTipX_FW_Diff_N);
+			TestResult_PenTipX_DiffMin = RawDataTest_SinglePoint_Sub(RawData_PenTipX_DiffMin, RecordResult_PenTipX_DiffMin, ts->x_num, ts->y_gang_num,
+											PS_Config_Lmt_PenTipX_FW_Diff_P, PS_Config_Lmt_PenTipX_FW_Diff_N);
 
-			TestResult_PenTipY_DiffMax = RawDataTest_SinglePoint_Sub(
-							     RawData_PenTipY_DiffMax, RecordResult_PenTipY_DiffMax, ts->x_gang_num,
-							     ts->y_num,
-							     PS_Config_Lmt_PenTipY_FW_Diff_P, PS_Config_Lmt_PenTipY_FW_Diff_N);
+			TestResult_PenTipY_DiffMax = RawDataTest_SinglePoint_Sub(RawData_PenTipY_DiffMax, RecordResult_PenTipY_DiffMax, ts->x_gang_num, ts->y_num,
+											PS_Config_Lmt_PenTipY_FW_Diff_P, PS_Config_Lmt_PenTipY_FW_Diff_N);
 
-			TestResult_PenTipY_DiffMin = RawDataTest_SinglePoint_Sub(
-							     RawData_PenTipY_DiffMin, RecordResult_PenTipY_DiffMin, ts->x_gang_num,
-							     ts->y_num,
-							     PS_Config_Lmt_PenTipY_FW_Diff_P, PS_Config_Lmt_PenTipY_FW_Diff_N);
+			TestResult_PenTipY_DiffMin = RawDataTest_SinglePoint_Sub(RawData_PenTipY_DiffMin, RecordResult_PenTipY_DiffMin, ts->x_gang_num, ts->y_num,
+											PS_Config_Lmt_PenTipY_FW_Diff_P, PS_Config_Lmt_PenTipY_FW_Diff_N);
 
-			TestResult_PenRingX_DiffMax = RawDataTest_SinglePoint_Sub(
-							      RawData_PenRingX_DiffMax, RecordResult_PenRingX_DiffMax, ts->x_num,
-							      ts->y_gang_num,
-							      PS_Config_Lmt_PenRingX_FW_Diff_P, PS_Config_Lmt_PenRingX_FW_Diff_N);
+			TestResult_PenRingX_DiffMax = RawDataTest_SinglePoint_Sub(RawData_PenRingX_DiffMax, RecordResult_PenRingX_DiffMax, ts->x_num, ts->y_gang_num,
+											PS_Config_Lmt_PenRingX_FW_Diff_P, PS_Config_Lmt_PenRingX_FW_Diff_N);
 
-			TestResult_PenRingX_DiffMin = RawDataTest_SinglePoint_Sub(
-							      RawData_PenRingX_DiffMin, RecordResult_PenRingX_DiffMin, ts->x_num,
-							      ts->y_gang_num,
-							      PS_Config_Lmt_PenRingX_FW_Diff_P, PS_Config_Lmt_PenRingX_FW_Diff_N);
+			TestResult_PenRingX_DiffMin = RawDataTest_SinglePoint_Sub(RawData_PenRingX_DiffMin, RecordResult_PenRingX_DiffMin, ts->x_num, ts->y_gang_num,
+											PS_Config_Lmt_PenRingX_FW_Diff_P, PS_Config_Lmt_PenRingX_FW_Diff_N);
 
-			TestResult_PenRingY_DiffMax = RawDataTest_SinglePoint_Sub(
-							      RawData_PenRingY_DiffMax, RecordResult_PenRingY_DiffMax, ts->x_gang_num,
-							      ts->y_num,
-							      PS_Config_Lmt_PenRingY_FW_Diff_P, PS_Config_Lmt_PenRingY_FW_Diff_N);
+			TestResult_PenRingY_DiffMax = RawDataTest_SinglePoint_Sub(RawData_PenRingY_DiffMax, RecordResult_PenRingY_DiffMax, ts->x_gang_num, ts->y_num,
+											PS_Config_Lmt_PenRingY_FW_Diff_P, PS_Config_Lmt_PenRingY_FW_Diff_N);
 
-			TestResult_PenRingY_DiffMin = RawDataTest_SinglePoint_Sub(
-							      RawData_PenRingY_DiffMin, RecordResult_PenRingY_DiffMin, ts->x_gang_num,
-							      ts->y_num,
-							      PS_Config_Lmt_PenRingY_FW_Diff_P, PS_Config_Lmt_PenRingY_FW_Diff_N);
+			TestResult_PenRingY_DiffMin = RawDataTest_SinglePoint_Sub(RawData_PenRingY_DiffMin, RecordResult_PenRingY_DiffMin, ts->x_gang_num, ts->y_num,
+											PS_Config_Lmt_PenRingY_FW_Diff_P, PS_Config_Lmt_PenRingY_FW_Diff_N);
 
-			if ((TestResult_PenTipX_DiffMax == -1) || (TestResult_PenTipX_DiffMin == -1)
-					|| (TestResult_PenTipY_DiffMax == -1) || (TestResult_PenTipY_DiffMin == -1) ||
-					(TestResult_PenRingX_DiffMax == -1) || (TestResult_PenRingX_DiffMin == -1)
-					|| (TestResult_PenRingY_DiffMax == -1) || (TestResult_PenRingY_DiffMin == -1))
+			if ((TestResult_PenTipX_DiffMax == -1) || (TestResult_PenTipX_DiffMin == -1) || (TestResult_PenTipY_DiffMax == -1) || (TestResult_PenTipY_DiffMin == -1) ||
+				(TestResult_PenRingX_DiffMax == -1) || (TestResult_PenRingX_DiffMin == -1) || (TestResult_PenRingY_DiffMax == -1) || (TestResult_PenRingY_DiffMin == -1))
 				TestResult_Pen_Noise = -1;
-
 			else
 				TestResult_Pen_Noise = 0;
 		} /* if (ts->pen_support) */
 	}
 
 #if DOZE_TEST
-
 	//---Noise Test---
 	if (nvt_read_doze_fw_noise(RawData_Doze_Diff) != 0) {
 		TestResult_Doze_Noise = 1;	// 1: ERROR
 		TestResult_Doze_FW_DiffMax = 1;
 		TestResult_Doze_FW_DiffMin = 1;
-
 	} else {
-		TestResult_Doze_FW_DiffMax = RawDataTest_SinglePoint_Sub(RawData_Doze_Diff_Max,
-					     RecordResult_Doze_FW_DiffMax,
-					     Doze_X_Channel, Y_Channel,
-					     PS_Config_Lmt_Doze_Diff_P, PS_Config_Lmt_Doze_Diff_N);
+		TestResult_Doze_FW_DiffMax = RawDataTest_SinglePoint_Sub(RawData_Doze_Diff_Max, RecordResult_Doze_FW_DiffMax,
+				Doze_X_Channel, Y_Channel,
+				PS_Config_Lmt_Doze_Diff_P, PS_Config_Lmt_Doze_Diff_N);
 
 		// for carrier sensing system, only positive noise data
-		TestResult_Doze_FW_DiffMin = RawDataTest_SinglePoint_Sub(RawData_Doze_Diff_Min,
-					     RecordResult_Doze_FW_DiffMin,
-					     Doze_X_Channel, Y_Channel,
-					     PS_Config_Lmt_Doze_Diff_P, PS_Config_Lmt_Doze_Diff_N);
+		TestResult_Doze_FW_DiffMin = RawDataTest_SinglePoint_Sub(RawData_Doze_Diff_Min, RecordResult_Doze_FW_DiffMin,
+				Doze_X_Channel, Y_Channel,
+				PS_Config_Lmt_Doze_Diff_P, PS_Config_Lmt_Doze_Diff_N);
 	}
 
 	if ((TestResult_FW_DiffMax == -1) || (TestResult_FW_DiffMin == -1))
 		TestResult_Doze_Noise = -1;
-
 	else
 		TestResult_Doze_Noise = 0;
 
 	//---Doze FW Rawdata Test---
-	if (nvt_read_doze_baseline(RawData_Doze_FWRawdata) != 0)
+	if(nvt_read_doze_baseline(RawData_Doze_FWRawdata) != 0) {
 		TestResult_Doze_FWRawdata = 1;
-
-	else {
-		TestResult_Doze_FWRawdata = RawDataTest_SinglePoint_Sub(RawData_Doze_FWRawdata,
-					    RecordResult_Doze_FWRawdata,
-					    Doze_X_Channel, Y_Channel,
-					    PS_Config_Lmt_Doze_Rawdata_P, PS_Config_Lmt_Doze_Rawdata_N);
+	} else {
+		TestResult_Doze_FWRawdata = RawDataTest_SinglePoint_Sub(RawData_Doze_FWRawdata, RecordResult_Doze_FWRawdata,
+				Doze_X_Channel, Y_Channel,
+				PS_Config_Lmt_Doze_Rawdata_P, PS_Config_Lmt_Doze_Rawdata_N);
 	}
-
 #endif
 
 #if DIGI_NOISE_TEST
-
 	if (nvt_enter_digital_test(true)) {
 		mutex_unlock(&ts->lock);
 		NVT_ERR("enter digital test failed!\n");
@@ -3327,19 +2952,17 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 		TestResult_DigiNoise = 1;	// 1: ERROR
 		TestResult_FW_DigiDiffMax = 1;
 		TestResult_FW_DigiDiffMin = 1;
-
 	} else {
 		TestResult_FW_DigiDiffMax = RawDataTest_SinglePoint_Sub(RawData_DigiDiff_Max,
-					    RecordResult_FW_DigiDiffMax, X_Channel, Y_Channel,
-					    PS_Config_Lmt_FW_DigiDiff_P, PS_Config_Lmt_FW_DigiDiff_N);
+				RecordResult_FW_DigiDiffMax, X_Channel, Y_Channel,
+				PS_Config_Lmt_FW_DigiDiff_P, PS_Config_Lmt_FW_DigiDiff_N);
 
 		TestResult_FW_DigiDiffMin = RawDataTest_SinglePoint_Sub(RawData_DigiDiff_Min,
-					    RecordResult_FW_DigiDiffMin, X_Channel, Y_Channel,
-					    PS_Config_Lmt_FW_DigiDiff_P, PS_Config_Lmt_FW_DigiDiff_N);
+				RecordResult_FW_DigiDiffMin, X_Channel, Y_Channel,
+				PS_Config_Lmt_FW_DigiDiff_P, PS_Config_Lmt_FW_DigiDiff_N);
 
 		if ((TestResult_FW_DigiDiffMax == -1) || (TestResult_FW_DigiDiffMin == -1))
 			TestResult_DigiNoise = -1;
-
 		else
 			TestResult_DigiNoise = 0;
 	}
@@ -3349,51 +2972,45 @@ static int32_t nvt_selftest_open(struct inode *inode, struct file *file)
 		NVT_ERR("enter digital test failed!\n");
 		return -EAGAIN;
 	}
-
 #endif
+/*
+       nvt_update_firmware(ts->mp_fw_name);
 
-	/*
-	       nvt_update_firmware(ts->mp_fw_name);
+	    if (nvt_check_fw_reset_state(RESET_STATE_REK)) {
+			mutex_unlock(&ts->lock);
+			NVT_ERR("check fw reset state failed!\n");
+			return -EAGAIN;
+		}
+	
+		if (nvt_switch_FreqHopEnDis(FREQ_HOP_DISABLE)) {
+			mutex_unlock(&ts->lock);
+			NVT_ERR("switch frequency hopping disable failed!\n");
+			return -EAGAIN;
+		}
+	
+		if (nvt_check_fw_reset_state(RESET_STATE_NORMAL_RUN)) {
+			mutex_unlock(&ts->lock);
+			NVT_ERR("check fw reset state failed!\n");
+			return -EAGAIN;
+		}
+*/
 
-		    if (nvt_check_fw_reset_state(RESET_STATE_REK)) {
-				mutex_unlock(&ts->lock);
-				NVT_ERR("check fw reset state failed!\n");
-				return -EAGAIN;
-			}
-
-			if (nvt_switch_FreqHopEnDis(FREQ_HOP_DISABLE)) {
-				mutex_unlock(&ts->lock);
-				NVT_ERR("switch frequency hopping disable failed!\n");
-				return -EAGAIN;
-			}
-
-			if (nvt_check_fw_reset_state(RESET_STATE_NORMAL_RUN)) {
-				mutex_unlock(&ts->lock);
-				NVT_ERR("check fw reset state failed!\n");
-				return -EAGAIN;
-			}
-
-	*/
 	//--Short Test---
 	if (nvt_read_fw_short(RawData_Short) != 0) {
 		TestResult_Short = 1; // 1:ERROR
-
 	} else {
 		//---Self Test Check --- // 0:PASS, -1:FAIL
-		TestResult_Short = RawDataTest_SinglePoint_Sub(RawData_Short,
-				   RecordResult_Short, X_Channel, Y_Channel,
-				   PS_Config_Lmt_Short_Rawdata_P, PS_Config_Lmt_Short_Rawdata_N);
+		TestResult_Short = RawDataTest_SinglePoint_Sub(RawData_Short, RecordResult_Short, X_Channel, Y_Channel,
+										PS_Config_Lmt_Short_Rawdata_P, PS_Config_Lmt_Short_Rawdata_N);
 	}
 
 	//---Open Test---
 	if (nvt_read_fw_open(RawData_Open) != 0) {
 		TestResult_Open = 1;    // 1:ERROR
-
 	} else {
 		//---Self Test Check --- // 0:PASS, -1:FAIL
-		TestResult_Open = RawDataTest_SinglePoint_Sub(RawData_Open, RecordResult_Open,
-				  X_Channel, Y_Channel,
-				  PS_Config_Lmt_Open_Rawdata_P, PS_Config_Lmt_Open_Rawdata_N);
+		TestResult_Open = RawDataTest_SinglePoint_Sub(RawData_Open, RecordResult_Open, X_Channel, Y_Channel,
+											PS_Config_Lmt_Open_Rawdata_P, PS_Config_Lmt_Open_Rawdata_N);
 	}
 
 	//---Download Normal FW---
@@ -3435,92 +3052,81 @@ static int32_t c_show_lpwg_selftest(struct seq_file *m, void *v)
 
 	nvt_mp_seq_printf(m, "LPWG FW Rawdata Test");
 	print_selftest_result(m, TestResult_FW_Rawdata, RecordResult_FW_Rawdata,
-			      RawData_FW_Rawdata, X_Channel, Y_Channel);
+			RawData_FW_Rawdata, X_Channel, Y_Channel);
 
 	nvt_mp_seq_printf(m, "LPWG Noise Test");
-
 	if ((TestResult_Noise == 0) || (TestResult_Noise == 1)) {
 		print_selftest_result(m, TestResult_FW_DiffMax, RecordResult_FW_DiffMax,
-				      RawData_Diff_Max, X_Channel, Y_Channel);
-
+				RawData_Diff_Max, X_Channel, Y_Channel);
 	} else { // TestResult_Noise is -1
 		nvt_mp_seq_printf(m, " FAIL!\n");
 
 		if (TestResult_FW_DiffMax == -1) {
 			nvt_mp_seq_printf(m, "FW Diff Max");
 			print_selftest_result(m, TestResult_FW_DiffMax, RecordResult_FW_DiffMax,
-					      RawData_Diff_Max, X_Channel, Y_Channel);
+					RawData_Diff_Max, X_Channel, Y_Channel);
 		}
-
 		if (TestResult_FW_DiffMin == -1) {
 			nvt_mp_seq_printf(m, "FW Diff Min");
 			print_selftest_result(m, TestResult_FW_DiffMin, RecordResult_FW_DiffMin,
-					      RawData_Diff_Min, X_Channel, Y_Channel);
+					RawData_Diff_Min, X_Channel, Y_Channel);
 		}
 	}
 
 #if (FDM_TEST && LPWG_TEST)
 	nvt_mp_seq_printf(m, "FDM FW Rawdata Test");
-
 	if ((TestResult_FDM_FWRawdata == 0) || (TestResult_FDM_FWRawdata == 1)) {
 		print_selftest_result(m, TestResult_FDM_FWRawdata,
-				      RecordResult_FDM_FWRawdata, RawData_FDM_FWRawdata,
-				      FDM_X_Channel, Y_Channel);
-
+				RecordResult_FDM_FWRawdata, RawData_FDM_FWRawdata,
+				FDM_X_Channel, Y_Channel);
 	} else { // TestResult_FDM_FWRawdata is -1
 		nvt_mp_seq_printf(m, " FAIL!\n");
-
 		if (TestResult_FDM_FWRawdata == -1) {
 			nvt_mp_seq_printf(m, "FDM FW Rawdata");
 			print_selftest_result(m, TestResult_FDM_FWRawdata,
-					      RecordResult_FDM_FWRawdata, RawData_FDM_FWRawdata,
-					      FDM_X_Channel, Y_Channel);
+					RecordResult_FDM_FWRawdata, RawData_FDM_FWRawdata,
+					FDM_X_Channel, Y_Channel);
 		}
 	}
 
 	nvt_mp_seq_printf(m, "FDM Noise Test");
-
 	if ((TestResult_FDM_Noise == 0) || (TestResult_FDM_Noise == 1)) {
 		print_selftest_result(m, TestResult_FDM_FW_DiffMax,
-				      RecordResult_FDM_FW_DiffMax, RawData_FDM_Diff_Max,
-				      FDM_X_Channel, Y_Channel);
-
+				RecordResult_FDM_FW_DiffMax, RawData_FDM_Diff_Max,
+				FDM_X_Channel, Y_Channel);
 	} else { // TestResult_FDM_Noise is -1
 		nvt_mp_seq_printf(m, " FAIL!\n");
 
 		if (TestResult_FDM_FW_DiffMax == -1) {
 			nvt_mp_seq_printf(m, "FDM FW Diff Max");
 			print_selftest_result(m, TestResult_FDM_FW_DiffMax,
-					      RecordResult_FDM_FW_DiffMax, RawData_FDM_Diff_Max,
-					      FDM_X_Channel, Y_Channel);
+					RecordResult_FDM_FW_DiffMax, RawData_FDM_Diff_Max,
+					FDM_X_Channel, Y_Channel);
 		}
-
 		if (TestResult_FDM_FW_DiffMin == -1) {
 			nvt_mp_seq_printf(m, "FDM FW Diff Min");
 			print_selftest_result(m, TestResult_FDM_FW_DiffMin,
-					      RecordResult_FDM_FW_DiffMin, RawData_FDM_Diff_Min,
-					      FDM_X_Channel, Y_Channel);
+					RecordResult_FDM_FW_DiffMin, RawData_FDM_Diff_Min,
+					FDM_X_Channel, Y_Channel);
 		}
 	}
-
 #endif
 
-	/* oppo format */
+	/* oplus format */
 	err_cnt = TestResult_FW_Rawdata + TestResult_Noise;
 #if (FDM_TEST && LPWG_TEST)
 	err_cnt += TestResult_FDM_FWRawdata + TestResult_FDM_Noise;
 #endif
 
-	nvt_mp_seq_printf(m, "FW:0x%x\n", ts->fw_ver);
-	nvt_mp_seq_printf(m, "%d error(s). %s\n", err_cnt,
-			  err_cnt ? "" : "All test passed.");
+    nvt_mp_seq_printf(m, "FW:0x%x\n", ts->fw_ver);
+    nvt_mp_seq_printf(m, "%d error(s). %s\n", err_cnt, err_cnt ? "" : "All test passed.");
 
 	nvt_mp_test_result_printed = 1;
 	touch_black_test = 0;
 
 	NVT_LOG("--\n");
 
-	return 0;
+    return 0;
 }
 
 const struct seq_operations nvt_lpwg_selftest_seq_ops = {
@@ -3554,10 +3160,10 @@ static int32_t nvt_lpwg_selftest_open(struct inode *inode, struct file *file)
 #endif
 
 	NVT_LOG("+++++\n");
-
-	//goto exit;
-	if (mutex_lock_interruptible(&ts->lock))
+    //goto exit;
+	if (mutex_lock_interruptible(&ts->lock)) {
 		return -ERESTARTSYS;
+	}
 
 #if NVT_TOUCH_ESD_PROTECT
 	nvt_esd_check_enable(false);
@@ -3575,7 +3181,7 @@ static int32_t nvt_lpwg_selftest_open(struct inode *inode, struct file *file)
 	nvt_mode_change_cmd(0x13);
 
 	/* Parsing criteria from dts */
-	if (of_property_read_bool(np, "novatek,mp-support-dt")) {
+	if(of_property_read_bool(np, "novatek,mp-support-dt")) {
 		/*
 		 * Parsing Criteria by Novatek PID
 		 * The string rule is "novatek-mp-criteria-<nvt_pid>"
@@ -3594,7 +3200,6 @@ static int32_t nvt_lpwg_selftest_open(struct inode *inode, struct file *file)
 			NVT_ERR("mp parse device tree failed!\n");
 			return -EINVAL;
 		}
-
 	} else {
 		NVT_LOG("Not found novatek,mp-support-dt, use default setting\n");
 		//---Print Test Criteria---
@@ -3620,8 +3225,7 @@ static int32_t nvt_lpwg_selftest_open(struct inode *inode, struct file *file)
 	}
 
 	msleep(100);
-	NVT_LOG("\\\n");
-
+    NVT_LOG("\\\n");
 	//---Enter Test Mode---
 	if (nvt_clear_fw_status()) {
 		mutex_unlock(&ts->lock);
@@ -3644,14 +3248,12 @@ static int32_t nvt_lpwg_selftest_open(struct inode *inode, struct file *file)
 	}
 
 	//---FW Rawdata Test---
-	if (nvt_read_lpwg_rawdata(RawData_FW_Rawdata) != 0)
+	if (nvt_read_lpwg_rawdata(RawData_FW_Rawdata) != 0) {
 		TestResult_FW_Rawdata = 1;
-
-	else {
-		TestResult_FW_Rawdata = RawDataTest_SinglePoint_Sub(RawData_FW_Rawdata,
-					RecordResult_FW_Rawdata,
-					X_Channel, Y_Channel,
-					PS_Config_Lmt_LPWG_Rawdata_P, PS_Config_Lmt_LPWG_Rawdata_N);
+	} else {
+		TestResult_FW_Rawdata = RawDataTest_SinglePoint_Sub(RawData_FW_Rawdata, RecordResult_FW_Rawdata,
+				X_Channel, Y_Channel,
+				PS_Config_Lmt_LPWG_Rawdata_P, PS_Config_Lmt_LPWG_Rawdata_N);
 	}
 
 	//---Leave Test Mode---
@@ -3662,63 +3264,51 @@ static int32_t nvt_lpwg_selftest_open(struct inode *inode, struct file *file)
 		TestResult_Noise = 1;	// 1: ERROR
 		TestResult_FW_DiffMax = 1;
 		TestResult_FW_DiffMin = 1;
-
 	} else {
-		TestResult_FW_DiffMax = RawDataTest_SinglePoint_Sub(RawData_Diff_Max,
-					RecordResult_FW_DiffMax,
-					X_Channel, Y_Channel,
-					PS_Config_Lmt_LPWG_Diff_P, PS_Config_Lmt_LPWG_Diff_N);
+		TestResult_FW_DiffMax = RawDataTest_SinglePoint_Sub(RawData_Diff_Max, RecordResult_FW_DiffMax,
+				X_Channel, Y_Channel,
+				PS_Config_Lmt_LPWG_Diff_P, PS_Config_Lmt_LPWG_Diff_N);
 
 		// for carrier sensing system, only positive noise data
-		TestResult_FW_DiffMin = RawDataTest_SinglePoint_Sub(RawData_Diff_Min,
-					RecordResult_FW_DiffMin,
-					X_Channel, Y_Channel,
-					PS_Config_Lmt_LPWG_Diff_P, PS_Config_Lmt_LPWG_Diff_N);
+		TestResult_FW_DiffMin = RawDataTest_SinglePoint_Sub(RawData_Diff_Min, RecordResult_FW_DiffMin,
+				X_Channel, Y_Channel,
+				PS_Config_Lmt_LPWG_Diff_P, PS_Config_Lmt_LPWG_Diff_N);
 
 		if ((TestResult_FW_DiffMax == -1) || (TestResult_FW_DiffMin == -1))
 			TestResult_Noise = -1;
-
 		else
 			TestResult_Noise = 0;
 	}
 
 #if (FDM_TEST && LPWG_TEST)
-
 	//---Noise Test---
 	if (nvt_read_fdm_fw_noise(RawData_FDM_Diff) != 0) {
 		TestResult_FDM_Noise = 1;	// 1: ERROR
 		TestResult_FDM_FW_DiffMax = 1;
 		TestResult_FDM_FW_DiffMin = 1;
-
 	} else {
-		TestResult_FDM_FW_DiffMax = RawDataTest_SinglePoint_Sub(RawData_FDM_Diff_Max,
-					    RecordResult_FDM_FW_DiffMax,
-					    FDM_X_Channel, Y_Channel,
-					    PS_Config_Lmt_FDM_Diff_P, PS_Config_Lmt_FDM_Diff_N);
+		TestResult_FDM_FW_DiffMax = RawDataTest_SinglePoint_Sub(RawData_FDM_Diff_Max, RecordResult_FDM_FW_DiffMax,
+				FDM_X_Channel, Y_Channel,
+				PS_Config_Lmt_FDM_Diff_P, PS_Config_Lmt_FDM_Diff_N);
 
-		TestResult_FDM_FW_DiffMin = RawDataTest_SinglePoint_Sub(RawData_FDM_Diff_Min,
-					    RecordResult_FDM_FW_DiffMin,
-					    FDM_X_Channel, Y_Channel,
-					    PS_Config_Lmt_FDM_Diff_P, PS_Config_Lmt_FDM_Diff_N);
+		TestResult_FDM_FW_DiffMin = RawDataTest_SinglePoint_Sub(RawData_FDM_Diff_Min, RecordResult_FDM_FW_DiffMin,
+				FDM_X_Channel, Y_Channel,
+				PS_Config_Lmt_FDM_Diff_P, PS_Config_Lmt_FDM_Diff_N);
 	}
 
 	if ((TestResult_FW_DiffMax == -1) || (TestResult_FW_DiffMin == -1))
 		TestResult_FDM_Noise = -1;
-
 	else
 		TestResult_FDM_Noise = 0;
 
 	//---FDM FW Rawdata Test---
-	if (nvt_read_fdm_baseline(RawData_FDM_FWRawdata) != 0)
+	if(nvt_read_fdm_baseline(RawData_FDM_FWRawdata) != 0) {
 		TestResult_FDM_FWRawdata = 1;
-
-	else {
-		TestResult_FDM_FWRawdata = RawDataTest_SinglePoint_Sub(RawData_FDM_FWRawdata,
-					   RecordResult_FDM_FWRawdata,
-					   FDM_X_Channel, Y_Channel,
-					   PS_Config_Lmt_FDM_Rawdata_P, PS_Config_Lmt_FDM_Rawdata_N);
+	} else {
+		TestResult_FDM_FWRawdata = RawDataTest_SinglePoint_Sub(RawData_FDM_FWRawdata, RecordResult_FDM_FWRawdata,
+				FDM_X_Channel, Y_Channel,
+				PS_Config_Lmt_FDM_Rawdata_P, PS_Config_Lmt_FDM_Rawdata_N);
 	}
-
 #endif
 
 	//---Download Normal FW---
@@ -3726,7 +3316,7 @@ static int32_t nvt_lpwg_selftest_open(struct inode *inode, struct file *file)
 	nvt_mode_change_cmd(0x13);
 
 	mutex_unlock(&ts->lock);
-	//exit:
+    //exit:
 	NVT_LOG("-----\n");
 
 	nvt_mp_test_result_printed = 0;
@@ -3751,8 +3341,7 @@ Description:
 return:
 	n.a.
 *******************************************************/
-int32_t nvt_mp_parse_ain(struct device_node *np, const char *name,
-			 uint8_t *array, int32_t size)
+int32_t nvt_mp_parse_ain(struct device_node *np, const char *name, uint8_t *array, int32_t size)
 {
 	struct property *data;
 	int32_t len, ret;
@@ -3761,15 +3350,12 @@ int32_t nvt_mp_parse_ain(struct device_node *np, const char *name,
 
 	data = of_find_property(np, name, &len);
 	len /= sizeof(u32);
-
 	if ((!data) || (!len) || (len != size)) {
 		NVT_ERR("error find %s. len=%d\n", name, len);
 		return -1;
-
 	} else {
 		NVT_LOG("%s. len=%d\n", name, len);
 		ret = of_property_read_u32_array(np, name, tmp, len);
-
 		if (ret) {
 			NVT_ERR("error reading %s. ret=%d\n", name, ret);
 			return -1;
@@ -3795,17 +3381,14 @@ Description:
 return:
 	n.a.
 *******************************************************/
-int32_t nvt_mp_parse_u32(struct device_node *np, const char *name,
-			 int32_t *para)
+int32_t nvt_mp_parse_u32(struct device_node *np, const char *name, int32_t *para)
 {
 	int32_t ret;
 
 	ret = of_property_read_u32(np, name, para);
-
 	if (ret) {
 		NVT_ERR("error reading %s. ret=%d\n", name, ret);
 		return -1;
-
 	} else {
 #if NVT_DEBUG
 		NVT_LOG("%s=%d\n", name, *para);
@@ -3822,9 +3405,8 @@ Description:
 return:
 	n.a.
 *******************************************************/
-int32_t nvt_mp_parse_array(struct device_node *np, const char *name,
-			   int32_t *array,
-			   int32_t size)
+int32_t nvt_mp_parse_array(struct device_node *np, const char *name, int32_t *array,
+		int32_t size)
 {
 	struct property *data;
 	int32_t len, ret;
@@ -3834,15 +3416,12 @@ int32_t nvt_mp_parse_array(struct device_node *np, const char *name,
 
 	data = of_find_property(np, name, &len);
 	len /= sizeof(u32);
-
 	if ((!data) || (!len) || (len < size)) {
 		NVT_ERR("error find %s. len=%d\n", name, len);
 		return -1;
-
 	} else {
 		NVT_LOG("%s. len=%d\n", name, len);
 		ret = of_property_read_u32_array(np, name, array, len);
-
 		if (ret) {
 			NVT_ERR("error reading %s. ret=%d\n", name, ret);
 			return -1;
@@ -3850,12 +3429,10 @@ int32_t nvt_mp_parse_array(struct device_node *np, const char *name,
 
 #if NVT_DEBUG
 		NVT_LOG("%s =\n", name);
-
 		for (j = 0; j < Y_Channel; j++) {
 			nvt_print_data_log_in_one_line(array + j * X_Channel, X_Channel);
 			printk("\n");
 		}
-
 #if TOUCH_KEY_NUM > 0
 		nvt_print_data_log_in_one_line(array + Y_Channel * X_Channel, Key_Channel);
 		printk("\n");
@@ -3873,9 +3450,8 @@ Description:
 return:
 	n.a.
 *******************************************************/
-int32_t nvt_mp_parse_pen_array(struct device_node *np, const char *name,
-			       int32_t *array,
-			       uint32_t x_num, uint32_t y_num)
+int32_t nvt_mp_parse_pen_array(struct device_node *np, const char *name, int32_t *array,
+		uint32_t x_num, uint32_t y_num)
 {
 	struct property *data;
 	int32_t len, ret;
@@ -3887,15 +3463,12 @@ int32_t nvt_mp_parse_pen_array(struct device_node *np, const char *name,
 	size = x_num * y_num;
 	data = of_find_property(np, name, &len);
 	len /= sizeof(u32);
-
 	if ((!data) || (!len) || (len < size)) {
 		NVT_ERR("error find %s. len=%d\n", name, len);
 		return -1;
-
 	} else {
 		NVT_LOG("%s. len=%d\n", name, len);
 		ret = of_property_read_u32_array(np, name, array, len);
-
 		if (ret) {
 			NVT_ERR("error reading %s. ret=%d\n", name, ret);
 			return -1;
@@ -3903,12 +3476,10 @@ int32_t nvt_mp_parse_pen_array(struct device_node *np, const char *name,
 
 #if NVT_DEBUG
 		NVT_LOG("%s =\n", name);
-
 		for (j = 0; j < y_num; j++) {
 			nvt_print_data_log_in_one_line(array + j * x_num, x_num);
 			printk("\n");
 		}
-
 #endif
 	}
 
@@ -3938,7 +3509,6 @@ int32_t nvt_mp_parse_dt(struct device_node *root, const char *node_compatible)
 			break;
 		}
 	}
-
 	if (child == NULL) {
 		NVT_ERR("Not found compatible node %s!\n", node_compatible);
 		return -1;
@@ -3952,10 +3522,8 @@ int32_t nvt_mp_parse_dt(struct device_node *root, const char *node_compatible)
 		return -1;
 
 #if TOUCH_KEY_NUM > 0
-
 	if (nvt_mp_parse_u32(np, "IC_KEY_CFG_SIZE", &IC_KEY_CFG_SIZE))
 		return -1;
-
 #endif
 
 	if (nvt_mp_parse_u32(np, "X_Channel", &X_Channel))
@@ -3971,217 +3539,176 @@ int32_t nvt_mp_parse_dt(struct device_node *root, const char *node_compatible)
 		return -1;
 
 #if TOUCH_KEY_NUM > 0
-
 	if (nvt_mp_parse_ain(np, "AIN_KEY", AIN_KEY, IC_KEY_CFG_SIZE))
 		return -1;
-
 #endif
 
 	/* MP Criteria */
-	if (nvt_mp_parse_array(np, "PS_Config_Lmt_Short_Rawdata_P",
-			       PS_Config_Lmt_Short_Rawdata_P,
-			       X_Channel * Y_Channel + Key_Channel))
+	if (nvt_mp_parse_array(np, "PS_Config_Lmt_Short_Rawdata_P", PS_Config_Lmt_Short_Rawdata_P,
+			X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
-	if (nvt_mp_parse_array(np, "PS_Config_Lmt_Short_Rawdata_N",
-			       PS_Config_Lmt_Short_Rawdata_N,
-			       X_Channel * Y_Channel + Key_Channel))
+	if (nvt_mp_parse_array(np, "PS_Config_Lmt_Short_Rawdata_N", PS_Config_Lmt_Short_Rawdata_N,
+			X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
-	if (nvt_mp_parse_array(np, "PS_Config_Lmt_Open_Rawdata_P",
-			       PS_Config_Lmt_Open_Rawdata_P,
-			       X_Channel * Y_Channel + Key_Channel))
+	if (nvt_mp_parse_array(np, "PS_Config_Lmt_Open_Rawdata_P", PS_Config_Lmt_Open_Rawdata_P,
+			X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
-	if (nvt_mp_parse_array(np, "PS_Config_Lmt_Open_Rawdata_N",
-			       PS_Config_Lmt_Open_Rawdata_N,
-			       X_Channel * Y_Channel + Key_Channel))
+	if (nvt_mp_parse_array(np, "PS_Config_Lmt_Open_Rawdata_N", PS_Config_Lmt_Open_Rawdata_N,
+			X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
-	if (nvt_mp_parse_array(np, "PS_Config_Lmt_FW_Rawdata_P",
-			       PS_Config_Lmt_FW_Rawdata_P,
-			       X_Channel * Y_Channel + Key_Channel))
+	if (nvt_mp_parse_array(np, "PS_Config_Lmt_FW_Rawdata_P", PS_Config_Lmt_FW_Rawdata_P,
+			X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
-	if (nvt_mp_parse_array(np, "PS_Config_Lmt_FW_Rawdata_N",
-			       PS_Config_Lmt_FW_Rawdata_N,
-			       X_Channel * Y_Channel + Key_Channel))
+	if (nvt_mp_parse_array(np, "PS_Config_Lmt_FW_Rawdata_N", PS_Config_Lmt_FW_Rawdata_N,
+			X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
 	if (nvt_mp_parse_array(np, "PS_Config_Lmt_FW_CC_P", PS_Config_Lmt_FW_CC_P,
-			       X_Channel * Y_Channel + Key_Channel))
+			X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
 	if (nvt_mp_parse_array(np, "PS_Config_Lmt_FW_CC_N", PS_Config_Lmt_FW_CC_N,
-			       X_Channel * Y_Channel + Key_Channel))
+			X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
 	if (nvt_mp_parse_array(np, "PS_Config_Lmt_FW_Diff_P", PS_Config_Lmt_FW_Diff_P,
-			       X_Channel * Y_Channel + Key_Channel))
+			X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
 	if (nvt_mp_parse_array(np, "PS_Config_Lmt_FW_Diff_N", PS_Config_Lmt_FW_Diff_N,
-			       X_Channel * Y_Channel + Key_Channel))
+			X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
 	if (ts->pen_support) {
-		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenTipX_FW_Raw_P",
-					   PS_Config_Lmt_PenTipX_FW_Raw_P,
-					   ts->x_num, ts->y_gang_num))
+		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenTipX_FW_Raw_P", PS_Config_Lmt_PenTipX_FW_Raw_P,
+				ts->x_num, ts->y_gang_num))
 			return -1;
 
-		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenTipX_FW_Raw_N",
-					   PS_Config_Lmt_PenTipX_FW_Raw_N,
-					   ts->x_num, ts->y_gang_num))
+		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenTipX_FW_Raw_N", PS_Config_Lmt_PenTipX_FW_Raw_N,
+				ts->x_num, ts->y_gang_num))
 			return -1;
 
-		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenTipY_FW_Raw_P",
-					   PS_Config_Lmt_PenTipY_FW_Raw_P,
-					   ts->x_gang_num, ts->y_num))
+		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenTipY_FW_Raw_P", PS_Config_Lmt_PenTipY_FW_Raw_P,
+				ts->x_gang_num, ts->y_num))
 			return -1;
 
-		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenTipY_FW_Raw_N",
-					   PS_Config_Lmt_PenTipY_FW_Raw_N,
-					   ts->x_gang_num, ts->y_num))
+		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenTipY_FW_Raw_N", PS_Config_Lmt_PenTipY_FW_Raw_N,
+				ts->x_gang_num, ts->y_num))
 			return -1;
 
-		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenRingX_FW_Raw_P",
-					   PS_Config_Lmt_PenRingX_FW_Raw_P,
-					   ts->x_num, ts->y_gang_num))
+		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenRingX_FW_Raw_P", PS_Config_Lmt_PenRingX_FW_Raw_P,
+				ts->x_num, ts->y_gang_num))
 			return -1;
 
-		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenRingX_FW_Raw_N",
-					   PS_Config_Lmt_PenRingX_FW_Raw_N,
-					   ts->x_num, ts->y_gang_num))
+		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenRingX_FW_Raw_N", PS_Config_Lmt_PenRingX_FW_Raw_N,
+				ts->x_num, ts->y_gang_num))
 			return -1;
 
-		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenRingY_FW_Raw_P",
-					   PS_Config_Lmt_PenRingY_FW_Raw_P,
-					   ts->x_gang_num, ts->y_num))
+		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenRingY_FW_Raw_P", PS_Config_Lmt_PenRingY_FW_Raw_P,
+				ts->x_gang_num, ts->y_num))
 			return -1;
 
-		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenRingY_FW_Raw_N",
-					   PS_Config_Lmt_PenRingY_FW_Raw_N,
-					   ts->x_gang_num, ts->y_num))
+		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenRingY_FW_Raw_N", PS_Config_Lmt_PenRingY_FW_Raw_N,
+				ts->x_gang_num, ts->y_num))
 			return -1;
 
-		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenTipX_FW_Diff_P",
-					   PS_Config_Lmt_PenTipX_FW_Diff_P,
-					   ts->x_num, ts->y_gang_num))
+		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenTipX_FW_Diff_P", PS_Config_Lmt_PenTipX_FW_Diff_P,
+				ts->x_num, ts->y_gang_num))
 			return -1;
 
-		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenTipX_FW_Diff_N",
-					   PS_Config_Lmt_PenTipX_FW_Diff_N,
-					   ts->x_num, ts->y_gang_num))
+		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenTipX_FW_Diff_N", PS_Config_Lmt_PenTipX_FW_Diff_N,
+				ts->x_num, ts->y_gang_num))
 			return -1;
 
-		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenTipY_FW_Diff_P",
-					   PS_Config_Lmt_PenTipY_FW_Diff_P,
-					   ts->x_gang_num, ts->y_num))
+		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenTipY_FW_Diff_P", PS_Config_Lmt_PenTipY_FW_Diff_P,
+				ts->x_gang_num, ts->y_num))
 			return -1;
 
-		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenTipY_FW_Diff_N",
-					   PS_Config_Lmt_PenTipY_FW_Diff_N,
-					   ts->x_gang_num, ts->y_num))
+		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenTipY_FW_Diff_N", PS_Config_Lmt_PenTipY_FW_Diff_N,
+				ts->x_gang_num, ts->y_num))
 			return -1;
 
-		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenRingX_FW_Diff_P",
-					   PS_Config_Lmt_PenRingX_FW_Diff_P,
-					   ts->x_num, ts->y_gang_num))
+		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenRingX_FW_Diff_P", PS_Config_Lmt_PenRingX_FW_Diff_P,
+				ts->x_num, ts->y_gang_num))
 			return -1;
 
-		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenRingX_FW_Diff_N",
-					   PS_Config_Lmt_PenRingX_FW_Diff_N,
-					   ts->x_num, ts->y_gang_num))
+		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenRingX_FW_Diff_N", PS_Config_Lmt_PenRingX_FW_Diff_N,
+				ts->x_num, ts->y_gang_num))
 			return -1;
 
-		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenRingY_FW_Diff_P",
-					   PS_Config_Lmt_PenRingY_FW_Diff_P,
-					   ts->x_gang_num, ts->y_num))
+		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenRingY_FW_Diff_P", PS_Config_Lmt_PenRingY_FW_Diff_P,
+				ts->x_gang_num, ts->y_num))
 			return -1;
 
-		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenRingY_FW_Diff_N",
-					   PS_Config_Lmt_PenRingY_FW_Diff_N,
-					   ts->x_gang_num, ts->y_num))
+		if (nvt_mp_parse_pen_array(np, "PS_Config_Lmt_PenRingY_FW_Diff_N", PS_Config_Lmt_PenRingY_FW_Diff_N,
+				ts->x_gang_num, ts->y_num))
 			return -1;
 	} /* if (ts->pen_support) */
 
-	if (nvt_mp_parse_u32(np, "PS_Config_Diff_Test_Frame",
-			     &PS_Config_Diff_Test_Frame))
+	if (nvt_mp_parse_u32(np, "PS_Config_Diff_Test_Frame", &PS_Config_Diff_Test_Frame))
 		return -1;
 
 #if DOZE_TEST
-
 	if (nvt_mp_parse_u32(np, "Doze_X_Channel", &Doze_X_Channel))
 		return -1;
 
-	if (nvt_mp_parse_array(np, "PS_Config_Lmt_Doze_Rawdata_P",
-			       PS_Config_Lmt_Doze_Rawdata_P,
-			       Doze_X_Channel * Y_Channel + Key_Channel))
+	if (nvt_mp_parse_array(np, "PS_Config_Lmt_Doze_Rawdata_P", PS_Config_Lmt_Doze_Rawdata_P,
+			Doze_X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
-	if (nvt_mp_parse_array(np, "PS_Config_Lmt_Doze_Rawdata_N",
-			       PS_Config_Lmt_Doze_Rawdata_N,
-			       Doze_X_Channel * Y_Channel + Key_Channel))
+	if (nvt_mp_parse_array(np, "PS_Config_Lmt_Doze_Rawdata_N", PS_Config_Lmt_Doze_Rawdata_N,
+			Doze_X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
-	if (nvt_mp_parse_u32(np, "PS_Config_Doze_Noise_Test_Frame",
-			     &PS_Config_Doze_Noise_Test_Frame))
+	if (nvt_mp_parse_u32(np, "PS_Config_Doze_Noise_Test_Frame", &PS_Config_Doze_Noise_Test_Frame))
 		return -1;
 
-	if (nvt_mp_parse_array(np, "PS_Config_Lmt_Doze_Diff_P",
-			       PS_Config_Lmt_Doze_Diff_P,
-			       Doze_X_Channel * Y_Channel + Key_Channel))
+	if (nvt_mp_parse_array(np, "PS_Config_Lmt_Doze_Diff_P", PS_Config_Lmt_Doze_Diff_P,
+			Doze_X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
-	if (nvt_mp_parse_array(np, "PS_Config_Lmt_Doze_Diff_N",
-			       PS_Config_Lmt_Doze_Diff_N,
-			       Doze_X_Channel * Y_Channel + Key_Channel))
+	if (nvt_mp_parse_array(np, "PS_Config_Lmt_Doze_Diff_N", PS_Config_Lmt_Doze_Diff_N,
+			Doze_X_Channel * Y_Channel + Key_Channel))
 		return -1;
-
 #endif
 
 #if (FDM_TEST && LPWG_TEST)
-
 	if (nvt_mp_parse_u32(np, "FDM_X_Channel", &FDM_X_Channel))
 		return -1;
 
-	if (nvt_mp_parse_array(np, "PS_Config_Lmt_FDM_Rawdata_P",
-			       PS_Config_Lmt_FDM_Rawdata_P,
-			       FDM_X_Channel * Y_Channel + Key_Channel))
+	if (nvt_mp_parse_array(np, "PS_Config_Lmt_FDM_Rawdata_P", PS_Config_Lmt_FDM_Rawdata_P,
+			FDM_X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
-	if (nvt_mp_parse_array(np, "PS_Config_Lmt_FDM_Rawdata_N",
-			       PS_Config_Lmt_FDM_Rawdata_N,
-			       FDM_X_Channel * Y_Channel + Key_Channel))
+	if (nvt_mp_parse_array(np, "PS_Config_Lmt_FDM_Rawdata_N", PS_Config_Lmt_FDM_Rawdata_N,
+			FDM_X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
-	if (nvt_mp_parse_u32(np, "PS_Config_FDM_Noise_Test_Frame",
-			     &PS_Config_FDM_Noise_Test_Frame))
+	if (nvt_mp_parse_u32(np, "PS_Config_FDM_Noise_Test_Frame", &PS_Config_FDM_Noise_Test_Frame))
 		return -1;
 
 	if (nvt_mp_parse_array(np, "PS_Config_Lmt_FDM_Diff_P", PS_Config_Lmt_FDM_Diff_P,
-			       FDM_X_Channel * Y_Channel + Key_Channel))
+			FDM_X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
 	if (nvt_mp_parse_array(np, "PS_Config_Lmt_FDM_Diff_N", PS_Config_Lmt_FDM_Diff_N,
-			       FDM_X_Channel * Y_Channel + Key_Channel))
+			FDM_X_Channel * Y_Channel + Key_Channel))
 		return -1;
-
 #endif
 
 #if DIGI_NOISE_TEST
-
-	if (nvt_mp_parse_array(np, "PS_Config_Lmt_FW_DigiDiff_P",
-			       PS_Config_Lmt_FW_DigiDiff_P,
-			       X_Channel * Y_Channel + Key_Channel))
+	if (nvt_mp_parse_array(np, "PS_Config_Lmt_FW_DigiDiff_P", PS_Config_Lmt_FW_DigiDiff_P,
+			X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
-	if (nvt_mp_parse_array(np, "PS_Config_Lmt_FW_DigiDiff_N",
-			       PS_Config_Lmt_FW_DigiDiff_N,
-			       X_Channel * Y_Channel + Key_Channel))
+	if (nvt_mp_parse_array(np, "PS_Config_Lmt_FW_DigiDiff_N", PS_Config_Lmt_FW_DigiDiff_N,
+			X_Channel * Y_Channel + Key_Channel))
 		return -1;
-
 #endif
 
 	NVT_LOG("Parse mp criteria done!\n");
@@ -4197,8 +3724,7 @@ Description:
 return:
 	n.a.
 *******************************************************/
-int32_t nvt_mp_parse_lpwg_dt(struct device_node *root,
-			     const char *node_compatible)
+int32_t nvt_mp_parse_lpwg_dt(struct device_node *root, const char *node_compatible)
 {
 	struct device_node *np = root;
 	struct device_node *child = NULL;
@@ -4214,7 +3740,6 @@ int32_t nvt_mp_parse_lpwg_dt(struct device_node *root,
 			break;
 		}
 	}
-
 	if (child == NULL) {
 		NVT_ERR("Not found compatible node %s!\n", node_compatible);
 		return -1;
@@ -4228,10 +3753,8 @@ int32_t nvt_mp_parse_lpwg_dt(struct device_node *root,
 		return -1;
 
 #if TOUCH_KEY_NUM > 0
-
 	if (nvt_mp_parse_u32(np, "IC_KEY_CFG_SIZE", &IC_KEY_CFG_SIZE))
 		return -1;
-
 #endif
 
 	if (nvt_mp_parse_u32(np, "X_Channel", &X_Channel))
@@ -4247,35 +3770,28 @@ int32_t nvt_mp_parse_lpwg_dt(struct device_node *root,
 		return -1;
 
 #if TOUCH_KEY_NUM > 0
-
 	if (nvt_mp_parse_ain(np, "AIN_KEY", AIN_KEY, IC_KEY_CFG_SIZE))
 		return -1;
-
 #endif
 
 	/* MP Criteria */
-	if (nvt_mp_parse_array(np, "PS_Config_Lmt_LPWG_Rawdata_P",
-			       PS_Config_Lmt_LPWG_Rawdata_P,
-			       X_Channel * Y_Channel + Key_Channel))
+	if (nvt_mp_parse_array(np, "PS_Config_Lmt_LPWG_Rawdata_P", PS_Config_Lmt_LPWG_Rawdata_P,
+			X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
-	if (nvt_mp_parse_array(np, "PS_Config_Lmt_LPWG_Rawdata_N",
-			       PS_Config_Lmt_LPWG_Rawdata_N,
-			       X_Channel * Y_Channel + Key_Channel))
+	if (nvt_mp_parse_array(np, "PS_Config_Lmt_LPWG_Rawdata_N", PS_Config_Lmt_LPWG_Rawdata_N,
+			X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
-	if (nvt_mp_parse_array(np, "PS_Config_Lmt_LPWG_Diff_P",
-			       PS_Config_Lmt_LPWG_Diff_P,
-			       X_Channel * Y_Channel + Key_Channel))
+	if (nvt_mp_parse_array(np, "PS_Config_Lmt_LPWG_Diff_P", PS_Config_Lmt_LPWG_Diff_P,
+			X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
-	if (nvt_mp_parse_array(np, "PS_Config_Lmt_LPWG_Diff_N",
-			       PS_Config_Lmt_LPWG_Diff_N,
-			       X_Channel * Y_Channel + Key_Channel))
+	if (nvt_mp_parse_array(np, "PS_Config_Lmt_LPWG_Diff_N", PS_Config_Lmt_LPWG_Diff_N,
+			X_Channel * Y_Channel + Key_Channel))
 		return -1;
 
-	if (nvt_mp_parse_u32(np, "PS_Config_Diff_Test_Frame",
-			     &PS_Config_Diff_Test_Frame))
+	if (nvt_mp_parse_u32(np, "PS_Config_Diff_Test_Frame", &PS_Config_Diff_Test_Frame))
 		return -1;
 
 	NVT_LOG("Parse mp lpwg criteria done!\n");
@@ -4295,54 +3811,46 @@ return:
 *******************************************************/
 int32_t nvt_mp_proc_init(void)
 {
-	NVT_proc_selftest_entry = proc_create("nvt_selftest", 0444, NULL,
-					      &nvt_selftest_fops);
+	NVT_proc_selftest_entry = proc_create("nvt_selftest", 0444, NULL, &nvt_selftest_fops);
 #if LPWG_TEST
 	NVT_proc_lpwg_selftest_entry =
 		proc_create("nvt_lpwg_selftest", 0444, NULL, &nvt_lpwg_selftest_fops);
 #endif
-
 	if (NVT_proc_selftest_entry == NULL) {
 		NVT_ERR("create /proc/nvt_selftest Failed!\n");
 		return -EPERM;
 #if LPWG_TEST
-
 	} else if (NVT_proc_lpwg_selftest_entry == NULL) {
 		NVT_ERR("create /proc/nvt_lpwg_selftest Failed!\n");
 		return -EPERM;
 #endif
-
 	} else {
-		if (nvt_mp_buffer_init()) {
+		if(nvt_mp_buffer_init()) {
 			NVT_ERR("Allocate mp memory failed\n");
 			return -EPERM;
-
-		} else
+		}
+		else {
 			NVT_LOG("create /proc/nvt_selftest Succeeded!\n");
+		}
 
-		/* oppo customized proc node */
+		/* oplus customized proc node */
 		if (ts->oplus_touchpanel_proc != NULL) {
 			//proc/touchpanel/baseline_test
 			oplus_auto_test_entry = proc_create("baseline_test", 0666,
-							    ts->oplus_touchpanel_proc, &nvt_selftest_fops);
-
+					ts->oplus_touchpanel_proc, &nvt_selftest_fops);
 			if (oplus_auto_test_entry == NULL) {
 				NVT_ERR("create proc/touchpanel/baseline_test Failed!\n");
 				return -EPERM;
 			}
-
 #if LPWG_TEST
 			//proc/touchpanel/black_screen_test
 			oplus_black_screen_entry = proc_create("black_screen_test", 0666,
-							       ts->oplus_touchpanel_proc, &nvt_lpwg_selftest_fops);
-
+					ts->oplus_touchpanel_proc, &nvt_lpwg_selftest_fops);
 			if (oplus_black_screen_entry == NULL) {
 				NVT_ERR("create proc/touchpanel/black_screen_test Failed!\n");
 				return -EPERM;
 			}
-
 #endif
-
 		} else {
 			NVT_ERR("proc/touchpanel/ is NULL!\n");
 			return -EPERM;
@@ -4371,15 +3879,12 @@ void nvt_mp_proc_deinit(void)
 		NVT_proc_selftest_entry = NULL;
 		NVT_LOG("Removed /proc/%s\n", "nvt_selftest");
 	}
-
 #if LPWG_TEST
-
 	if (NVT_proc_lpwg_selftest_entry != NULL) {
 		remove_proc_entry("nvt_lpwg_selftest", NULL);
 		NVT_proc_lpwg_selftest_entry = NULL;
 		NVT_LOG("Removed /proc/%s\n", "nvt_lpwg_selftest");
 	}
-
 #endif
 }
 #endif /* #if NVT_TOUCH_MP */

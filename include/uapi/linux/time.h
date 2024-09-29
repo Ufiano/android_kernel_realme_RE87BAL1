@@ -3,7 +3,7 @@
 #define _UAPI_LINUX_TIME_H
 
 #include <linux/types.h>
-
+#include <linux/time_types.h>
 
 #ifndef _STRUCT_TIMESPEC
 #define _STRUCT_TIMESPEC
@@ -22,7 +22,6 @@ struct timezone {
 	int	tz_minuteswest;	/* minutes west of Greenwich */
 	int	tz_dsttime;	/* type of dst correction */
 };
-
 
 /*
  * Names of the interval timers, and structure
@@ -61,10 +60,6 @@ struct itimerval {
  */
 #define CLOCK_SGI_CYCLE			10
 #define CLOCK_TAI			11
-
-#define CLOCK_POWEROFF_WAKE		12
-#define CLOCK_POWERON_WAKE		13
-#define CLOCK_POWEROFF_ALARM		14
 
 #define MAX_CLOCKS			16
 #define CLOCKS_MASK			(CLOCK_REALTIME | CLOCK_MONOTONIC)

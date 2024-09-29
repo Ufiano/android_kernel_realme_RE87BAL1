@@ -1,17 +1,3 @@
-/*
- * Copyright (C) 2013 Google, Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- */
-
 #include <linux/cpu.h>
 #include <linux/interrupt.h>
 #include <linux/irq.h>
@@ -23,8 +9,13 @@
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/trusty/smcall.h>
-#include <linux/trusty/sm_err.h>
-#include <linux/trusty/trusty.h>
+#include "sm_err.h"
+#include "trusty.h"
+
+#ifdef pr_fmt
+#undef pr_fmt
+#endif
+#define pr_fmt(fmt) "sprd-trusty-irq: " fmt
 
 struct trusty_irq {
 	struct trusty_irq_state *is;
@@ -53,7 +44,7 @@ struct trusty_irq_state {
 
 static int trusty_irq_cpuhp_slot = -1;
 
-#define SPRD_GIC_V2	2
+#define SPRD_GIC_DEFAULT	2
 #define SPRD_GIC_V3	3
 
 #define IPI_TRUSTY_SMC	13
@@ -157,7 +148,7 @@ static int trusty_irq_call_notify(struct notifier_block *nb,
 	return NOTIFY_OK;
 }
 
-irqreturn_t trusty_irq_handler(int irq, void *data)
+static irqreturn_t trusty_irq_handler(int irq, void *data)
 {
 	struct trusty_irq *trusty_irq = data;
 	struct trusty_irq_state *is = trusty_irq->is;
@@ -177,12 +168,13 @@ irqreturn_t trusty_irq_handler(int irq, void *data)
 			break;
 
 		default:
-			dev_err(is->dev, "unexcepted irq: %ld\n", irq_data->hwirq);
+			dev_err(is->dev, "unexcepted irq: %ld\n",
+				irq_data->hwirq);
 			return IRQ_NONE;
 		}
 		break;
 
-	case SPRD_GIC_V2:
+	case SPRD_GIC_DEFAULT:
 		if (trusty_irq->percpu) {
 			disable_percpu_irq(irq);
 			irqset = this_cpu_ptr(is->percpu_irqs);
@@ -197,12 +189,12 @@ irqreturn_t trusty_irq_handler(int irq, void *data)
 		hlist_add_head(&trusty_irq->node, &irqset->pending);
 	}
 	spin_unlock(&is->normal_irqs_lock);
-
-		trusty_enqueue_nop(is->trusty_dev, NULL);
-		break;
+	trusty_enqueue_nop(is->trusty_dev, NULL);
+	break;
 
 	default:
-		dev_err(is->dev, "unexcepted gic version: %d\n", is->gic_version);
+		dev_err(is->dev, "unexcepted gic version: %d\n",
+			is->gic_version);
 		return IRQ_NONE;
 	}
 
@@ -305,7 +297,17 @@ static int trusty_irq_create_irq_mapping(struct trusty_irq_state *is, int irq)
 	 * field omitted, so to convert irq template to interrupt specifier
 	 * array we have to move down one slot the first irq_pos entries and
 	 * replace the resulting gap with real irq id.
+	 *
+	 * After replace ipi to sgi for k54, the #interrupt-cells of sgi and
+	 * ppi and psi must be equal 3. However, there is only one args in sgi.
+	 * So modify args_count and args[0] for sgi mapping
 	 */
+
+	if (templ_idx == 0) {
+		oirq.args[0] = 0;
+		oirq.args_count = 1;
+	}
+
 	irq_pos = oirq.args[0];
 
 	if (irq_pos >= oirq.args_count) {
@@ -500,13 +502,14 @@ static int trusty_irq_probe(struct platform_device *pdev)
 	is->dev = &pdev->dev;
 	is->trusty_dev = is->dev->parent;
 	spin_lock_init(&is->normal_irqs_lock);
-	if (of_find_compatible_node(NULL, NULL, "arm,gic-v3")) {
+	if (of_find_compatible_node(NULL, NULL, "arm,gic-v3"))
 		is->gic_version = SPRD_GIC_V3;
-	} else if (of_find_compatible_node(NULL, NULL, "arm,gic-400")) {
-		is->gic_version = SPRD_GIC_V2;
-	} else {
-		is->gic_version = SPRD_GIC_V2;
+	else {
+		is->gic_version = SPRD_GIC_DEFAULT;
+		dev_dbg(&pdev->dev, "gic_version is default gic_v2\n");
 	}
+
+
 	dev_dbg(&pdev->dev, "%s gic version = %d\n", __func__, is->gic_version);
 
 	is->percpu_irqs = alloc_percpu(struct trusty_irq_irqset);
@@ -592,7 +595,7 @@ static int trusty_irq_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id trusty_test_of_match[] = {
-	{ .compatible = "android,trusty-irq-v1", },
+	{ .compatible = "sprd,trusty-irq-v1", },
 	{},
 };
 
@@ -600,8 +603,7 @@ static struct platform_driver trusty_irq_driver = {
 	.probe = trusty_irq_probe,
 	.remove = trusty_irq_remove,
 	.driver	= {
-		.name = "trusty-irq",
-		.owner = THIS_MODULE,
+		.name = "sprd-trusty-irq",
 		.of_match_table = trusty_test_of_match,
 	},
 };
@@ -643,3 +645,6 @@ static void __exit trusty_irq_driver_exit(void)
 
 module_init(trusty_irq_driver_init);
 module_exit(trusty_irq_driver_exit);
+
+MODULE_DESCRIPTION("Sprd trusty irq driver");
+MODULE_LICENSE("GPL v2");

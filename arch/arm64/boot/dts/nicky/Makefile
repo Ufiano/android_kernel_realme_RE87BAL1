@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
+
 ifeq ($(BSP_BUILD_ANDROID_OS),y)
 
 ifeq ($(BSP_BUILD_FAMILY),qogirl6)
@@ -20,10 +21,10 @@ ums9230-nicky-overlay-dvt.dtbo-base := ums9230.dtb
 ums9230-nicky-overlay-pvt.dtbo-base := ums9230.dtb
 ums9230-nicky-overlay-mp-0.dtbo-base := ums9230.dtb
 ums9230-nicky-overlay-mp-1.dtbo-base := ums9230.dtb
+
 endif
 
 endif #//BSP_BUILD_ANDROID_OS
 
 always		:= $(dtb-y) $(dtbo-y)
-subdir-y	:= $(dts-dirs)
 clean-files	:= *.dtb *.dtbo

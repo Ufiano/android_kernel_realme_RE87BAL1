@@ -1,7 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
 # define_trace.h needs to know how to find our header
-GCOV_PROFILE := $(CONFIG_SPRD_USB_GCOV)
-
 CFLAGS_trace.o			:= -I$(src)
 
 udc-core-y			:= core.o trace.o
@@ -41,4 +39,5 @@ obj-$(CONFIG_USB_MV_U3D)	+= mv_u3d_core.o
 obj-$(CONFIG_USB_GR_UDC)	+= gr_udc.o
 obj-$(CONFIG_USB_GADGET_XILINX)	+= udc-xilinx.o
 obj-$(CONFIG_USB_SNP_UDC_PLAT) += snps_udc_plat.o
+obj-$(CONFIG_USB_ASPEED_VHUB)	+= aspeed-vhub/
 obj-$(CONFIG_USB_BDC_UDC)	+= bdc/

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*******************************************************************************
  * Filename: target_core_xcopy.c
  *
@@ -8,16 +9,6 @@
  *
  * Author:
  * Nicholas A. Bellinger <nab@daterainc.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  *
  ******************************************************************************/
 
@@ -55,60 +46,83 @@ static int target_xcopy_gen_naa_ieee(struct se_device *dev, unsigned char *buf)
 	return 0;
 }
 
-struct xcopy_dev_search_info {
-	const unsigned char *dev_wwn;
-	struct se_device *found_dev;
-};
-
+/**
+ * target_xcopy_locate_se_dev_e4_iter - compare XCOPY NAA device identifiers
+ *
+ * @se_dev: device being considered for match
+ * @dev_wwn: XCOPY requested NAA dev_wwn
+ * @return: 1 on match, 0 on no-match
+ */
 static int target_xcopy_locate_se_dev_e4_iter(struct se_device *se_dev,
-					      void *data)
+					      const unsigned char *dev_wwn)
 {
-	struct xcopy_dev_search_info *info = data;
 	unsigned char tmp_dev_wwn[XCOPY_NAA_IEEE_REGEX_LEN];
 	int rc;
 
-	if (!se_dev->dev_attrib.emulate_3pc)
+	if (!se_dev->dev_attrib.emulate_3pc) {
+		pr_debug("XCOPY: emulate_3pc disabled on se_dev %p\n", se_dev);
 		return 0;
+	}
 
 	memset(&tmp_dev_wwn[0], 0, XCOPY_NAA_IEEE_REGEX_LEN);
 	target_xcopy_gen_naa_ieee(se_dev, &tmp_dev_wwn[0]);
 
-	rc = memcmp(&tmp_dev_wwn[0], info->dev_wwn, XCOPY_NAA_IEEE_REGEX_LEN);
-	if (rc != 0)
+	rc = memcmp(&tmp_dev_wwn[0], dev_wwn, XCOPY_NAA_IEEE_REGEX_LEN);
+	if (rc != 0) {
+		pr_debug("XCOPY: skip non-matching: %*ph\n",
+			 XCOPY_NAA_IEEE_REGEX_LEN, tmp_dev_wwn);
 		return 0;
-
-	info->found_dev = se_dev;
+	}
 	pr_debug("XCOPY 0xe4: located se_dev: %p\n", se_dev);
 
-	rc = target_depend_item(&se_dev->dev_group.cg_item);
-	if (rc != 0) {
-		pr_err("configfs_depend_item attempt failed: %d for se_dev: %p\n",
-		       rc, se_dev);
-		return rc;
-	}
-
-	pr_debug("Called configfs_depend_item for se_dev: %p se_dev->se_dev_group: %p\n",
-		 se_dev, &se_dev->dev_group);
 	return 1;
 }
 
-static int target_xcopy_locate_se_dev_e4(const unsigned char *dev_wwn,
-					struct se_device **found_dev)
+static int target_xcopy_locate_se_dev_e4(struct se_session *sess,
+					const unsigned char *dev_wwn,
+					struct se_device **_found_dev,
+					struct percpu_ref **_found_lun_ref)
 {
-	struct xcopy_dev_search_info info;
-	int ret;
+	struct se_dev_entry *deve;
+	struct se_node_acl *nacl;
+	struct se_lun *this_lun = NULL;
+	struct se_device *found_dev = NULL;
 
-	memset(&info, 0, sizeof(info));
-	info.dev_wwn = dev_wwn;
+	/* cmd with NULL sess indicates no associated $FABRIC_MOD */
+	if (!sess)
+		goto err_out;
 
-	ret = target_for_each_device(target_xcopy_locate_se_dev_e4_iter, &info);
-	if (ret == 1) {
-		*found_dev = info.found_dev;
-		return 0;
-	} else {
-		pr_debug_ratelimited("Unable to locate 0xe4 descriptor for EXTENDED_COPY\n");
-		return -EINVAL;
+	pr_debug("XCOPY 0xe4: searching for: %*ph\n",
+		 XCOPY_NAA_IEEE_REGEX_LEN, dev_wwn);
+
+	nacl = sess->se_node_acl;
+	rcu_read_lock();
+	hlist_for_each_entry_rcu(deve, &nacl->lun_entry_hlist, link) {
+		struct se_device *this_dev;
+		int rc;
+
+		this_lun = rcu_dereference(deve->se_lun);
+		this_dev = rcu_dereference_raw(this_lun->lun_se_dev);
+
+		rc = target_xcopy_locate_se_dev_e4_iter(this_dev, dev_wwn);
+		if (rc) {
+			if (percpu_ref_tryget_live(&this_lun->lun_ref))
+				found_dev = this_dev;
+			break;
+		}
 	}
+	rcu_read_unlock();
+	if (found_dev == NULL)
+		goto err_out;
+
+	pr_debug("lun_ref held for se_dev: %p se_dev->se_dev_group: %p\n",
+		 found_dev, &found_dev->dev_group);
+	*_found_dev = found_dev;
+	*_found_lun_ref = &this_lun->lun_ref;
+	return 0;
+err_out:
+	pr_debug_ratelimited("Unable to locate 0xe4 descriptor for EXTENDED_COPY\n");
+	return -EINVAL;
 }
 
 static int target_xcopy_parse_tiddesc_e4(struct se_cmd *se_cmd, struct xcopy_op *xop,
@@ -255,12 +269,16 @@ static int target_xcopy_parse_target_descriptors(struct se_cmd *se_cmd,
 
 	switch (xop->op_origin) {
 	case XCOL_SOURCE_RECV_OP:
-		rc = target_xcopy_locate_se_dev_e4(xop->dst_tid_wwn,
-						&xop->dst_dev);
+		rc = target_xcopy_locate_se_dev_e4(se_cmd->se_sess,
+						xop->dst_tid_wwn,
+						&xop->dst_dev,
+						&xop->remote_lun_ref);
 		break;
 	case XCOL_DEST_RECV_OP:
-		rc = target_xcopy_locate_se_dev_e4(xop->src_tid_wwn,
-						&xop->src_dev);
+		rc = target_xcopy_locate_se_dev_e4(se_cmd->se_sess,
+						xop->src_tid_wwn,
+						&xop->src_dev,
+						&xop->remote_lun_ref);
 		break;
 	default:
 		pr_err("XCOPY CSCD descriptor IDs not found in CSCD list - "
@@ -389,9 +407,7 @@ out:
  */
 
 struct xcopy_pt_cmd {
-	bool remote_port;
 	struct se_cmd se_cmd;
-	struct xcopy_op *xcopy_op;
 	struct completion xpt_passthrough_sem;
 	unsigned char sense_buffer[TRANSPORT_SENSE_BUFFER];
 };
@@ -400,11 +416,6 @@ struct se_portal_group xcopy_pt_tpg;
 static struct se_session xcopy_pt_sess;
 static struct se_node_acl xcopy_pt_nacl;
 
-static char *xcopy_pt_get_fabric_name(void)
-{
-        return "xcopy-pt";
-}
-
 static int xcopy_pt_get_cmd_state(struct se_cmd *se_cmd)
 {
         return 0;
@@ -412,18 +423,12 @@ static int xcopy_pt_get_cmd_state(struct se_cmd *se_cmd)
 
 static void xcopy_pt_undepend_remotedev(struct xcopy_op *xop)
 {
-	struct se_device *remote_dev;
-
 	if (xop->op_origin == XCOL_SOURCE_RECV_OP)
-		remote_dev = xop->dst_dev;
+		pr_debug("putting dst lun_ref for %p\n", xop->dst_dev);
 	else
-		remote_dev = xop->src_dev;
+		pr_debug("putting src lun_ref for %p\n", xop->src_dev);
 
-	pr_debug("Calling configfs_undepend_item for"
-		  " remote_dev: %p remote_dev->dev_group: %p\n",
-		  remote_dev, &remote_dev->dev_group.cg_item);
-
-	target_undepend_item(&remote_dev->dev_group.cg_item);
+	percpu_ref_put(xop->remote_lun_ref);
 }
 
 static void xcopy_pt_release_cmd(struct se_cmd *se_cmd)
@@ -448,11 +453,6 @@ static int xcopy_pt_write_pending(struct se_cmd *se_cmd)
 	return 0;
 }
 
-static int xcopy_pt_write_pending_status(struct se_cmd *se_cmd)
-{
-	return 0;
-}
-
 static int xcopy_pt_queue_data_in(struct se_cmd *se_cmd)
 {
 	return 0;
@@ -464,12 +464,11 @@ static int xcopy_pt_queue_status(struct se_cmd *se_cmd)
 }
 
 static const struct target_core_fabric_ops xcopy_pt_tfo = {
-	.get_fabric_name	= xcopy_pt_get_fabric_name,
+	.fabric_name		= "xcopy-pt",
 	.get_cmd_state		= xcopy_pt_get_cmd_state,
 	.release_cmd		= xcopy_pt_release_cmd,
 	.check_stop_free	= xcopy_pt_check_stop_free,
 	.write_pending		= xcopy_pt_write_pending,
-	.write_pending_status	= xcopy_pt_write_pending_status,
 	.queue_data_in		= xcopy_pt_queue_data_in,
 	.queue_status		= xcopy_pt_queue_status,
 };
@@ -480,6 +479,8 @@ static const struct target_core_fabric_ops xcopy_pt_tfo = {
 
 int target_xcopy_setup_pt(void)
 {
+	int ret;
+
 	xcopy_wq = alloc_workqueue("xcopy_wq", WQ_MEM_RECLAIM, 0);
 	if (!xcopy_wq) {
 		pr_err("Unable to allocate xcopy_wq\n");
@@ -497,10 +498,9 @@ int target_xcopy_setup_pt(void)
 	INIT_LIST_HEAD(&xcopy_pt_nacl.acl_list);
 	INIT_LIST_HEAD(&xcopy_pt_nacl.acl_sess_list);
 	memset(&xcopy_pt_sess, 0, sizeof(struct se_session));
-	INIT_LIST_HEAD(&xcopy_pt_sess.sess_list);
-	INIT_LIST_HEAD(&xcopy_pt_sess.sess_acl_list);
-	INIT_LIST_HEAD(&xcopy_pt_sess.sess_cmd_list);
-	spin_lock_init(&xcopy_pt_sess.sess_cmd_lock);
+	ret = transport_init_session(&xcopy_pt_sess);
+	if (ret < 0)
+		goto destroy_wq;
 
 	xcopy_pt_nacl.se_tpg = &xcopy_pt_tpg;
 	xcopy_pt_nacl.nacl_sess = &xcopy_pt_sess;
@@ -509,80 +509,35 @@ int target_xcopy_setup_pt(void)
 	xcopy_pt_sess.se_node_acl = &xcopy_pt_nacl;
 
 	return 0;
+
+destroy_wq:
+	destroy_workqueue(xcopy_wq);
+	xcopy_wq = NULL;
+	return ret;
 }
 
 void target_xcopy_release_pt(void)
 {
-	if (xcopy_wq)
+	if (xcopy_wq) {
 		destroy_workqueue(xcopy_wq);
-}
-
-static void target_xcopy_setup_pt_port(
-	struct xcopy_pt_cmd *xpt_cmd,
-	struct xcopy_op *xop,
-	bool remote_port)
-{
-	struct se_cmd *ec_cmd = xop->xop_se_cmd;
-	struct se_cmd *pt_cmd = &xpt_cmd->se_cmd;
-
-	if (xop->op_origin == XCOL_SOURCE_RECV_OP) {
-		/*
-		 * Honor destination port reservations for X-COPY PUSH emulation
-		 * when CDB is received on local source port, and READs blocks to
-		 * WRITE on remote destination port.
-		 */
-		if (remote_port) {
-			xpt_cmd->remote_port = remote_port;
-		} else {
-			pt_cmd->se_lun = ec_cmd->se_lun;
-			pt_cmd->se_dev = ec_cmd->se_dev;
-
-			pr_debug("Honoring local SRC port from ec_cmd->se_dev:"
-				" %p\n", pt_cmd->se_dev);
-			pt_cmd->se_lun = ec_cmd->se_lun;
-			pr_debug("Honoring local SRC port from ec_cmd->se_lun: %p\n",
-				pt_cmd->se_lun);
-		}
-	} else {
-		/*
-		 * Honor source port reservation for X-COPY PULL emulation
-		 * when CDB is received on local desintation port, and READs
-		 * blocks from the remote source port to WRITE on local
-		 * destination port.
-		 */
-		if (remote_port) {
-			xpt_cmd->remote_port = remote_port;
-		} else {
-			pt_cmd->se_lun = ec_cmd->se_lun;
-			pt_cmd->se_dev = ec_cmd->se_dev;
-
-			pr_debug("Honoring local DST port from ec_cmd->se_dev:"
-				" %p\n", pt_cmd->se_dev);
-			pt_cmd->se_lun = ec_cmd->se_lun;
-			pr_debug("Honoring local DST port from ec_cmd->se_lun: %p\n",
-				pt_cmd->se_lun);
-		}
+		transport_uninit_session(&xcopy_pt_sess);
 	}
 }
 
-static void target_xcopy_init_pt_lun(struct se_device *se_dev,
-		struct se_cmd *pt_cmd, bool remote_port)
-{
-	/*
-	 * Don't allocate + init an pt_cmd->se_lun if honoring local port for
-	 * reservations.  The pt_cmd->se_lun pointer will be setup from within
-	 * target_xcopy_setup_pt_port()
-	 */
-	if (remote_port) {
-		pr_debug("Setup emulated se_dev: %p from se_dev\n",
-			pt_cmd->se_dev);
-		pt_cmd->se_lun = &se_dev->xcopy_lun;
-		pt_cmd->se_dev = se_dev;
-	}
-
-	pt_cmd->se_cmd_flags |= SCF_SE_LUN_CMD;
-}
-
+/*
+ * target_xcopy_setup_pt_cmd - set up a pass-through command
+ * @xpt_cmd:	 Data structure to initialize.
+ * @xop:	 Describes the XCOPY operation received from an initiator.
+ * @se_dev:	 Backend device to associate with @xpt_cmd if
+ *		 @remote_port == true.
+ * @cdb:	 SCSI CDB to be copied into @xpt_cmd.
+ * @remote_port: If false, use the LUN through which the XCOPY command has
+ *		 been received. If true, use @se_dev->xcopy_lun.
+ * @alloc_mem:	 Whether or not to allocate an SGL list.
+ *
+ * Set up a SCSI command (READ or WRITE) that will be used to execute an
+ * XCOPY command.
+ */
 static int target_xcopy_setup_pt_cmd(
 	struct xcopy_pt_cmd *xpt_cmd,
 	struct xcopy_op *xop,
@@ -594,14 +549,19 @@ static int target_xcopy_setup_pt_cmd(
 	struct se_cmd *cmd = &xpt_cmd->se_cmd;
 	sense_reason_t sense_rc;
 	int ret = 0, rc;
+
 	/*
 	 * Setup LUN+port to honor reservations based upon xop->op_origin for
 	 * X-COPY PUSH or X-COPY PULL based upon where the CDB was received.
 	 */
-	target_xcopy_init_pt_lun(se_dev, cmd, remote_port);
-
-	xpt_cmd->xcopy_op = xop;
-	target_xcopy_setup_pt_port(xpt_cmd, xop, remote_port);
+	if (remote_port) {
+		cmd->se_lun = &se_dev->xcopy_lun;
+		cmd->se_dev = se_dev;
+	} else {
+		cmd->se_lun = xop->xop_se_cmd->se_lun;
+		cmd->se_dev = xop->xop_se_cmd->se_dev;
+	}
+	cmd->se_cmd_flags |= SCF_SE_LUN_CMD;
 
 	cmd->tag = 0;
 	sense_rc = target_setup_cmd_from_cdb(cmd, cdb);

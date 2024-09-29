@@ -1,6 +1,6 @@
- //SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
+ * Copyright (C) 2020 Spreadtrum Communications Inc.
  */
 
 #include <linux/debugfs.h>
@@ -142,9 +142,9 @@ enum sc2721_regulator_id {
 	SC2721_LDO_VDDSDIO,
 	SC2721_LDO_VDD28,
 	SC2721_LDO_VDDWIFIPA,
-	SC2721_LDO_VDD18_DCXO,
+	SC2721_LDO_VDDDCXO,
 	SC2721_LDO_VDDUSB33,
-	SC2721_LDO_VDDMEM,
+	SC2721_LDO_VDDLDOMEM,
 	SC2721_LDO_VDDKPLED,
 };
 
@@ -205,8 +205,8 @@ static struct regulator_desc regulators[] = {
 			   3750000U, 0),
 	SC2721_REGU_LINEAR(LDO_VDDSIM2, SC2721_LDO_VDDSIM2_PD,
 			   SC2721_LDO_VDDSIM2_PD_MASK, SC2721_LDO_VDDSIM2_VOL,
-			   SC2721_LDO_VDDSIM2_VOL_MASK, 10000U, 1200000U, 3750000U,
-			   0),
+			   SC2721_LDO_VDDSIM2_VOL_MASK, 10000U, 1200000U,
+			   3750000U, 0),
 	SC2721_REGU_LINEAR(LDO_VDDEMMCCORE, SC2721_LDO_VDDEMMCCORE_PD,
 			   SC2721_LDO_VDDEMMCCORE_PD_MASK,
 			   SC2721_LDO_VDDEMMCCORE_VOL,
@@ -219,18 +219,18 @@ static struct regulator_desc regulators[] = {
 			   3750000U, 0),
 	SC2721_REGU_LINEAR(LDO_VDDSDIO, SC2721_LDO_VDDSDIO_PD,
 			   SC2721_LDO_VDDSDIO_PD_MASK, SC2721_LDO_VDDSDIO_VOL,
-			   SC2721_LDO_VDDSDIO_VOL_MASK, 10000U, 1200000U, 3750000U,
-			   0),
+			   SC2721_LDO_VDDSDIO_VOL_MASK, 10000U, 1200000U,
+			   3750000U, 0),
 	SC2721_REGU_LINEAR(LDO_VDD28, SC2721_POWER_PD_SW,
 			   SC2721_LDO_VDD28_PD_MASK, SC2721_LDO_VDD28_VOL,
-			   SC2721_LDO_VDD28_VOL_MASK, 10000U, 1200000U, 3750000U,
-			   0),
+			   SC2721_LDO_VDD28_VOL_MASK, 10000U, 1200000U,
+			   3750000U, 0),
 	SC2721_REGU_LINEAR(LDO_VDDWIFIPA, SC2721_LDO_VDDWIFIPA_PD,
 			   SC2721_LDO_VDDWIFIPA_PD_MASK,
 			   SC2721_LDO_VDDWIFIPA_VOL,
 			   SC2721_LDO_VDDWIFIPA_VOL_MASK, 10000U, 1200000U,
 			   3750000U, 0),
-	SC2721_REGU_LINEAR(LDO_VDD18_DCXO, SC2721_POWER_PD_SW,
+	SC2721_REGU_LINEAR(LDO_VDDDCXO, SC2721_POWER_PD_SW,
 			   SC2721_LDO_VDD18_DCXO_PD_MASK,
 			   SC2721_LDO_VDD18_DCXO_VOL,
 			   SC2721_LDO_VDD18_DCXO_VOL_MASK, 10000U, 1200000U,
@@ -253,21 +253,21 @@ static struct regulator_desc regulators[] = {
 			   1900000U, 0),
 	SC2721_REGU_LINEAR(LDO_AVDD18, SC2721_POWER_PD_SW,
 			   SC2721_LDO_AVDD18_PD_MASK, SC2721_LDO_AVDD18_VOL,
-			   SC2721_LDO_AVDD18_VOL_MASK, 6250U, 1106250U, 1900000U,
-			   0),
+			   SC2721_LDO_AVDD18_VOL_MASK, 6250U, 1106250U,
+			   1900000U, 0),
 	SC2721_REGU_LINEAR(LDO_VDDRF18, SC2721_LDO_VDDRF18_PD,
 			   SC2721_LDO_VDDRF18_PD_MASK, SC2721_LDO_VDDRF18_VOL,
-			   SC2721_LDO_VDDRF18_VOL_MASK, 6250U, 1106250U, 1900000U,
-			   0),
+			   SC2721_LDO_VDDRF18_VOL_MASK, 6250U, 1106250U,
+			   1900000U, 0),
 	SC2721_REGU_LINEAR(LDO_VDDRF125, SC2721_LDO_VDDRF125_PD,
 			   SC2721_LDO_VDDRF125_PD_MASK,
 			   SC2721_LDO_VDDRF125_VOL,
 			   SC2721_LDO_VDDRF125_VOL_MASK, 6250U, 1106250U,
 			   1400000U, 0),
-	SC2721_REGU_LINEAR(LDO_VDDMEM, SC2721_POWER_PD_SW,
+	SC2721_REGU_LINEAR(LDO_VDDLDOMEM, SC2721_POWER_PD_SW,
 			   SC2721_LDO_VDDMEM_PD_MASK, SC2721_LDO_VDDMEM_VOL,
-			   SC2721_LDO_VDDMEM_VOL_MASK, 6250U, 1106250U, 1400000U,
-			   0),
+			   SC2721_LDO_VDDMEM_VOL_MASK, 6250U, 1106250U,
+			   1400000U, 0),
 	SC2721_REGU_LINEAR(LDO_VDDKPLED, SC2721_LDO_VDDKPLED_PD,
 			   SC2721_LDO_VDDKPLED_PD_MASK, SC2721_LDO_VDDKPLED_VOL,
 			   SC2721_LDO_VDDKPLED_VOL_MASK, 10000U, 1200000U,
@@ -343,9 +343,9 @@ static void sc2721_regulator_debugfs_init(struct regulator_dev *rdev)
 		return;
 	}
 
-	debugfs_create_file("enable", S_IRUGO | S_IWUSR,
+	debugfs_create_file("enable", 0644,
 			    debugfs_root, rdev, &fops_enable);
-	debugfs_create_file("voltage", S_IRUGO | S_IWUSR,
+	debugfs_create_file("voltage", 0644,
 			    debugfs_root, rdev, &fops_ldo);
 }
 
@@ -396,9 +396,16 @@ static int sc2721_regulator_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static const struct of_device_id sc2721_regulator_match[] = {
+	{ .compatible = "sprd,sc2721-regulator" },
+	{},
+};
+MODULE_DEVICE_TABLE(of, sc2721_regulator_match);
+
 static struct platform_driver sc2721_regulator_driver = {
 	.driver = {
-		.name = "sc27xx-regulator",
+		.name = "sc2721-regulator",
+		.of_match_table = sc2721_regulator_match,
 	},
 	.probe = sc2721_regulator_probe,
 	.remove = sc2721_regulator_remove,

@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (C) 2020 Unisoc Inc.
+ */
+
 #ifndef __SPRD_HWFEATURE__
 #define __SPRD_HWFEATURE__
 

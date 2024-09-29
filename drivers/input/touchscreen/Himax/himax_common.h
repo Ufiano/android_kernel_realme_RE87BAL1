@@ -42,7 +42,7 @@
 #include <linux/version.h>
 
 #if defined(CONFIG_OF)
-#include <linux/of_gpio.h>
+	#include <linux/of_gpio.h>
 #endif
 
 #define HIMAX_DRIVER_VER "2.0.0.75_ABCD1234_01"
@@ -104,13 +104,12 @@
 #if defined(__HIMAX_MOD__)
 #define HX_USE_KSYM
 #if !defined(HX_USE_KSYM) || !defined(__KERNEL_KALLSYMS_ALL_ENABLED__)
-#error Modulized driver must enable HX_USE_KSYM and CONFIG_KALLSYM_ALL
+	#error Modulized driver must enable HX_USE_KSYM and CONFIG_KALLSYM_ALL
 #endif
 #endif
 
 //#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0))
 #define KERNEL_VER_ABOVE_4_19
-//#endif
 
 #if defined(HX_ZERO_FLASH)
 /*zero flash case, you need to setup the fix_touch_info of module*/
@@ -126,10 +125,10 @@
 #endif
 
 #if defined(OPLUS_PROC_NODE)
-//#define HX_TP_USB_NOTIFIER
-//#define HX_TP_HEADSET_NOTIFIER
-//#define HX_UPDATE_FW_NOTIFIER
-#define OPLUS_HX_UPDATE_FW   /* OPPO bootup upgrade function by thread */
+	//#define HX_TP_USB_NOTIFIER
+	//#define HX_TP_HEADSET_NOTIFIER
+	//#define HX_UPDATE_FW_NOTIFIER
+	#define OPLUS_HX_UPDATE_FW   /* OPLUS bootup upgrade function by thread */
 #endif
 
 #if defined(HX_BOOT_UPGRADE) || defined(HX_ZERO_FLASH)
@@ -138,9 +137,9 @@
 #define BOOT_UPGRADE_FWNAME "Himax_firmware.bin"
 #if defined(HX_ZERO_FLASH)
 #if defined(OPLUS_PROC_NODE)
-#define BOOT_UPGRADE_FWNAME_SIGNED "Himax_firmware_signed.bin"
-#define FW_UPDATE_COMPLETE_TIMEOUT  msecs_to_jiffies(40*1000)
-#define MPAP_FWNAME "Himax_mpfw.bin"
+	#define BOOT_UPGRADE_FWNAME_SIGNED "Himax_firmware_signed.bin"
+	#define FW_UPDATE_COMPLETE_TIMEOUT  msecs_to_jiffies(40*1000)
+	#define MPAP_FWNAME "Himax_mpfw.bin"
 #endif
 #endif
 #endif
@@ -179,10 +178,10 @@
 
 #if defined(HX_CONFIG_FB)
 int fb_notifier_callback(struct notifier_block *self,
-			 unsigned long event, void *data);
+		unsigned long event, void *data);
 #elif defined(HX_CONFIG_DRM)
 int drm_notifier_callback(struct notifier_block *self,
-			  unsigned long event, void *data);
+			unsigned long event, void *data);
 #endif
 
 /* command[2] + address[4] + data[64k] */
@@ -369,21 +368,21 @@ enum area_type {
 };
 
 typedef enum {
-	CORNER_TOPLEFT,      /*When Phone Face you in portrait top left corner*/
-	CORNER_TOPRIGHT,     /*When Phone Face you in portrait top right corner*/
-	CORNER_BOTTOMLEFT,   /*When Phone Face you in portrait bottom left corner*/
-	CORNER_BOTTOMRIGHT,  /*When Phone Face you in portrait bottom right corner*/
+    CORNER_TOPLEFT,      /*When Phone Face you in portrait top left corner*/
+    CORNER_TOPRIGHT,     /*When Phone Face you in portrait top right corner*/
+    CORNER_BOTTOMLEFT,   /*When Phone Face you in portrait bottom left corner*/
+    CORNER_BOTTOMRIGHT,  /*When Phone Face you in portrait bottom right corner*/
 } corner_type;
 
 typedef enum {
-	TP_SUSPEND_EARLY_EVENT,
-	TP_SUSPEND_COMPLETE,
-	TP_RESUME_EARLY_EVENT,
-	TP_RESUME_COMPLETE,
-	TP_SPEEDUP_RESUME_COMPLETE,
-} suspend_resume_state;
+    TP_SUSPEND_EARLY_EVENT,
+    TP_SUSPEND_COMPLETE,
+    TP_RESUME_EARLY_EVENT,
+    TP_RESUME_COMPLETE,
+    TP_SPEEDUP_RESUME_COMPLETE,
+}suspend_resume_state;
 
-enum {
+enum{
 	MSM_BOOT_MODE__NORMAL,
 	MSM_BOOT_MODE__FASTBOOT,
 	MSM_BOOT_MODE__RECOVERY,
@@ -394,13 +393,13 @@ enum {
 	MSM_BOOT_MODE__CHARGE,
 	MSM_BOOT_MODE__SILENCE,
 	MSM_BOOT_MODE__SAU,
-
+   
 };
 #endif
 
 #if defined(HX_ZERO_FLASH)
-#define HX_SPI_OPERATION
-#define HX_0F_DEBUG
+	#define HX_SPI_OPERATION
+	#define HX_0F_DEBUG
 #endif
 struct himax_ic_data {
 	int vendor_fw_ver;
@@ -497,8 +496,8 @@ struct himax_report_data {
 };
 #if defined(OPLUS_PROC_NODE)
 struct firmware_head_struct {
-	const uint8_t *data;
-	size_t size;
+        const uint8_t *data;
+        size_t size;
 };
 #endif
 struct himax_ts_data {
@@ -524,7 +523,7 @@ struct himax_ts_data {
 	uint8_t nFinger_support;
 	uint8_t irq_enabled;
 	uint8_t diag_self[50];
-
+	
 #if defined(OPLUS_PROC_NODE)
 	uint8_t backup_flag;
 	uint8_t psensor_stus;
@@ -539,17 +538,17 @@ struct himax_ts_data {
 	struct edge_limit edge_limit;
 	int firmware_update_type;    /*firmware_update_type: 0=check firmware version 1=force update; 2=for FAE debug*/
 	int force_update;
-	struct completion fw_complete; /*completion for control fw update*/
-	struct work_struct fw_update_work;             /*using for fw update*/
+	struct completion      fw_complete;                 /*completion for control fw update*/
+	struct work_struct     fw_update_work;             /*using for fw update*/
 	struct firmware_head_struct firmware_headfile;
 	u8 *g_fw_buf;
 	size_t g_fw_len;
 	bool g_fw_sta;
 	bool  using_headfile;
 	bool is_headset_checked;                            /*state of headset or usb*/
-	bool is_usb_checked;                                /*state of charger or usb*/
+    bool is_usb_checked;                                /*state of charger or usb*/
 	struct mutex mode_chg_lock;
-	int boot_mode;
+    int boot_mode;
 	bool recovery_mode;
 	int noise_level;
 	int touch_direction;
@@ -560,11 +559,11 @@ struct himax_ts_data {
 #if defined(HX_UPDATE_FW_NOTIFIER)
 	struct notifier_block notifier_update_fw;
 	struct work_struct resume_work_queue;
-#endif
+#endif	
 #if defined(HX_TP_HEADSET_NOTIFIER)
 	struct notifier_block notifier_headset;
 	struct work_struct headset_work_queue;
-
+	
 #endif
 #endif
 
@@ -608,11 +607,11 @@ struct himax_ts_data {
 	atomic_t irq_state;
 	spinlock_t irq_lock;
 
-	/******* SPI-start *******/
+/******* SPI-start *******/
 	struct spi_device	*spi;
 	int hx_irq;
 	uint8_t *xfer_buff;
-	/******* SPI-end *******/
+/******* SPI-end *******/
 
 	int in_self_test;
 	int self_test_finished;
@@ -660,7 +659,7 @@ struct himax_ts_data {
 	struct workqueue_struct *guest_info_wq;
 	struct work_struct guest_info_work;
 #endif
-	bool suspend;
+     bool suspend;
 
 
 };
@@ -670,7 +669,7 @@ struct himax_debug {
 	bool is_checking_irq;
 	void (*fp_ts_dbg_func)(struct himax_ts_data *ts, int start);
 	int (*fp_set_diag_cmd)(struct himax_ic_data *ic_data,
-			       struct himax_report_data *hx_touch_data);
+				struct himax_report_data *hx_touch_data);
 };
 
 enum input_protocol_type {
@@ -679,7 +678,7 @@ enum input_protocol_type {
 };
 
 #if defined(HX_HIGH_SENSE)
-void himax_set_HSEN_func(uint8_t HSEN_enable);
+	void himax_set_HSEN_func(uint8_t HSEN_enable);
 #endif
 
 #if defined(HX_SMART_WAKEUP)
@@ -702,10 +701,10 @@ extern uint32_t g_hx_chip_inited;
 int himax_chip_common_suspend(struct himax_ts_data *ts);
 int himax_chip_common_resume(struct himax_ts_data *ts);
 
-extern struct filename *(*kp_getname_kernel)(const char *filename);
+extern struct filename* (*kp_getname_kernel)(const char *filename);
 extern void (*kp_putname_kernel)(struct filename *name);
-extern struct file *(*kp_file_open_name)(struct filename *name,
-		int flags, umode_t mode);
+extern struct file * (*kp_file_open_name)(struct filename *name,
+			int flags, umode_t mode);
 
 struct himax_core_fp;
 extern struct himax_core_fp g_core_fp;
@@ -714,13 +713,13 @@ extern struct himax_ic_data *ic_data;
 extern struct device *g_device;
 
 #if defined(CONFIG_TOUCHSCREEN_HIMAX_DEBUG)
-int himax_debug_init(void);
-int himax_debug_remove(void);
+	int himax_debug_init(void);
+	int himax_debug_remove(void);
 #endif
 
 #if defined(CONFIG_TOUCHSCREEN_HIMAX_INSPECT)
-extern char *g_rslt_data;
-extern void (*fp_himax_self_test_init)(void);
+	extern char *g_rslt_data;
+	extern void (*fp_himax_self_test_init)(void);
 #endif
 
 extern int HX_TOUCH_INFO_POINT_CNT;
@@ -728,7 +727,7 @@ extern int HX_TOUCH_INFO_POINT_CNT;
 extern bool ic_boot_done;
 
 int himax_parse_dt(struct himax_ts_data *ts,
-		   struct himax_i2c_platform_data *pdata);
+			struct himax_i2c_platform_data *pdata);
 int himax_report_data(struct himax_ts_data *ts, int ts_path, int ts_status);
 
 int himax_report_data_init(void);
@@ -744,7 +743,6 @@ void himax_cable_detect_func(bool force_renew);
 extern int tp_usb_register_client(struct notifier_block *notifier_tp_usb);
 #endif
 #ifdef HX_UPDATE_FW_NOTIFIER
-extern int update_tpfw_register_client(struct notifier_block
-				       *notifier_update_fw);
+extern int update_tpfw_register_client(struct notifier_block *notifier_update_fw);
 #endif
 #endif

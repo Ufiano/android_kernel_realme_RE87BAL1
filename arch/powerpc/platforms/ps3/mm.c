@@ -1,23 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  *  PS3 address space management.
  *
  *  Copyright (C) 2006 Sony Computer Entertainment Inc.
  *  Copyright 2006 Sony Corp.
- *
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; version 2 of the License.
- *
- *  This program is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include <linux/dma-mapping.h>
 #include <linux/kernel.h>
 #include <linux/export.h>
 #include <linux/memblock.h>
@@ -526,8 +515,7 @@ static int dma_sb_map_pages(struct ps3_dma_region *r, unsigned long phys_addr,
 	int result;
 	struct dma_chunk *c;
 
-	c = kzalloc(sizeof(struct dma_chunk), GFP_ATOMIC);
-
+	c = kzalloc(sizeof(*c), GFP_ATOMIC);
 	if (!c) {
 		result = -ENOMEM;
 		goto fail_alloc;
@@ -572,8 +560,7 @@ static int dma_ioc0_map_pages(struct ps3_dma_region *r, unsigned long phys_addr,
 
 	DBG(KERN_ERR "%s: phy=%#lx, lpar%#lx, len=%#lx\n", __func__,
 	    phys_addr, ps3_mm_phys_to_lpar(phys_addr), len);
-	c = kzalloc(sizeof(struct dma_chunk), GFP_ATOMIC);
-
+	c = kzalloc(sizeof(*c), GFP_ATOMIC);
 	if (!c) {
 		result = -ENOMEM;
 		goto fail_alloc;
@@ -609,8 +596,8 @@ static int dma_ioc0_map_pages(struct ps3_dma_region *r, unsigned long phys_addr,
 				       r->ioid,
 				       iopte_flag);
 		if (result) {
-			pr_warning("%s:%d: lv1_put_iopte failed: %s\n",
-				   __func__, __LINE__, ps3_result(result));
+			pr_warn("%s:%d: lv1_put_iopte failed: %s\n",
+				__func__, __LINE__, ps3_result(result));
 			goto fail_map;
 		}
 		DBG("%s: pg=%d bus=%#lx, lpar=%#lx, ioid=%#x\n", __func__,
@@ -1132,6 +1119,7 @@ int ps3_dma_region_init(struct ps3_system_bus_device *dev,
 	enum ps3_dma_region_type region_type, void *addr, unsigned long len)
 {
 	unsigned long lpar_addr;
+	int result;
 
 	lpar_addr = addr ? ps3_mm_phys_to_lpar(__pa(addr)) : 0;
 
@@ -1142,6 +1130,16 @@ int ps3_dma_region_init(struct ps3_system_bus_device *dev,
 	if (r->offset >= map.rm.size)
 		r->offset -= map.r1.offset;
 	r->len = len ? len : _ALIGN_UP(map.total, 1 << r->page_size);
+
+	dev->core.dma_mask = &r->dma_mask;
+
+	result = dma_set_mask_and_coherent(&dev->core, DMA_BIT_MASK(32));
+
+	if (result < 0) {
+		dev_err(&dev->core, "%s:%d: dma_set_mask_and_coherent failed: %d\n",
+			__func__, __LINE__, result);
+		return result;
+	}
 
 	switch (dev->dev_type) {
 	case PS3_DEVICE_TYPE_SB:

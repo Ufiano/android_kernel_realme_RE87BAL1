@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Linux VM pressure
  *
@@ -6,10 +7,6 @@
  *
  * Based on ideas from Andrew Morton, David Rientjes, KOSAKI Motohiro,
  * Leonid Moiseichuk, Mel Gorman, Minchan Kim and Pekka Enberg.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
  */
 
 #include <linux/cgroup.h>
@@ -24,7 +21,6 @@
 #include <linux/printk.h>
 #include <linux/notifier.h>
 #include <linux/init.h>
-#include <linux/module.h>
 #include <linux/vmpressure.h>
 
 /*
@@ -41,7 +37,7 @@
  * TODO: Make the window size depend on machine size, as we do for vmstat
  * thresholds. Currently we set it to 512 pages (2MB for 4KB pages).
  */
-static unsigned long vmpressure_win = SWAP_CLUSTER_MAX * 16;
+static const unsigned long vmpressure_win = SWAP_CLUSTER_MAX * 16;
 
 /*
  * These thresholds are used when we account memory pressure through
@@ -51,15 +47,6 @@ static unsigned long vmpressure_win = SWAP_CLUSTER_MAX * 16;
  */
 static const unsigned int vmpressure_level_med = 60;
 static const unsigned int vmpressure_level_critical = 95;
-
-static unsigned long vmpressure_scale_max = 100;
-module_param_named(vmpressure_scale_max, vmpressure_scale_max,
-			ulong, 0644);
-
-/* vmpressure values >= this will be scaled based on allocstalls */
-static unsigned long allocstall_threshold = 70;
-module_param_named(allocstall_threshold, allocstall_threshold,
-			ulong, 0644);
 
 static struct vmpressure global_vmpressure;
 static BLOCKING_NOTIFIER_HEAD(vmpressure_notifier);
@@ -186,19 +173,6 @@ out:
 		 scanned, reclaimed);
 
 	return pressure;
-}
-
-static unsigned long vmpressure_account_stall(unsigned long pressure,
-				unsigned long stall, unsigned long scanned)
-{
-	unsigned long scale;
-
-	if (pressure < allocstall_threshold)
-		return pressure;
-
-	scale = ((vmpressure_scale_max - pressure) * stall) / scanned;
-
-	return pressure + scale;
 }
 
 struct vmpressure_event {
@@ -352,35 +326,11 @@ static void vmpressure_memcg(gfp_t gfp, struct mem_cgroup *memcg, bool tree,
 }
 #endif
 
-static void calculate_vmpressure_win(void)
-{
-	long x;
-
-	x = global_node_page_state(NR_FILE_PAGES) -
-			global_node_page_state(NR_SHMEM) -
-			total_swapcache_pages() +
-			global_zone_page_state(NR_FREE_PAGES);
-	if (x < 1)
-		x = 1;
-	/*
-	 * For low (free + cached), vmpressure window should be
-	 * small, and high for higher values of (free + cached).
-	 * But it should not be linear as well. This ensures
-	 * timely vmpressure notifications when system is under
-	 * memory pressure, and optimal number of events when
-	 * cached is high. The sqaure root function is empirically
-	 * found to serve the purpose.
-	 */
-	x = int_sqrt(x);
-	vmpressure_win = x;
-}
-
 static void vmpressure_global(gfp_t gfp, unsigned long scanned,
 		unsigned long reclaimed)
 {
 	struct vmpressure *vmpr = &global_vmpressure;
 	unsigned long pressure;
-	unsigned long stall;
 
 	if (!(gfp & (__GFP_HIGHMEM | __GFP_MOVABLE | __GFP_IO | __GFP_FS)))
 		return;
@@ -389,16 +339,8 @@ static void vmpressure_global(gfp_t gfp, unsigned long scanned,
 		return;
 
 	spin_lock(&vmpr->sr_lock);
-	if (!vmpr->scanned)
-		calculate_vmpressure_win();
-
 	vmpr->scanned += scanned;
 	vmpr->reclaimed += reclaimed;
-
-	if (!current_is_kswapd())
-		vmpr->stall += scanned;
-
-	stall = vmpr->stall;
 	scanned = vmpr->scanned;
 	reclaimed = vmpr->reclaimed;
 	spin_unlock(&vmpr->sr_lock);
@@ -409,11 +351,9 @@ static void vmpressure_global(gfp_t gfp, unsigned long scanned,
 	spin_lock(&vmpr->sr_lock);
 	vmpr->scanned = 0;
 	vmpr->reclaimed = 0;
-	vmpr->stall = 0;
 	spin_unlock(&vmpr->sr_lock);
 
 	pressure = vmpressure_calc_pressure(scanned, reclaimed);
-	pressure = vmpressure_account_stall(pressure, stall, scanned);
 	vmpressure_notify(pressure);
 }
 
@@ -478,26 +418,6 @@ void vmpressure_prio(gfp_t gfp, struct mem_cgroup *memcg, int prio)
 	vmpressure(gfp, memcg, true, vmpressure_win, 0);
 }
 
-static enum vmpressure_levels str_to_level(const char *arg)
-{
-	enum vmpressure_levels level;
-
-	for (level = 0; level < VMPRESSURE_NUM_LEVELS; level++)
-		if (!strcmp(vmpressure_str_levels[level], arg))
-			return level;
-	return -1;
-}
-
-static enum vmpressure_modes str_to_mode(const char *arg)
-{
-	enum vmpressure_modes mode;
-
-	for (mode = 0; mode < VMPRESSURE_NUM_MODES; mode++)
-		if (!strcmp(vmpressure_str_modes[mode], arg))
-			return mode;
-	return -1;
-}
-
 #define MAX_VMPRESSURE_ARGS_LEN	(strlen("critical") + strlen("hierarchy") + 2)
 
 /**
@@ -514,6 +434,9 @@ static enum vmpressure_modes str_to_mode(const char *arg)
  * "hierarchy" or "local").
  *
  * To be used as memcg event method.
+ *
+ * Return: 0 on success, -ENOMEM on memory failure or -EINVAL if @args could
+ * not be parsed.
  */
 int vmpressure_register_event(struct mem_cgroup *memcg,
 			      struct eventfd_ctx *eventfd, const char *args)
@@ -521,34 +444,31 @@ int vmpressure_register_event(struct mem_cgroup *memcg,
 	struct vmpressure *vmpr = memcg_to_vmpressure(memcg);
 	struct vmpressure_event *ev;
 	enum vmpressure_modes mode = VMPRESSURE_NO_PASSTHROUGH;
-	enum vmpressure_levels level = -1;
+	enum vmpressure_levels level;
 	char *spec, *spec_orig;
 	char *token;
 	int ret = 0;
 
-	spec_orig = spec = kzalloc(MAX_VMPRESSURE_ARGS_LEN + 1, GFP_KERNEL);
+	spec_orig = spec = kstrndup(args, MAX_VMPRESSURE_ARGS_LEN, GFP_KERNEL);
 	if (!spec) {
 		ret = -ENOMEM;
 		goto out;
 	}
-	strncpy(spec, args, MAX_VMPRESSURE_ARGS_LEN);
 
 	/* Find required level */
 	token = strsep(&spec, ",");
-	level = str_to_level(token);
-	if (level == -1) {
-		ret = -EINVAL;
+	ret = match_string(vmpressure_str_levels, VMPRESSURE_NUM_LEVELS, token);
+	if (ret < 0)
 		goto out;
-	}
+	level = ret;
 
 	/* Find optional mode */
 	token = strsep(&spec, ",");
 	if (token) {
-		mode = str_to_mode(token);
-		if (mode == -1) {
-			ret = -EINVAL;
+		ret = match_string(vmpressure_str_modes, VMPRESSURE_NUM_MODES, token);
+		if (ret < 0)
 			goto out;
-		}
+		mode = ret;
 	}
 
 	ev = kzalloc(sizeof(*ev), GFP_KERNEL);
@@ -564,6 +484,7 @@ int vmpressure_register_event(struct mem_cgroup *memcg,
 	mutex_lock(&vmpr->events_lock);
 	list_add(&ev->node, &vmpr->events);
 	mutex_unlock(&vmpr->events_lock);
+	ret = 0;
 out:
 	kfree(spec_orig);
 	return ret;

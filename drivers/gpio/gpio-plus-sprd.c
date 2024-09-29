@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
+ * Copyright (C) 2020 Spreadtrum Communications Inc.
  */
 
 #include <linux/bitops.h>
@@ -8,11 +8,8 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
-#include <linux/of_gpio.h>
 #include <linux/platform_device.h>
 #include <linux/spinlock.h>
-#include <linux/sprd-debuglog.h>
-#include "gpiolib.h"
 
 /*
  * Registers definitions for GPIO plus controller, gpio plus
@@ -337,7 +334,7 @@ static int sprd_gpio_plus_irq_set_type(struct irq_data *data,
 	struct gpio_chip *chip = irq_data_get_irq_chip_data(data);
 	u32 offset = irqd_to_hwirq(data);
 	u32 channel = sprd_gpio_plus_to_channel(chip, offset);
-	u32 value;
+	u32 value, mode;
 
 	switch (flow_type) {
 	case IRQ_TYPE_EDGE_RISING:
@@ -365,23 +362,33 @@ static int sprd_gpio_plus_irq_set_type(struct irq_data *data,
 		irq_set_handler_locked(data, handle_edge_irq);
 		break;
 	case IRQ_TYPE_LEVEL_HIGH:
+		mode = sprd_gpio_plus_read(chip, INT_CRL(channel),
+					BIT_INT_MODE_MASK);
 		value = sprd_gpio_plus_read(chip, INT_CRL(channel),
 					BIT_DBC_CYCLE_MASK);
-		if (!value)
+		if ((mode != SPRD_GPIO_PLUS_LEVEL) && (value == 0)) {
 			sprd_gpio_plus_update(chip, INT_CRL(channel),
 				BIT_INT_MODE_MASK, SPRD_GPIO_PLUS_LEVEL);
-
+		} else if ((mode != SPRD_GPIO_PLUS_DEBOUNCE) && (value != 0)) {
+			sprd_gpio_plus_update(chip, INT_CRL(channel),
+				BIT_INT_MODE_MASK, SPRD_GPIO_PLUS_DEBOUNCE);
+		}
 		sprd_gpio_plus_update(chip, INT_CRL(channel),
 			BIT_INT_LEVEL, 1);
 		irq_set_handler_locked(data, handle_level_irq);
 		break;
 	case IRQ_TYPE_LEVEL_LOW:
+		mode = sprd_gpio_plus_read(chip, INT_CRL(channel),
+					BIT_INT_MODE_MASK);
 		value = sprd_gpio_plus_read(chip, INT_CRL(channel),
 					BIT_DBC_CYCLE_MASK);
-		if (!value)
+		if ((mode != SPRD_GPIO_PLUS_LEVEL) && (value == 0)) {
 			sprd_gpio_plus_update(chip, INT_CRL(channel),
 				BIT_INT_MODE_MASK, SPRD_GPIO_PLUS_LEVEL);
-
+		} else if ((mode != SPRD_GPIO_PLUS_DEBOUNCE) && (value != 0)) {
+			sprd_gpio_plus_update(chip, INT_CRL(channel),
+				BIT_INT_MODE_MASK, SPRD_GPIO_PLUS_DEBOUNCE);
+		}
 		sprd_gpio_plus_update(chip, INT_CRL(channel),
 			BIT_INT_LEVEL, 0);
 		irq_set_handler_locked(data, handle_level_irq);
@@ -397,7 +404,6 @@ static void sprd_gpio_plus_irq_handler(struct irq_desc *desc)
 {
 	struct gpio_chip *chip = irq_desc_get_handler_data(desc);
 	struct irq_chip *ic = irq_desc_get_chip(desc);
-	struct gpio_desc *gpio_desc;
 	u32 n, girq, gpio;
 	unsigned long reg;
 
@@ -409,12 +415,7 @@ static void sprd_gpio_plus_irq_handler(struct irq_desc *desc)
 	for_each_set_bit_from(n, &reg, SPRD_CHANNEL_END) {
 		gpio = sprd_channel_to_gpio_plus(chip, n);
 		girq = irq_find_mapping(chip->irq.domain, gpio);
-
 		generic_handle_irq(girq);
-
-		gpio_desc = gpiochip_get_desc(chip, gpio);
-		if (!IS_ERR_OR_NULL(gpio_desc))
-			gpio_desc->flags &= ~BIT(FLAG_IS_WAKEUP);
 	}
 
 	chained_irq_exit(ic, desc);
@@ -429,50 +430,11 @@ static struct irq_chip sprd_gpio_plus_irqchip = {
 	.flags = IRQCHIP_SKIP_SET_WAKE,
 };
 
-static int sprd_gpio_plus_get_info(void *out, void *data)
-{
-	struct sprd_gpio_plus *sprd_gpio_plus = (struct sprd_gpio_plus *)data;
-	struct wakeup_info *src = (struct wakeup_info *)out;
-	struct gpio_desc *gpio_desc;
-	struct gpio_chip *chip;
-	u32 n, gpio;
-	unsigned long reg;
-
-	if (!out || !data) {
-		pr_err("%s: parameters is null\n", __func__);
-		return -EINVAL;
-	}
-
-	chip = &sprd_gpio_plus->chip;
-	reg = sprd_gpio_plus_read(chip, INT_SYSIF_MSK(SPRD_SYSIF_CURRENT),
-				  BIT_INT_SYSIF_MASK);
-	n = SPRD_CHANNEL_START;
-	for_each_set_bit_from(n, &reg, SPRD_CHANNEL_END) {
-		gpio = sprd_channel_to_gpio_plus(chip, n);
-		gpio_desc = gpiochip_get_desc(chip, gpio);
-		if (IS_ERR_OR_NULL(gpio_desc) ||
-		    IS_ERR_OR_NULL(gpio_desc->label))
-			snprintf(src->name, WAKEUP_NAME_LEN, "gpio%u", gpio);
-		else {
-			snprintf(src->name, WAKEUP_NAME_LEN, "%s",
-				 gpio_desc->label);
-			gpio_desc->flags |= BIT(FLAG_IS_WAKEUP);
-		}
-		src->type = WAKEUP_GPIO;
-		src->gpio = gpio;
-		return 0;
-	}
-
-	return -EINVAL;
-}
-
 static int sprd_gpio_plus_probe(struct platform_device *pdev)
 {
 	struct gpio_irq_chip *irq;
 	struct sprd_gpio_plus *sprd_gpio_plus;
 	struct resource *res;
-	struct irq_data *data;
-	u32 hwirq;
 	int ret;
 
 	sprd_gpio_plus = devm_kzalloc(&pdev->dev,
@@ -523,19 +485,6 @@ static int sprd_gpio_plus_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, sprd_gpio_plus);
-
-	data = irq_get_irq_data(sprd_gpio_plus->irq);
-	if (!data) {
-		dev_err(&pdev->dev, "Fail to get gpio irqd\n");
-		return -ENODEV;
-	}
-	hwirq = irqd_to_hwirq(data);
-	ret = wakeup_info_register((int)hwirq, INVALID_SUB_NUM,
-				   sprd_gpio_plus_get_info,
-				   (void *)sprd_gpio_plus);
-	if (ret)
-		dev_err(&pdev->dev, "Register debuglog error(%u)\n",
-			hwirq);
 
 	return 0;
 }

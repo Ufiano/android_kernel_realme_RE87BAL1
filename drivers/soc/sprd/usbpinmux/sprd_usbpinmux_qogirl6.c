@@ -1,4 +1,4 @@
-/*copyright (C) 2021 Spreadtrum Communications Inc.
+/*copyright (C) 2022 Spreadtrum Communications Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -21,7 +21,6 @@
 #include <linux/of_device.h>
 #include <linux/of.h>
 #include <linux/of_irq.h>
-#include <linux/pinctrl/consumer.h>
 #include <linux/regmap.h>
 #include <linux/regulator/consumer.h>
 #include <linux/soc/sprd/sprd_usbpinmux.h>
@@ -35,20 +34,19 @@ static u32		usb_uart_jtag_mux_mask;
 static int usbmux_syscon_get_args(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	int args_count;
 	unsigned int args[2];
 
-	args_count = syscon_get_args_by_name(dev->of_node, "usb_uart_jtag_mux",
-		sizeof(args), args);
-	if (args_count == ARRAY_SIZE(args)) {
+	usbmux_cfg = syscon_regmap_lookup_by_phandle_args(dev->of_node,
+		"usb-mux-syscon", 2, args);
+	if (IS_ERR(usbmux_cfg)) {
+		dev_err(&pdev->dev, "get usbmux_cfg syscon failed!\n");
+		return -EINVAL;
+	} else {
 		usb_uart_jtag_mux_reg = args[0];
 		usb_uart_jtag_mux_mask = args[1];
 		pr_debug("usb_uart_jtag_mux:reg:%x,mask:%x\n",
 			args[0], args[1]);
-	} else {
-		return -EINVAL;
 	}
-
 	return 0;
 }
 
@@ -78,19 +76,9 @@ EXPORT_SYMBOL(sprd_usbmux_check_mode);
 static int sprd_usbpinmux_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
-	struct pinctrl		*uart_ctrl;
-	struct pinctrl_state	*uctrl_state0;
-	struct pinctrl_state	*uctrl_state1;
 	struct regulator	*vdd_on;
 	u32			vdd_vol;
 	int ret;
-
-	usbmux_cfg = syscon_regmap_lookup_by_phandle(dev->of_node,
-				"sprd,syscon-config");
-	if (IS_ERR(usbmux_cfg)) {
-		dev_err(&pdev->dev, "ap usbmux_cfg syscon failed!\n");
-		return PTR_ERR(usbmux_cfg);
-	}
 
 	ret = usbmux_syscon_get_args(pdev);
 	if (!ret)
@@ -120,36 +108,6 @@ static int sprd_usbpinmux_probe(struct platform_device *pdev)
 		ret = regulator_enable(vdd_on);
 		if (ret) {
 			dev_err(dev, "fail to enable regulator!\n");
-			return ret;
-		}
-
-		uart_ctrl = devm_pinctrl_get(dev);
-		if (IS_ERR(uart_ctrl)) {
-			dev_err(dev, "ERR:get pinctrl failed\n");
-			return -ENODEV;
-		}
-
-		uctrl_state0 = pinctrl_lookup_state(uart_ctrl, "uart_inf_sel0");
-		if (IS_ERR(uctrl_state0)) {
-			dev_err(dev, "pinctrl lookup state for uart_inf_sel0 failed!\n");
-			return PTR_ERR(uctrl_state0);
-		}
-
-		uctrl_state1 = pinctrl_lookup_state(uart_ctrl, "uart_inf_sel1");
-		if (IS_ERR(uctrl_state1)) {
-			dev_err(dev, "pinctrl lookup state for uart_inf_sel1 failed!\n");
-			return PTR_ERR(uctrl_state1);
-		}
-
-		ret = pinctrl_select_state(uart_ctrl, uctrl_state0);
-		if (ret) {
-			dev_err(dev, "pinctrl_sel_state for uart_inf_sel0 failed!\n");
-			return ret;
-		}
-
-		ret = pinctrl_select_state(uart_ctrl, uctrl_state1);
-		if (ret) {
-			dev_err(dev, "pinctrl_sel_state for uart_inf_sel1 failed!\n");
 			return ret;
 		}
 	}

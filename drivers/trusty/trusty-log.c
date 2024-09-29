@@ -12,15 +12,22 @@
  *
  */
 #include <linux/platform_device.h>
-#include <linux/trusty/smcall.h>
-#include <linux/trusty/trusty.h>
+#include <linux/mod_devicetable.h>
 #include <linux/notifier.h>
 #include <linux/slab.h>
 #include <linux/mm.h>
 #include <linux/module.h>
 #include <linux/log2.h>
 #include <asm/page.h>
+#include <linux/trusty/smcall.h>
+#include <linux/vmalloc.h>
 #include "trusty-log.h"
+#include "trusty.h"
+
+#ifdef pr_fmt
+#undef pr_fmt
+#endif
+#define pr_fmt(fmt) "sprd-trusty-log: " fmt
 
 
 #define SMC_SC_SYSCTL_SET_CONSOLE	SMC_STDCALL_NR(SMC_ENTITY_SYSCTL, 0)
@@ -29,7 +36,7 @@
 #define SMC_SC_SYSCTL_GET_LOGLEVEL	SMC_STDCALL_NR(SMC_ENTITY_SYSCTL, 3)
 
 #define TRUSTY_LOG_DEFAULT_SIZE (PAGE_SIZE * 4)
-#define TRUSTY_LOG_MAX_SIZE	(PAGE_SIZE * 32)
+#define TRUSTY_LOG_MAX_SIZE (PAGE_SIZE * 32)
 #define TRUSTY_LINE_BUFFER_SIZE 256
 
 struct trusty_log_state {
@@ -71,7 +78,7 @@ static int log_read_line(struct trusty_log_state *s, int put, int get)
 	return i;
 }
 
-static void trusty_dump_logs(struct trusty_log_state *s)
+static void trusty_dump_logs(struct trusty_log_state *s, unsigned long action)
 {
 	struct log_rb *log = s->log;
 	uint32_t get, put, alloc;
@@ -82,7 +89,7 @@ static void trusty_dump_logs(struct trusty_log_state *s)
 		return;
 	}
 
-	BUG_ON(!is_power_of_2(log->sz));
+	WARN_ON(!is_power_of_2(log->sz));
 
 	/*
 	 * For this ring buffer, at any given point, alloc >= put >= get.
@@ -93,7 +100,10 @@ static void trusty_dump_logs(struct trusty_log_state *s)
 	 */
 	get = s->get;
 	while ((put = log->put) != get) {
-		/* Make sure that the read of put occurs before the read of log data */
+		/*
+		 * Make sure that the read of put occurs before the read
+		 * of log data
+		 */
 		rmb();
 
 		/* Read a line from the log */
@@ -112,7 +122,10 @@ static void trusty_dump_logs(struct trusty_log_state *s)
 			get = alloc - log->sz;
 			continue;
 		}
-		pr_info("trusty: %s", s->line_buffer);
+		if (action == TRUSTY_CALL_PANIC)
+			pr_emerg("trusty: %s", s->line_buffer);
+		else
+			pr_info("trusty: %s", s->line_buffer);
 		get += read_chars;
 	}
 	s->get = get;
@@ -124,12 +137,12 @@ static int trusty_log_call_notify(struct notifier_block *nb,
 	struct trusty_log_state *s;
 	unsigned long flags;
 
-	if (action != TRUSTY_CALL_RETURNED)
+	if (action == TRUSTY_CALL_PREPARE)
 		return NOTIFY_DONE;
 
 	s = container_of(nb, struct trusty_log_state, call_notifier);
 	spin_lock_irqsave(&s->lock, flags);
-	trusty_dump_logs(s);
+	trusty_dump_logs(s, action);
 	spin_unlock_irqrestore(&s->lock, flags);
 	return NOTIFY_OK;
 }
@@ -138,7 +151,6 @@ static int trusty_log_panic_notify(struct notifier_block *nb,
 				   unsigned long action, void *data)
 {
 	struct trusty_log_state *s;
-
 	/*
 	 * Don't grab the spin lock to hold up the panic notifier, even
 	 * though this is racy.
@@ -146,7 +158,7 @@ static int trusty_log_panic_notify(struct notifier_block *nb,
 	s = container_of(nb, struct trusty_log_state, panic_notifier);
 	pr_info("trusty-log panic notifier - trusty version %s",
 		trusty_version_str_get(s->trusty_dev));
-	trusty_dump_logs(s);
+	trusty_dump_logs(s, TRUSTY_CALL_PANIC);
 	return NOTIFY_OK;
 }
 
@@ -165,20 +177,19 @@ static bool trusty_supports_logging(struct device *device)
 		return false;
 	}
 
-	if (result == TRUSTY_LOG_API_VERSION) {
+	if (result == TRUSTY_LOG_API_VERSION)
 		return true;
-	} else {
-		pr_info("trusty-log unsupported api version: %d, supported: %d\n",
+
+	pr_info("trusty-log unsupported api version: %d, supported: %d\n",
 			result, TRUSTY_LOG_API_VERSION);
-		return false;
-	}
+	return false;
 }
 
 static ssize_t trusty_loglevel_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct trusty_log_state *log_state = NULL;
-	long loglevel;
+	unsigned long loglevel;
 	int result;
 
 
@@ -186,14 +197,14 @@ static ssize_t trusty_loglevel_store(struct device *dev,
 	if (result) {
 		pr_info("%s is not in hex or decimal form.\n", buf);
 		return -EINVAL;
-	} else {
-		log_state = platform_get_drvdata(to_platform_device(dev));
-		result = trusty_std_call32(log_state->trusty_dev,
-			SMC_SC_SYSCTL_SET_LOGLEVEL, loglevel, 0, 0);
-		if (result == SM_ERR_UNDEFINED_SMC) {
-			pr_info("SMC_SC_SYSCTL_SET_CONSOLE not supported on secure side.\n");
-			return -EFAULT;
-		}
+	}
+
+	log_state = platform_get_drvdata(to_platform_device(dev));
+	result = trusty_std_call32(log_state->trusty_dev,
+	SMC_SC_SYSCTL_SET_LOGLEVEL, loglevel, 0, 0);
+	if (result == SM_ERR_UNDEFINED_SMC) {
+		pr_info("SMC_SC_SYSCTL_SET_CONSOLE not supported on secure side.\n");
+		return -EFAULT;
 	}
 
 	return strnlen(buf, count);
@@ -243,27 +254,30 @@ static ssize_t trusty_console_store(struct device *dev,
 {
 
 	struct trusty_log_state *log_state = NULL;
-	long console;
+	unsigned long console;
 	int result;
 
 	result = kstrtoul(buf, 0, &console);
 	if (result) {
 		pr_info("%s is not in hex or decimal form.\n", buf);
 		return -EINVAL;
-	} else {
-		log_state = platform_get_drvdata(to_platform_device(dev));
-		result = trusty_std_call32(log_state->trusty_dev,
-			SMC_SC_SYSCTL_SET_CONSOLE, console, 0, 0);
-		if (result == SM_ERR_UNDEFINED_SMC) {
-			pr_info("SMC_SC_SYSCTL_SET_CONSOLE not supported on secure side.\n");
-			return -EFAULT;
-		}
 	}
+
+	log_state = platform_get_drvdata(to_platform_device(dev));
+	result = trusty_std_call32(log_state->trusty_dev,
+				   SMC_SC_SYSCTL_SET_CONSOLE, console, 0, 0);
+
+	if (result == SM_ERR_UNDEFINED_SMC) {
+		pr_info("SMC_SC_SYSCTL_SET_CONSOLE not supported on secure side.\n");
+		return -EFAULT;
+	}
+
 	return strnlen(buf, count);
 
 }
 static DEVICE_ATTR(trusty_console, 0660,
 		   trusty_console_show, trusty_console_store);
+
 
 static void trusty_log_free_pages(struct page **pages, size_t num_pages,
 				  void *va)
@@ -410,6 +424,7 @@ static ssize_t trusty_logsize_store(struct device *dev,
 	if (IS_ERR(pages)) {
 		pr_err("Trusty log allocate buffer error(%ld)\n",
 		       PTR_ERR(pages));
+		count = PTR_ERR(pages);
 		goto _exit;
 	}
 
@@ -418,6 +433,7 @@ static ssize_t trusty_logsize_store(struct device *dev,
 	if (IS_ERR(pfn_list)) {
 		pr_err("Trusty log register buffer failed(%ld)\n",
 		       PTR_ERR(pfn_list));
+		count = PTR_ERR(pfn_list);
 		goto _exit1;
 	}
 
@@ -425,6 +441,7 @@ static ssize_t trusty_logsize_store(struct device *dev,
 	result = trusty_log_unregister_buf(s->trusty_dev, s->pfn_list);
 	if (result) {
 		pr_err("Trusty log unregister buffer error(%d)\n", result);
+		count = result;
 		goto _exit1;
 	}
 	trusty_log_free_pages(s->pages, s->num_pages, s->log);
@@ -477,9 +494,8 @@ static int trusty_log_probe(struct platform_device *pdev)
 	int result;
 
 	dev_dbg(&pdev->dev, "%s\n", __func__);
-	if (!trusty_supports_logging(pdev->dev.parent)) {
+	if (!trusty_supports_logging(pdev->dev.parent))
 		return -ENXIO;
-	}
 
 	s = kzalloc(sizeof(*s), GFP_KERNEL);
 	if (!s) {
@@ -551,7 +567,6 @@ error_alloc_state:
 	return result;
 }
 
-
 static int trusty_log_remove(struct platform_device *pdev)
 {
 	struct trusty_log_state *s = platform_get_drvdata(pdev);
@@ -574,18 +589,22 @@ static int trusty_log_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id trusty_test_of_match[] = {
-	{ .compatible = "android,trusty-log-v1", },
+	{ .compatible = "sprd,trusty-log-v1", },
 	{},
 };
 
-static struct platform_driver trusty_log_driver = {
+struct platform_driver trusty_log_driver = {
 	.probe = trusty_log_probe,
 	.remove = trusty_log_remove,
 	.driver = {
-		.name = "trusty-log",
+		.name = "sprd-trusty-log",
 		.owner = THIS_MODULE,
 		.of_match_table = trusty_test_of_match,
 	},
 };
 
 module_platform_driver(trusty_log_driver);
+
+
+MODULE_DESCRIPTION("Sprd trusty log driver");
+MODULE_LICENSE("GPL v2");

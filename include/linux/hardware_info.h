@@ -122,14 +122,19 @@ HWID_MAIN_CAM_SN,
 HWID_MAIN_CAM_2_SN,
 HWID_MAIN_CAM_3_SN,
 HWID_SUB_CAM_SN,
+//fanjiafeng5  add for pdx213 fingerprint sn add begin
 HWID_FINGERPRINT_SN,
+//fanjiafeng5 add end
 HWID_SMARTPA,
 HWID_ALS,
 HWID_END
 };
 
+//Add for camera otp information
 struct global_otp_struct {
+/*simon modified to show source camera for factory camera mixture in zal1806 start*/
 char *sensor_name;
+/*simon modified to show source camera for factory camera mixture in zal1806 end*/
 int otp_valid;
 int vendor_id;
 int module_code;
@@ -161,10 +166,13 @@ const char *gsensor;
 const char *gyroscope;
 const char *msensor;
 const char *fingerprint;
+//fanjiafeng5  add for pdx213 fingerprint sn add begin
 unsigned char *fingerprint_sn;
+//fanjiafeng5  add end
 const char *sar_sensor_1;
 const char *sar_sensor_2;
 const char *bat_id;
+//hongzhenglong add for chargeric hardinfo
 const char *charger_ic;
 const unsigned int *flash;
 const unsigned int *emmc_version;

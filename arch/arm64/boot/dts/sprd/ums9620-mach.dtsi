@@ -33,7 +33,7 @@
 
 	chosen: chosen {
 		stdout-path = "serial1:115200n8";
-		bootargs = "earlycon=sprd_serial,0x20210000,115200n8 console=ttyS1,115200n8 loglevel=1 init=/init root=/dev/ram0 rw printk.devkmsg=on pcie_ports=compat swiotlb=1";
+		bootargs = "earlycon=sprd_serial,0x20210000,115200n8 console=ttySPRD1,115200n8 loglevel=1 init=/init root=/dev/ram0 rw printk.devkmsg=on pcie_ports=compat swiotlb=1 initcall_debug=1";
 	};
 
 	dpu_dvfs: dpu-dvfs {
@@ -90,9 +90,8 @@
 			reg = <0x0 0x80000000 0x0 0x00001000>;
 		};
 
-		rebootescrow@853f0000 {
-			no-map;
-			reg = <0x0 0x853f0000 0x0 0x00010000>; /* 64K */
+		sysdump_reserved: sysdumpinfo-mem@80001000 {
+			reg = <0x0 0x80001000 0x0 0x00001000>;
 		};
 
 		smem_reserved: sipc-mem@87800000 {
@@ -101,6 +100,12 @@
 
 		cp_reserved: cp-modem@88000000 {
 			reg = <0x0 0x88000000 0x0 0x22000000>;
+		};
+
+		/* Only used for iq, will be removed in normal mode by uboot */
+		iq_reserved: iq-mem@aa000000{
+			compatible = "sprd,iq-mem";
+			reg = <0x0 0xaa000000 0x0 0x4000000>;
 		};
 
 		ch_ddr_reserved: ch_ddr@ae600000 {
@@ -113,6 +118,11 @@
 
 		audiodsp_reserved: audiodsp-mem@afa00000 {
 			reg = <0x0 0xafa00000 0x0 0x00600000>;
+		};
+
+		/* The uboot_log_reserved node is added in uboot. base:0xbbe8 0000, size:0x80000 */
+		uboot_log_reserved: uboot_log-mem@bbe80000 {
+			reg = <0x0 0xbbe80000 0x0 0x00080000>;
 		};
 
 		ise_med_reserved: ise_med@bc000000 {
@@ -129,14 +139,41 @@
 			reg = <0x0 0xbd020000 0x0 0x05fe0000>;
 		};
 
-		dptx_hdcp_reserved: dptx_hdcp@fd548000 {
-			reg = <0x0 0xfd548000 0x0 0x00060000>;
+		cma_reserved: cma_share@f00000000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0xf0000000 0x0 0x03000000>;
+			reusable;
+			linux,cma-default;
 		};
+
+		drm_reserved: framebuffer {
+			compatible = "shared-dma-pool";
+			size = <0x0 0x02c00000>;
+			reusable;
+		};
+
+		dptx_hdcp_reserved: dptx_hdcp@fff10000 {
+			reg = <0x0 0xfff10000 0x0 0x00060000>;
+		};
+
+		rebootescrow@fff70000 {
+			no-map;
+			reg = <0x0 0xfff70000 0x0 0x00010000>; /* 64K */
+		};
+
+		pstore_reserved: ramoops@fff80000 {
+			compatible = "ramoops";
+			reg = <0x0 0xfff80000 0x0 0x00040000>;
+			record-size = <0x8000>;
+			console-size = <0x8000>;
+			pmsg-size = <0x8000>;
+		};
+
 	};
 
 	rebootescrow@0 {
 		compatible = "pmem-region";
-		reg = <0x0 0x853f0000 0x0 0x00010000>;
+		reg = <0x0 0xfff70000 0x0 0x00010000>;
 	};
 
 	thm_zone: thermal-zones {
@@ -583,6 +620,7 @@
 			sprd,hotplug-period = <10>;
 			sprd,min-cpufreq = <614400>;
 			sprd,min-cpunum = <1>;
+			sprd,max-temp = <90000>;
 			sprd,core-base = <2163>;
 			sprd,cluster-base = <9406>;
 			sprd,dynamic-core =
@@ -632,6 +670,7 @@
 			sprd,hotplug-period = <10>;
 			sprd,min-cpufreq = <1228800>;
 			sprd,min-cpunum = <0>;
+			sprd,max-temp = <85000>;
 			sprd,core-base = <13764>;
 			sprd,cluster-base = <9406>;
 			sprd,dynamic-core =
@@ -677,6 +716,7 @@
 			sprd,hotplug-period = <10>;
 			sprd,min-cpufreq = <1228800>;
 			sprd,min-cpunum = <0>;
+			sprd,max-temp = <85000>;
 			sprd,core-base = <16032>;
 			sprd,cluster-base = <9406>;
 			sprd,dynamic-core =
@@ -761,6 +801,10 @@
 		};
 	};
 
+	audcp_iram_reserved: audcp-iram@a400 {
+		reg = <0x0 0xa400 0x0 0x1000>;
+	};
+
 	audio-mem-mgr {
 		memory-region = <&audio_reserved &audiodsp_reserved>;
 	};
@@ -782,7 +826,7 @@
 			compatible = "android,firmware";
 			vbmeta {
 				compatible = "android,vbmeta";
-				parts = "vbmeta,socko,odmko,boot,dtbo,nr_modem,nr_phy,l_agdsp,pm_sys";
+				parts = "vbmeta,boot,vendor_boot,dtbo,nr_modem,nr_phy,l_agdsp,pm_sys";
 			};
 		};
 	};
@@ -808,14 +852,14 @@
 		};
 	};
 
-        extcon_gpio: extcon-gpio {
+	extcon_gpio: extcon-gpio {
 		compatible = "linux,extcon-usb-gpio";
 		vbus-gpio = <&pmic_eic 0 GPIO_ACTIVE_HIGH>;
 	};
 
 	display-subsystem {
 		compatible = "sprd,display-subsystem";
-		ports = <&dpu_port>, <&dpu1_port>;
+		ports = <&dpu_port>;
 		gsp = <&gsp>;
 	};
 };
@@ -848,9 +892,6 @@
 	};
 };
 
-&dpu1 {
-	status = "okay";
-};
 
 &iommu_dispc1 {
 	status = "okay";
@@ -952,10 +993,10 @@
 };
 
 &sdio0 {
-	sprd,sdr104-dly = <0x0 0xc3 0xca 0xca>;
-	sprd,sdr50-dly = <0x0 0x7f 0x4d 0x4d>;
-	sprd,sdhs-dly = <0x0 0x7f 0x7f 0x7f>;
-	sprd,legacy-dly = <0x7f 0x7f 0x7f 0x7f>;
+	sprd,phy-delay-sd-uhs-sdr104 = <0x0 0xc3 0xca 0xca>;
+	sprd,phy-delay-sd-uhs-sdr50 = <0x0 0x7f 0x4d 0x4d>;
+	sprd,phy-delay-sd-highspeed = <0x0 0x7f 0x7f 0x7f>;
+	sprd,phy-delay-legacy = <0x7f 0x7f 0x7f 0x7f>;
 	vmmc-supply = <&vddsdcore>;
 	vqmmc-supply = <&vddsdio>;
 	voltage-ranges = <3000 3000>;
@@ -983,20 +1024,20 @@
 };
 
 &sdio3 {
-	sprd,hs400es-dly = <0x3f 0x40 0x3f 0x3f>;
-	sprd,hs400-dly = <0x45 0x35 0x45 0x45>;
-	sprd,hs200-dly = <0x7f 0x70 0x60 0x60>;
-	sprd,ddr52-dly = <0x7f 0x7f 0xbf 0xbf>;
-	sprd,mmchs-dly = <0x3f 0x40 0x3f 0x3f>;
+	/*sprd,phy-delay-mmc-hs400es = <0x3f 0x40 0x3f 0x3f>;
+	sprd,phy-delay-mmc-hs400 = <0x45 0x35 0x45 0x45>;*/
+	sprd,phy-delay-mmc-hs200 = <0x7f 0x70 0x60 0x60>;
+	sprd,phy-delay-mmc-ddr52 = <0x7f 0x7f 0xbf 0xbf>;
+	sprd,phy-delay-mmc-highspeed = <0x3f 0x40 0x3f 0x3f>;
 	vmmc-supply = <&vddemmccore>;
 	voltage-ranges = <3000 3000>;
 	bus-width = <8>;
 	non-removable;
 	cap-mmc-hw-reset;
-	mmc-hs400-enhanced-strobe;
+	/*mmc-hs400-enhanced-strobe;
 	mmc-hs400-1_8v;
 	mmc-hs200-1_8v;
-	mmc-ddr-1_8v;
+	mmc-ddr-1_8v; */
 	sprd,name = "sdio_emmc";
 	sprd,sdio-adma;
 	no-sdio;

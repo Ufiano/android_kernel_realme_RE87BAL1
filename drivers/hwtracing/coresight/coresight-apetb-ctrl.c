@@ -38,8 +38,7 @@
 
 #include <linux/coresight.h>
 
-static ssize_t enable_apetb_show(struct device *dev,
-				struct device_attribute *attr, char *buf)
+static ssize_t enable_apetb_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct apetb_device *csdev = dev_get_drvdata(dev);
 	int val;
@@ -49,9 +48,7 @@ static ssize_t enable_apetb_show(struct device *dev,
 	return scnprintf(buf, PAGE_SIZE, "%u\n", csdev->activated);
 }
 
-static ssize_t enable_apetb_store(struct device *dev,
-				 struct device_attribute *attr,
-				 const char *buf, size_t size)
+static ssize_t enable_apetb_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t size)
 {
 	int ret;
 	int i;
@@ -72,9 +69,8 @@ static ssize_t enable_apetb_store(struct device *dev,
 	} else {
 		csdev->activated = false;
 		tmc_enable_sink_store(csdev->apetb_sink, false);
-		for (i = 0; i < csdev->source_num; i++) {
+		for (i = 0; i < csdev->source_num; i++)
 			etm4_enable_source_store(csdev->apetb_source[i], false);
-		}
 	}
 
 	return size;
@@ -123,9 +119,7 @@ static void apetb_device_release(struct device *dev)
 	kfree(dbg);
 }
 
-struct apetb_device *apetb_device_register(struct device *parent,
-					       struct apetb_ops *ops,
-					       const char *apetb_name)
+struct apetb_device *apetb_device_register(struct device *parent, struct apetb_ops *ops, const char *apetb_name)
 {
 	struct apetb_device *dbg;
 
@@ -147,7 +141,7 @@ struct apetb_device *apetb_device_register(struct device *parent,
 	dev_set_drvdata(&dbg->dev, dbg);
 
 	if (device_register(&dbg->dev)) {
-		dev_err(&dbg->dev, "apetb_device_register failed\n");
+		dev_err(&dbg->dev, "%s failed\n", __func__);
 		goto err;
 	}
 

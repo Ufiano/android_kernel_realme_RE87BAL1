@@ -1,3 +1,4 @@
+//SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (C) 2018 Spreadtrum Communications Inc.
  *
@@ -63,15 +64,14 @@ struct topdvfs_dev {
 	bool parse_done;
 };
 
-static void
-top_dvfs_bits_update(struct topdvfs_dev *pdev, u32 reg, u32 mask, u32 val)
+static void top_dvfs_bits_update(struct topdvfs_dev *pdev, u32 reg, u32 mask, u32 val)
 {
-	u32 tmp;
+	u32 temp;
 
-	tmp = readl(pdev->base + reg) & ~mask;
-	tmp |= val & mask;
+	temp = readl(pdev->base + reg) & ~mask;
+	temp |= val & mask;
 
-	writel(tmp, pdev->base + reg);
+	writel(temp, pdev->base + reg);
 }
 
 static void subsys_dvfs_tune_enable(struct topdvfs_dev *pdev,
@@ -162,13 +162,13 @@ static int sprd_topdvfs_common_config(struct topdvfs_dev *pdev)
 	return 0;
 }
 
-int topdvfs_device_dt_parse(struct topdvfs_dev *pdev)
+static int topdvfs_device_dt_parse(struct topdvfs_dev *pdev)
 {
 	struct device_node *dcdc_node, *subsys_node;
 	struct dcdc_subsys *psubsys;
 	struct property *prop;
-	u32 nr, ix, num, len;
-	u32 subsys_num, i;
+	int nr, subsys_num, num, len, ix;
+	u32 i;
 	int ret = 0;
 
 	if (!pdev || !pdev->of_node) {
@@ -221,7 +221,7 @@ int topdvfs_device_dt_parse(struct topdvfs_dev *pdev)
 	pdev->device_dcdc_num = nr;
 
 	if (!pdev->pwr) {
-		pdev->pwr = kzalloc(nr * sizeof(struct dvfs_dcdc_pwr),
+		pdev->pwr = kcalloc(nr, nr * sizeof(struct dvfs_dcdc_pwr),
 				    GFP_KERNEL);
 		if (!pdev->pwr)
 			return -ENOMEM;
@@ -268,14 +268,13 @@ int topdvfs_device_dt_parse(struct topdvfs_dev *pdev)
 
 		pdev->pwr[ix].subsys_num = subsys_num;
 
+		pdev->pwr[ix].subsys =
+			kcalloc(subsys_num, subsys_num * sizeof(struct dcdc_subsys),
+				GFP_KERNEL);
 		if (!pdev->pwr[ix].subsys) {
-			pdev->pwr[ix].subsys =
-				kzalloc(subsys_num * sizeof(struct dcdc_subsys),
-					GFP_KERNEL);
-			if (!pdev->pwr[ix].subsys) {
-				ret = -ENOMEM;
-				goto err_pwr_free;
-			}
+			ret = -ENOMEM;
+			ix = ix - 1;
+			goto err_subsys_free;
 		}
 
 		for (i = 0; i < subsys_num; ++i) {
@@ -326,9 +325,8 @@ int topdvfs_device_dt_parse(struct topdvfs_dev *pdev)
 	return 0;
 
 err_subsys_free:
-	for (ix = 0; ix < nr; ix++)
-		for (i = 0; i < pdev->pwr[ix].subsys_num; ++i)
-			kfree(pdev->pwr[ix].subsys + i);
+	for (; ix >= 0; ix--)
+		kfree(pdev->pwr[ix].subsys);
 err_pwr_free:
 	kfree(pdev->pwr);
 	return ret;
@@ -348,10 +346,8 @@ static int sprd_topdvfs_probe(struct platform_device *pdev)
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 
 	ptopdvfs->base = devm_ioremap_resource(&pdev->dev, res);
-	if (IS_ERR(ptopdvfs->base)) {
-		ret = PTR_ERR(ptopdvfs->base);
-		goto err_dev_free;
-	}
+	if (IS_ERR(ptopdvfs->base))
+		return PTR_ERR(ptopdvfs->base);
 
 	ptopdvfs->of_node = pdev->dev.of_node;
 
@@ -360,28 +356,20 @@ static int sprd_topdvfs_probe(struct platform_device *pdev)
 							"sprd,syscon-enable");
 	if (IS_ERR(ptopdvfs->aon_apb_regs)) {
 		pr_err("Failed to get aon apb control register map.\n");
-		ret = -ENODEV;
-		goto err_mem_unmap;
+		return -ENODEV;
 	}
 
 	ret = topdvfs_device_dt_parse(ptopdvfs);
 	if (ret)
-		goto err_mem_unmap;
+		return ret;
 
 	ret = sprd_topdvfs_common_config(ptopdvfs);
 	if (ret)
-		goto err_mem_unmap;
+		return ret;
 
 	pr_info("Succeeded to register a top dvfs device\n");
 
 	return 0;
-
-err_mem_unmap:
-	devm_iounmap(&pdev->dev, ptopdvfs->base);
-err_dev_free:
-	devm_kfree(&pdev->dev, ptopdvfs);
-
-	return ret;
 }
 
 static int sprd_topdvfs_remove(struct platform_device *pdev)
@@ -390,11 +378,7 @@ static int sprd_topdvfs_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id sprd_topdvfs_dev_of_match[] = {
-	{ .compatible = "sprd,sharkl5-topdvfs"},
-	{ .compatible = "sprd,roc1-topdvfs"},
-	{ .compatible = "sprd,sharkl5pro-topdvfs"},
-	{ .compatible = "sprd,orca-topdvfs"},
-	{ .compatible = "sprd,qogirl6-topdvfs"},
+	{ .compatible = "sprd,topdvfs-dev"},
 	{},
 };
 
@@ -402,7 +386,7 @@ static struct platform_driver sprd_topdvfs_driver = {
 	.probe = sprd_topdvfs_probe,
 	.remove = sprd_topdvfs_remove,
 	.driver = {
-		.name = "sharkl5-topdvfs-drv",
+		.name = "sprd-topdvfs-drv",
 		.of_match_table = of_match_ptr(sprd_topdvfs_dev_of_match),
 	},
 };
@@ -416,4 +400,3 @@ device_initcall(top_dvfs_init);
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Jack Liu<Jack.Liu@unisoc.com>");
 MODULE_DESCRIPTION("sprd hardware dvfs driver");
-

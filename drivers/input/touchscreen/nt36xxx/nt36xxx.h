@@ -27,7 +27,6 @@
 #include <linux/gpio.h>
 #include "linux/hardware_info.h"
 
-
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
 #endif
@@ -171,7 +170,6 @@ struct nvt_ts_data {
 	struct spi_device *client;
 	struct input_dev *input_dev;
 	struct delayed_work nvt_fwu_work;
-	struct notifier_block drm_notifier;
 	uint16_t addr;
 	int8_t phys[32];
 #if defined(CONFIG_FB)
@@ -215,8 +213,9 @@ struct nvt_ts_data {
 	struct mt_chip_conf spi_ctrl;
 #endif
 #ifdef CONFIG_SPI_MT65XX
-	struct mtk_chip_config spi_ctrl;
+    struct mtk_chip_config spi_ctrl;
 #endif
+	char lcd_name_for_tp[50];
 	char *tp_fw_name;
 	char *mp_fw_name;
 	char *mp_criteria;
@@ -233,7 +232,7 @@ struct nvt_ts_data {
 	struct oplus_debug_info oplus_debug_info;
 	struct oplus_debug_gesture_record_info oplus_debug_gesture_record_info;
 	struct nvt_fw_debug_info nvt_fw_debug_info;
-	struct proc_dir_entry *oplus_touchpanel_proc;
+    struct proc_dir_entry *oplus_touchpanel_proc;
 	struct proc_dir_entry *debug_info;
 #if NVT_PM_WAIT_SPI_I2C_RESUME_COMPLETE
 	bool dev_pm_suspend;
@@ -242,7 +241,7 @@ struct nvt_ts_data {
 };
 
 #if NVT_TOUCH_PROC
-struct nvt_flash_data {
+struct nvt_flash_data{
 	rwlock_t lock;
 };
 #endif
@@ -256,11 +255,11 @@ typedef enum {
 } RST_COMPLETE_STATE;
 
 typedef enum {
-	EVENT_MAP_HOST_CMD                      = 0x50,
-	EVENT_MAP_HANDSHAKING_or_SUB_CMD_BYTE   = 0x51,
-	EVENT_MAP_RESET_COMPLETE                = 0x60,
-	EVENT_MAP_FWINFO                        = 0x78,
-	EVENT_MAP_PROJECTID                     = 0x9A,
+    EVENT_MAP_HOST_CMD                      = 0x50,
+    EVENT_MAP_HANDSHAKING_or_SUB_CMD_BYTE   = 0x51,
+    EVENT_MAP_RESET_COMPLETE                = 0x60,
+    EVENT_MAP_FWINFO                        = 0x78,
+    EVENT_MAP_PROJECTID                     = 0x9A,
 } SPI_EVENT_MAP;
 
 typedef enum {
@@ -274,9 +273,9 @@ typedef enum {
 } NVT_CUSTOMIZED_MODE;
 
 typedef enum {
-	EDGE_REJECT_L = 0,
-	EDGE_REJECT_H = 1,
-	PWR_FLAG = 2,
+    EDGE_REJECT_L = 0,
+    EDGE_REJECT_H = 1,
+    PWR_FLAG = 2,
 	HOPPING_FIX_FREQ_FLAG = 3,
 	HOPPING_POLLING_FLAG = 4,
 	JITTER_FLAG = 6,
@@ -284,16 +283,16 @@ typedef enum {
 } CMD_OFFSET;
 
 typedef enum {
-	DEBUG_MESSAGE_FLAG = 0,
-	DEBUG_GESTURE_COORDINATE_FLAG = 1,
-	DEBUG_GESTURE_COORDINATE_RECORD_FLAG = 2
+    DEBUG_MESSAGE_FLAG = 0,
+    DEBUG_GESTURE_COORDINATE_FLAG = 1,
+    DEBUG_GESTURE_COORDINATE_RECORD_FLAG = 2
 } CMD_EXTEND_OFFSET;
 
 enum touch_direction {
-	VERTICAL_SCREEN,
-	LANDSCAPE_SCREEN_90,
-	LANDSCAPE_SCREEN_270,
-	LANDSCAPE_SCREEN_180,
+    VERTICAL_SCREEN,
+    LANDSCAPE_SCREEN_90,
+    LANDSCAPE_SCREEN_270,
+    LANDSCAPE_SCREEN_180,
 };
 
 enum touch_panel_vendor {

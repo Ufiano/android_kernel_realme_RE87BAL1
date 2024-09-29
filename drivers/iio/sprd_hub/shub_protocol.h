@@ -1,4 +1,4 @@
-/*
+/* SPDX-License-Identifier: GPL-2.0
  * File:shub_protocol.h
  * Author:bao.yue@spreadtrum.com
  *
@@ -22,22 +22,22 @@
  */
 
 /* define encode and decode */
-#define  SHUB_MAGIC_NUMBER_LEN   4
-#define  SHUB_MAX_DATA_CRC       2
-#define  SHUB_MAGIC_NUMBER       0x7e
-#define  SHUB_MAX_HEAD_LEN       10
-#define  SHUB_MEMDUMP_DATA_SUBTYPE              0x0d
-#define  SHUB_MEMDUMP_CODE_SUBTYPE              0x0e
+#define  SHUB_MAGIC_NUMBER_LEN		4
+#define  SHUB_MAX_DATA_CRC		2
+#define  SHUB_MAGIC_NUMBER		0x7e
+#define  SHUB_MAX_HEAD_LEN		10
+#define  SHUB_MEMDUMP_DATA_SUBTYPE	0x0d
+#define  SHUB_MEMDUMP_CODE_SUBTYPE	0x0e
 
-#define  SHUB_GET_HIGH_BYTE(D) (unsigned char)((D) >> 8)
-#define  SHUB_GET_LOW_BYTE(D)  (unsigned char)(D)
+#define  SHUB_GET_HIGH_BYTE(D)		(unsigned char)((D) >> 8)
+#define  SHUB_GET_LOW_BYTE(D)		(unsigned char)(D)
 
-#define  SHUB_FLASH_BLOCK_SIZE  4096
-#define  MAX_MSG_BUFF_SIZE                        1536
-#define  MAX_RETRANSFER_TIMES			   1
-#define  RESPONSE_WAIT_TIMEOUT_MS		   300
-#define  THIRDALGO_START_SUBTYPE                0xc2
-#define  THIRDALGO_END_SUBTYPE                  0xfe
+#define  SHUB_FLASH_BLOCK_SIZE		4096
+#define  MAX_MSG_BUFF_SIZE		1536
+#define  MAX_RETRANSFER_TIMES		1
+#define  RESPONSE_WAIT_TIMEOUT_MS	300
+#define  THIRDALGO_START_SUBTYPE	0xc2
+#define  THIRDALGO_END_SUBTYPE		0xfe
 
 enum shub_subtype_id {
 	/* Android define */
@@ -64,7 +64,7 @@ enum shub_subtype_id {
 	AP_SEND_DATA_TO_DYNAMIC_SUBTYPE,
 	DYNAMIC_SEND_DATA_TO_AP_SUBTYPE,
 	/* 3rdAlgo define */
-	SHUB_SET_CALIBRATION_DATA_SUBTYPE        = THIRDALGO_START_SUBTYPE,
+	SHUB_SET_CALIBRATION_DATA_SUBTYPE	= THIRDALGO_START_SUBTYPE,
 	SHUB_SET_CALIBRATION_CMD_SUBTYPE,
 	SHUB_SET_TIMESYNC_SUBTYPE,
 	SHUB_SET_HOST_STATUS_SUBTYPE,
@@ -76,7 +76,7 @@ enum shub_subtype_id {
 	SHUB_GET_LIGHT_RAWDATA_SUBTYPE,
 	SHUB_GET_PROXIMITY_RAWDATA_SUBTYPE,
 	SHUB_GET_FWVERSION_SUBTYPE,
-	SHUB_CWM_END_SUBTYPE                   = THIRDALGO_END_SUBTYPE,
+	SHUB_CWM_END_SUBTYPE			= THIRDALGO_END_SUBTYPE,
 	SHUB_END_SUBTYPE,
 };
 
@@ -111,7 +111,6 @@ struct shub_data_processor {
 	u16 error_num;
 	u8 cur_header[SHUB_MAX_HEAD_LEN];
 	struct cmd_data  cmd_data;
-
 };
 
 /* define encode and decode struct union  end */
@@ -124,19 +123,15 @@ struct sent_cmd {
 	enum cmd_resp_status status;
 };
 
-extern struct shub_data_processor shub_stream_processor;
-extern struct shub_data_processor shub_stream_processor_nwu;
 /*function define */
 void  shub_init_parse_packet(struct shub_data_processor *stream);
 void shub_fill_head(struct cmd_data *in_data, u8 *out_data);
-int shub_encode_one_packet(
-			struct cmd_data *in_data,
-			u8 *out_data,
-			u16 out_len);
-int shub_parse_one_packet(
-	struct shub_data_processor *stream,
-	u8 *data,
-	u16 len);
+int shub_encode_one_packet(struct cmd_data *in_data,
+			   u8 *out_data,
+			   u16 out_len);
+int shub_parse_one_packet(struct shub_data_processor *stream,
+			  u8 *data,
+			  u16 len);
 void shub_dispatch(struct cmd_data *packet);
 void debuginfor(void *src, int len);
 #endif

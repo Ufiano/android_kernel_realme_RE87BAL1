@@ -1,7 +1,7 @@
-/**
+/*
  * sprd-musbhsdmac - Spreadtrum MUSB Specific Glue layer
  *
- * Copyright (c) 2018 Spreadtrum Co., Ltd.
+ * Copyright (c) 2020 Spreadtrum Co., Ltd.
  * http://www.spreadtrum.com
  *
  * This program is free software: you can redistribute it and/or modify
@@ -26,8 +26,7 @@
 
 static void sprd_dma_channel_release(struct dma_channel *channel);
 
-static void sprd_dma_controller_stop(struct sprd_musb_dma_controller
-				*controller)
+static void sprd_dma_controller_stop(struct sprd_musb_dma_controller *controller)
 {
 	struct musb *musb = controller->private_data;
 	struct dma_channel *channel;
@@ -72,336 +71,9 @@ static void sprd_dma_channel_release(struct dma_channel *channel)
 	channel->status = MUSB_DMA_STATUS_UNKNOWN;
 }
 
-#ifdef CONFIG_USB_SPRD_LINKFIFO
-static void musb_linknode_pushlist(struct musb *musb,
-		u64 ll_list, u32 is_tx, u32 chan);
 static struct dma_channel *sprd_dma_channel_allocate(struct dma_controller *c,
-				struct musb_hw_ep *hw_ep, u8 transmit)
-{
-	struct sprd_musb_dma_controller *controller = container_of(c,
-			struct sprd_musb_dma_controller, controller);
-	struct sprd_musb_dma_channel *musb_channel = NULL;
-	struct dma_channel *channel = NULL;
-	u8 bit;
-	u16 csr;
-	struct musb *musb;
-
-	bit = hw_ep->epnum;
-	musb = controller->private_data;
-
-	if (transmit) {
-		musb_channel = &(controller->channel[bit]);
-		controller->used_channels |= (1 << bit);
-		musb_channel->channel_num = bit;
-		if (musb->xceiv->otg->state != OTG_STATE_A_HOST) {
-			/* CONFIG DMA MODE */
-			csr = musb_readw(hw_ep->regs, MUSB_TXCSR);
-			csr |= MUSB_TXCSR_DMAMODE | MUSB_TXCSR_DMAENAB |
-				MUSB_TXCSR_AUTOSET;
-			musb_writew(hw_ep->regs, MUSB_TXCSR, csr);
-		}
-		memmove(musb_channel->dma_linklist,
-			hw_ep->ep_in.dma_linklist,
-			CHN_MAX_QUEUE_SIZE * sizeof(struct linklist_node_s));
-		memmove(musb_channel->list_dma_addr,
-			hw_ep->ep_in.list_dma_addr,
-			CHN_MAX_QUEUE_SIZE * sizeof(dma_addr_t));
-	} else {
-		musb_channel = &(controller->channel[bit + 15]);
-		controller->used_channels |= (1 << (bit + 15));
-		musb_channel->channel_num = bit + 15;
-		if (musb->xceiv->otg->state != OTG_STATE_A_HOST) {
-			/* CONFIG DMA MODE */
-			csr = musb_readw(hw_ep->regs, MUSB_RXCSR);
-			csr |= MUSB_RXCSR_DMAMODE | MUSB_RXCSR_DMAENAB |
-				MUSB_RXCSR_AUTOCLEAR;
-			musb_writew(hw_ep->regs, MUSB_RXCSR, csr);
-		}
-		memmove(musb_channel->dma_linklist,
-			hw_ep->ep_out.dma_linklist,
-			CHN_MAX_QUEUE_SIZE * sizeof(struct linklist_node_s));
-		memmove(musb_channel->list_dma_addr,
-			hw_ep->ep_out.list_dma_addr,
-			CHN_MAX_QUEUE_SIZE * sizeof(dma_addr_t));
-	}
-
-	/* Wait 9 more cycles for ensuring DMA can get USB request length */
-	musb_writel(controller->base, MUSB_DMA_FRAG_WAIT, 0x8);
-
-	musb_channel->controller = controller;
-	musb_channel->ep_num = bit;
-	musb_channel->transmit = transmit;
-	musb_channel->node_num = 0;
-	musb_channel->busy_slot = 0;
-	musb_channel->free_slot = 0;
-	channel = &(musb_channel->channel);
-	channel->private_data = musb_channel;
-	channel->status = MUSB_DMA_STATUS_FREE;
-	channel->max_len = 0xffff;
-	/* Tx => mode 1; Rx => mode 0 */
-	channel->desired_mode = transmit;
-	channel->actual_len = 0;
-	INIT_LIST_HEAD(&musb_channel->req_queued);
-
-	return channel;
-}
-
-static void sprd_configure_channel(struct dma_channel *channel,
-				   u8 transmit)
-{
-	struct sprd_musb_dma_channel *musb_channel = channel->private_data;
-	struct sprd_musb_dma_controller *controller = musb_channel->controller;
-	struct musb *musb = controller->private_data;
-	void __iomem *mbase = controller->base;
-	struct musb_ep *musb_ep;
-	struct musb_hw_ep *hw_ep;
-	u8 bchannel = musb_channel->channel_num;
-	u32 csr = 0;
-	u32 haddr4;
-	u32 queue = musb_channel->used_queue;
-
-	hw_ep = &musb->endpoints[musb_channel->ep_num];
-	if (musb_channel->transmit)
-		musb_ep = &hw_ep->ep_in;
-	else
-		musb_ep = &hw_ep->ep_out;
-
-	if (musb_ep->end_point.linkfifo) {
-		if (transmit) {
-			/* enable linklist end interrupt */
-			csr = musb_readl(mbase, MUSB_DMA_CHN_INTR(bchannel));
-			csr |= CHN_LLIST_INT_EN | CHN_CLEAR_INT_EN;
-			musb_writel(mbase, MUSB_DMA_CHN_INTR(bchannel), csr);
-
-			/* set linklist pointer */
-			musb_linknode_pushlist(musb,
-					       (u64)musb_channel->list_dma_addr[queue],
-					       transmit, bchannel);
-
-			/* enable channel and trigger tx dma transfer */
-			csr = musb_readl(mbase,
-					 MUSB_DMA_CHN_PAUSE(bchannel));
-			if (csr & CHN_CLR)
-				musb_writel(mbase,
-					    MUSB_DMA_CHN_PAUSE(bchannel), 0);
-		} else {
-			/* enable linklist end and rx last interrupt */
-			csr = musb_readl(mbase, MUSB_DMA_CHN_INTR(bchannel));
-			csr |= CHN_USBRX_INT_EN | CHN_LLIST_INT_EN | CHN_CLEAR_INT_EN;
-			musb_writel(mbase, MUSB_DMA_CHN_INTR(bchannel), csr);
-
-			/* set linklist pointer */
-			musb_linknode_pushlist(musb,
-					       (u64)musb_channel->list_dma_addr[queue],
-					       transmit, bchannel - 15);
-		}
-	} else {
-		haddr4 = (u32)((u64)musb_channel->list_dma_addr[queue] >> 32);
-		haddr4 <<= 4;
-		if (transmit) {
-			/* enable linklist end interrupt */
-			csr = musb_readl(mbase, MUSB_DMA_CHN_INTR(bchannel));
-			csr |= CHN_LLIST_INT_EN | CHN_CLEAR_INT_EN;
-			musb_writel(mbase, MUSB_DMA_CHN_INTR(bchannel), csr);
-
-			/* set linklist pointer */
-			musb_writel(mbase, MUSB_DMA_CHN_LLIST_PTR(bchannel),
-				    (u32)musb_channel->list_dma_addr[queue]);
-
-			musb_writel(mbase, MUSB_DMA_CHN_ADDR_H(bchannel),
-				    haddr4);
-
-			/* enable channel and trigger tx dma transfer */
-			csr = musb_readl(mbase, MUSB_DMA_CHN_PAUSE(bchannel));
-			if (csr & CHN_CLR)
-				musb_writel(mbase, MUSB_DMA_CHN_PAUSE(bchannel),
-					    0);
-			csr = musb_readl(mbase, MUSB_DMA_CHN_CFG(bchannel));
-			csr |= CHN_EN;
-			musb_writel(mbase, MUSB_DMA_CHN_CFG(bchannel), csr);
-		} else {
-			/* enable linklist end and rx last interrupt */
-			csr = musb_readl(mbase, MUSB_DMA_CHN_INTR(bchannel));
-			csr |= CHN_USBRX_INT_EN | CHN_LLIST_INT_EN | CHN_CLEAR_INT_EN;
-			musb_writel(mbase, MUSB_DMA_CHN_INTR(bchannel), csr);
-
-			/* set linklist pointer */
-			musb_writel(mbase, MUSB_DMA_CHN_LLIST_PTR(bchannel),
-				    (u32)musb_channel->list_dma_addr[queue]);
-
-			musb_writel(mbase, MUSB_DMA_CHN_ADDR_H(bchannel),
-				    haddr4);
-
-			/* enable channel and trigger rx dma transfer */
-			csr = musb_readl(mbase, MUSB_DMA_CHN_CFG(bchannel));
-			csr |= CHN_EN;
-			musb_writel(mbase, MUSB_DMA_CHN_CFG(bchannel), csr);
-		}
-	}
-}
-
-static void musb_reg_update(struct musb *musb, unsigned int reg,
-		       unsigned int mask, unsigned int val)
-{
-	void __iomem *mbase = musb->mregs;
-	u32 shift = __ffs(mask);
-	u32 tmp;
-
-	tmp = musb_readl(mbase, reg);
-	tmp &= ~mask;
-	tmp |= (val << shift) & mask;
-	musb_writel(mbase, reg, tmp);
-}
-
-static void musb_linknode_pushlist(struct musb *musb,
-		u64 ll_list, u32 is_tx, u32 chan)
-{
-	void __iomem *mbase = musb->mregs;
-
-	if (is_tx) {
-		musb_reg_update(musb, MUSB_DMA_MULT_LL_CTRL,
-				BIT_TX_IPA_CHN_MASK, chan);
-
-		musb_writel(mbase, MUSB_DMA_TX_CMD_QUEUE_HIGH,
-				((u32)(ll_list >> 32)) & 0xf);
-		musb_writel(mbase, MUSB_DMA_TX_CMD_QUEUE_LOW, (u32)ll_list);
-
-		musb_reg_update(musb, MUSB_DMA_MULT_LL_CTRL,
-				BIT_TX_CMD_QUEUE_WR, 1);
-	} else {
-		musb_reg_update(musb, MUSB_DMA_MULT_LL_CTRL,
-				BIT_RX_IPA_CHN_MASK, chan);
-
-		musb_writel(mbase, MUSB_DMA_RX_CMD_QUEUE_HIGH,
-				((u32)(ll_list >> 32)) & 0xf);
-		musb_writel(mbase, MUSB_DMA_RX_CMD_QUEUE_LOW, (u32)ll_list);
-
-		musb_reg_update(musb, MUSB_DMA_MULT_LL_CTRL,
-				BIT_RX_CMD_QUEUE_WR, 1);
-	}
-}
-
-static u64 musb_linknode_poplist(struct musb *musb, int is_tx, u32 chan)
-{
-	void __iomem *mbase = musb->mregs;
-	u64 cmplt_list;
-	u32 cmplt_list_low;
-	u32 cmplt_list_high;
-
-	if (is_tx) {
-		musb_reg_update(musb, MUSB_DMA_MULT_LL_CTRL,
-				BIT_TX_IPA_CHN_MASK, chan);
-		musb_reg_update(musb, MUSB_DMA_MULT_LL_CTRL,
-				BIT_TX_CMPLT_QUEUE_RD, 1);
-
-		cmplt_list_low = musb_readl(mbase, MUSB_DMA_TX_CMPLT_QUEUE_LOW);
-		cmplt_list_high = musb_readl(mbase,
-					     MUSB_DMA_TX_CMPLT_QUEUE_HIGH);
-	} else {
-		musb_reg_update(musb, MUSB_DMA_MULT_LL_CTRL,
-				BIT_RX_IPA_CHN_MASK, chan);
-		musb_reg_update(musb, MUSB_DMA_MULT_LL_CTRL,
-				BIT_RX_CMPLT_QUEUE_RD, 1);
-
-		cmplt_list_low = musb_readl(mbase, MUSB_DMA_RX_CMPLT_QUEUE_LOW);
-		cmplt_list_high = musb_readl(mbase,
-					     MUSB_DMA_RX_CMPLT_QUEUE_HIGH);
-	}
-
-	cmplt_list = ((u64)cmplt_list_high << 32) | cmplt_list_low;
-	return cmplt_list;
-}
-
-static void musb_linknode_clear(struct musb *musb, int is_tx, int chan)
-{
-	struct dma_controller	*c = musb->dma_controller;
-	struct sprd_musb_dma_controller *controller = container_of(c,
-				struct sprd_musb_dma_controller, controller);
-	struct sprd_musb_dma_channel *musb_channel = NULL;
-
-	if (is_tx)
-		musb_channel = &(controller->channel[chan]);
-	else
-		musb_channel = &(controller->channel[chan + 15]);
-
-	musb_channel->used_queue = 0;
-	if (is_tx) {
-		musb_reg_update(musb, MUSB_DMA_MULT_LL_CTRL,
-				BIT_TX_IPA_CHN_MASK, chan);
-		musb_reg_update(musb, MUSB_DMA_MULT_LL_Q_CTRL_STATUS,
-				BIT_TX_CMD_CLR, 1);
-		musb_reg_update(musb, MUSB_DMA_MULT_LL_Q_CTRL_STATUS,
-				BIT_TX_CMPLT_CLR, 1);
-	} else {
-		musb_reg_update(musb, MUSB_DMA_MULT_LL_CTRL,
-				BIT_RX_IPA_CHN_MASK, chan);
-		musb_reg_update(musb, MUSB_DMA_MULT_LL_Q_CTRL_STATUS,
-				BIT_RX_CMD_CLR, 1);
-		musb_reg_update(musb, MUSB_DMA_MULT_LL_Q_CTRL_STATUS,
-				BIT_RX_CMPLT_CLR, 1);
-	}
-}
-
-u32 musb_linknode_full(struct musb *musb, u32 is_tx)
-{
-	void __iomem *mbase = musb->mregs;
-	u32 is_queue_full = 0;
-	u32 ctrl_status;
-
-	ctrl_status = musb_readl(mbase, MUSB_DMA_MULT_LL_Q_CTRL_STATUS);
-	if (is_tx)
-		is_queue_full = (ctrl_status & BIT_TX_CMD_FULL) ? 1 : 0;
-	else
-		is_queue_full = (ctrl_status & BIT_RX_CMD_FULL) ? 1 : 0;
-
-	if (is_queue_full)
-		dev_info(musb->controller, "%s channel is full\n",
-		is_tx ? "tx" : "rx");
-
-	return is_queue_full;
-}
-EXPORT_SYMBOL_GPL(musb_linknode_full);
-
-static void musb_prepare_node(struct sprd_musb_dma_channel *musb_channel,
-			dma_addr_t dma_addr, u32 len, u8 last, u8 sp, u32 index)
-{
-	u32 queue = musb_channel->used_queue;
-
-	musb_channel->free_slot++;
-
-	musb_channel->dma_linklist[queue][index].addr = (unsigned int)dma_addr;
-	musb_channel->dma_linklist[queue][index].data_addr =
-		((u8)((u64)dma_addr >> 32)) & 0xf;
-	musb_channel->dma_linklist[queue][index].blk_len = len;
-	musb_channel->dma_linklist[queue][index].frag_len = 32;
-	musb_channel->dma_linklist[queue][index].ioc = last;
-	musb_channel->dma_linklist[queue][index].sp = sp;
-	musb_channel->dma_linklist[queue][index].list_end = last;
-	/*
-	 *   wmb below is used to make sure linklist CPU
-	 *   initialized is really written to DDR before
-	 *   USB DMA read the linklist.
-	 */
-	wmb();
-}
-
-static void musb_prepare_sg_lastnode(struct sprd_musb_dma_channel *musb_channel,
-			u32 index)
-{
-	u32 queue = musb_channel->used_queue;
-
-	musb_channel->dma_linklist[queue][index].ioc = 1;
-	musb_channel->dma_linklist[queue][index].list_end = 1;
-	/*
-	 *   wmb below is used to make sure linklist CPU
-	 *   initialized is really written to DDR before
-	 *   USB DMA read the linklist.
-	 */
-	wmb();
-}
-#else
-static struct dma_channel *sprd_dma_channel_allocate(struct dma_controller *c,
-				struct musb_hw_ep *hw_ep, u8 transmit)
+						     struct musb_hw_ep *hw_ep,
+						     u8 transmit)
 {
 	struct sprd_musb_dma_controller *controller = container_of(c,
 			struct sprd_musb_dma_controller, controller);
@@ -464,7 +136,7 @@ static struct dma_channel *sprd_dma_channel_allocate(struct dma_controller *c,
 }
 
 static void sprd_configure_channel(struct dma_channel *channel,
-				u8 transmit)
+				   u8 transmit)
 {
 	struct sprd_musb_dma_channel *musb_channel = channel->private_data;
 	struct sprd_musb_dma_controller *controller = musb_channel->controller;
@@ -511,22 +183,9 @@ static void sprd_configure_channel(struct dma_channel *channel,
 	}
 }
 
-static u64 musb_linknode_poplist(struct musb *musb, int is_tx, u32 chan)
-{
-	return 0;
-}
-
-static void musb_linknode_clear(struct musb *musb, int is_tx, int chan)
-{}
-
-u32 musb_linknode_full(struct musb *musb, u32 is_tx)
-{
-	return 0;
-}
-EXPORT_SYMBOL_GPL(musb_linknode_full);
-
 static void musb_prepare_node(struct sprd_musb_dma_channel *musb_channel,
-			dma_addr_t dma_addr, u32 len, u8 last, u8 sp, u32 index)
+			      dma_addr_t dma_addr, u32 len,
+			      u8 last, u8 sp, u32 index)
 {
 	musb_channel->free_slot++;
 
@@ -547,7 +206,7 @@ static void musb_prepare_node(struct sprd_musb_dma_channel *musb_channel,
 }
 
 static void musb_prepare_sg_lastnode(struct sprd_musb_dma_channel *musb_channel,
-			u32 index)
+				     u32 index)
 {
 	musb_channel->dma_linklist[index].ioc = 1;
 	musb_channel->dma_linklist[index].list_end = 1;
@@ -558,11 +217,12 @@ static void musb_prepare_sg_lastnode(struct sprd_musb_dma_channel *musb_channel,
 	 */
 	wmb();
 }
-#endif
 
 static void musb_prepare_nodes(struct sprd_musb_dma_channel *musb_channel,
-	dma_addr_t dma_addr, u32 length, struct musb_request *musb_req,
-	struct musb_ep *musb_ep, u32 node_num, u32 nodes_left)
+			       dma_addr_t dma_addr, u32 length,
+			       struct musb_request *musb_req,
+			       struct musb_ep *musb_ep,
+			       u32 node_num, u32 nodes_left)
 {
 	int i;
 	u8 last_one = 0;
@@ -583,13 +243,14 @@ static void musb_prepare_nodes(struct sprd_musb_dma_channel *musb_channel,
 		musb_channel->node_num++;
 	}
 	list_del(&musb_req->list);
-	list_add_tail(&musb_req->list,
-		&musb_channel->req_queued);
+	list_add_tail(&musb_req->list, &musb_channel->req_queued);
 }
 
 static void musb_prepare_first_nodes(struct sprd_musb_dma_channel *musb_channel,
-	dma_addr_t dma_addr, u32 length, dma_addr_t addr_last,
-	u32 node_num, u32 nodes_left)
+				     dma_addr_t dma_addr,
+				     u32 length,
+				     dma_addr_t addr_last,
+				     u32 node_num, u32 nodes_left)
 {
 	int i;
 	u8 last_one = 0;
@@ -599,8 +260,7 @@ static void musb_prepare_first_nodes(struct sprd_musb_dma_channel *musb_channel,
 		nodes_left--;
 		len = 0xfffc;
 		if ((node_num - 1) == i) {
-			len = length - (node_num
-			- 1) * 0xfffc;
+			len = length - (node_num - 1) * 0xfffc;
 			if (!addr_last)
 				last_one = 1;
 		}
@@ -613,22 +273,20 @@ static void musb_prepare_first_nodes(struct sprd_musb_dma_channel *musb_channel,
 }
 
 static void musb_prepare_listnodes(struct sprd_musb_dma_channel *musb_channel,
-			struct musb_ep *musb_ep, bool starting)
+				   struct musb_ep *musb_ep, bool starting)
 {
 	struct musb_request *musb_req, *n;
 	u8 last_one = 0;
 	dma_addr_t addr, addr_cpr, addr_last;
 	unsigned int length;
 	dma_addr_t dma;
-	u32 i;
-	u32 nodes_left;
-	u32 len;
+	u32 i, nodes_left, len;
 	u8  sp = 0;
 	u32 total_sgs = 0, len_sgs;
 
 	/* the first request must not be queued */
 	nodes_left = (musb_channel->busy_slot - musb_channel->free_slot)
-					& LISTNODE_MASK;
+			& LISTNODE_MASK;
 
 	/*
 	 * If busy & slot are equal than it is either full or empty. If we are
@@ -676,11 +334,9 @@ static void musb_prepare_listnodes(struct sprd_musb_dma_channel *musb_channel,
 				sp = 0;
 				len_sgs += length;
 
-				if (i == (request->num_mapped_sgs - 1) ||
-						sg_is_last(s)) {
+				if (i == (request->num_mapped_sgs - 1) || sg_is_last(s)) {
 					if (list_empty(&musb_ep->req_list) ||
-					(len_sgs % musb_ep->end_point.maxpacket
-								== 0)) {
+						(len_sgs % musb_ep->end_point.maxpacket == 0)) {
 						last_one = 1;
 						sp = 0;
 					} else {
@@ -695,7 +351,7 @@ static void musb_prepare_listnodes(struct sprd_musb_dma_channel *musb_channel,
 					sp = 0;
 				}
 
-				if (addr == addr_cpr || (!addr_last)) {
+				if (addr == addr_cpr || !addr_last) {
 					musb_prepare_node(musb_channel,
 					dma, length, last_one, sp,
 					musb_channel->node_num);
@@ -710,8 +366,8 @@ static void musb_prepare_listnodes(struct sprd_musb_dma_channel *musb_channel,
 						break;
 					len = (u32)(addr - dma);
 					musb_prepare_node(musb_channel,
-					dma, len, 0, sp,
-					musb_channel->node_num);
+						dma, len, 0, sp,
+						musb_channel->node_num);
 					musb_channel->node_num++;
 					nodes_left--;
 
@@ -719,8 +375,8 @@ static void musb_prepare_listnodes(struct sprd_musb_dma_channel *musb_channel,
 						last_one = 1;
 					len = length - (addr - dma);
 					musb_prepare_node(musb_channel,
-					addr, len, last_one, sp,
-					musb_channel->node_num);
+						addr, len, last_one, sp,
+						musb_channel->node_num);
 					musb_channel->node_num++;
 				}
 
@@ -853,8 +509,8 @@ static void musb_prepare_listnodes(struct sprd_musb_dma_channel *musb_channel,
 }
 
 static void musb_host_prepare_nodes(struct sprd_musb_dma_channel *musb_channel,
-	dma_addr_t dma_addr, u32 length,
-	u32 node_num, u32 nodes_left)
+				    dma_addr_t dma_addr, u32 length,
+				    u32 node_num, u32 nodes_left)
 {
 	int i;
 	u8 last_one = 0;
@@ -877,7 +533,7 @@ static void musb_host_prepare_nodes(struct sprd_musb_dma_channel *musb_channel,
 }
 
 static void musb_host_listnodes(struct sprd_musb_dma_channel *musb_channel,
-	dma_addr_t dma_addr, u32 len)
+				dma_addr_t dma_addr, u32 len)
 {
 	dma_addr_t addr, addr_cpr, addr_last;
 	u32 i;
@@ -979,8 +635,8 @@ static void musb_host_listnodes(struct sprd_musb_dma_channel *musb_channel,
 }
 
 static int sprd_dma_channel_program(struct dma_channel *channel,
-				u16 packet_sz, u8 mode,
-				dma_addr_t dma_addr, u32 len)
+				    u16 packet_sz, u8 mode,
+				    dma_addr_t dma_addr, u32 len)
 {
 	struct sprd_musb_dma_channel *musb_channel = channel->private_data;
 	struct sprd_musb_dma_controller *controller = musb_channel->controller;
@@ -991,14 +647,6 @@ static int sprd_dma_channel_program(struct dma_channel *channel,
 	if (channel->status == MUSB_DMA_STATUS_UNKNOWN ||
 		channel->status == MUSB_DMA_STATUS_BUSY)
 		return -EINVAL;
-
-	/* Let targets check/tweak the arguments */
-	if (musb->ops->adjust_channel_params) {
-		int ret = musb->ops->adjust_channel_params(channel,
-			packet_sz, &mode, &dma_addr, &len);
-		if (ret)
-			return ret;
-	}
 
 	hw_ep = &musb->endpoints[musb_channel->ep_num];
 	if (musb_channel->transmit)
@@ -1017,16 +665,7 @@ static int sprd_dma_channel_program(struct dma_channel *channel,
 	if ((musb->hwvers >= MUSB_HWVERS_1800) && (dma_addr % 4))
 		return -EINVAL;
 
-	if (musb_ep->end_point.linkfifo) {
-		if (!musb_linknode_full(musb, musb_channel->transmit)) {
-			musb_channel->used_queue++;
-			musb_channel->used_queue %= CHN_MAX_QUEUE_SIZE;
-		} else {
-			return -EINVAL;
-		}
-	} else {
-		musb_channel->used_queue = 0;
-	}
+	musb_channel->used_queue = 0;
 
 	channel->actual_len = 0;
 	musb_channel->max_packet_sz = packet_sz;
@@ -1047,6 +686,13 @@ static int sprd_dma_channel_program(struct dma_channel *channel,
 			csr = musb_readw(epio, MUSB_RXCSR);
 			if ((csr & dma_setting) != dma_setting)
 				musb_writew(epio, MUSB_RXCSR, dma_setting);
+		} else {
+			dma_setting = MUSB_TXCSR_AUTOSET |
+				      MUSB_TXCSR_DMAMODE |
+				      MUSB_TXCSR_DMAENAB;
+			csr = musb_readw(epio, MUSB_TXCSR);
+			if ((csr & dma_setting) != dma_setting)
+				musb_writew(epio, MUSB_TXCSR, dma_setting);
 		}
 		musb_prepare_listnodes(musb_channel, musb_ep, true);
 	} else {
@@ -1065,8 +711,8 @@ static int sprd_dma_channel_program(struct dma_channel *channel,
 
 	return 1;
 }
-static inline struct musb_request *channel_get_next_request
-						(struct list_head *list)
+
+static inline struct musb_request *channel_get_next_request(struct list_head *list)
 {
 	if (list_empty(list))
 		return NULL;
@@ -1076,7 +722,7 @@ static inline struct musb_request *channel_get_next_request
 
 #if IS_ENABLED(CONFIG_USB_MUSB_HOST) || IS_ENABLED(CONFIG_USB_MUSB_DUAL_ROLE)
 static void musb_host_channel_abort(struct musb *musb,
-	struct sprd_musb_dma_channel *musb_channel)
+				    struct sprd_musb_dma_channel *musb_channel)
 {
 	struct urb *urb;
 	struct musb_qh *qh;
@@ -1187,8 +833,9 @@ static int sprd_dma_channel_abort(struct dma_channel *channel)
 				musb_g_giveback(musb_ep, request, -ESHUTDOWN);
 				channel->status = MUSB_DMA_STATUS_FREE;
 			}
-		} else
+		} else {
 			musb_host_channel_abort(musb, musb_channel);
+		}
 	} else if (channel->status == MUSB_DMA_STATUS_CORE_ABORT) {
 		pause = musb_readl(mbase, MUSB_DMA_CHN_PAUSE(bchannel));
 		pause |= CHN_CLR;
@@ -1205,7 +852,7 @@ static void sprd_musb_dma_completion(struct musb *musb, u8 epnum, u8 transmit)
 	struct usb_request *request;
 	struct dma_channel *channel;
 	struct sprd_musb_dma_channel *musb_channel;
-	u32 blk_len	=	0;
+	u32 blk_len = 0;
 
 	if (transmit)
 		musb_ep = &musb->endpoints[epnum].ep_in;
@@ -1217,8 +864,6 @@ static void sprd_musb_dma_completion(struct musb *musb, u8 epnum, u8 transmit)
 		return;
 
 	musb_channel = channel->private_data;
-	if (musb_ep->end_point.linkfifo)
-		musb_linknode_poplist(musb, transmit, epnum);
 
 	do {
 		musb_req = channel_get_next_request(&musb_channel->req_queued);
@@ -1313,10 +958,10 @@ static void sprd_musb_urb_completion(struct musb *musb, u8 epnum, u8 is_in)
 			channel->status = MUSB_DMA_STATUS_FREE;
 			d++;
 			if (is_in)
-				musb_rx_dma_sprd(channel, musb, epnum, qh, urb,
+				musb->hops.rx_dma_program(channel, musb, epnum, qh, urb,
 					d->offset, d->length);
 			else
-				musb_tx_dma_program(musb->dma_controller, hw_ep,
+				musb->hops.tx_dma_program(musb->dma_controller, hw_ep,
 					qh, urb, d->offset, d->length);
 			return;
 		}
@@ -1326,7 +971,7 @@ static void sprd_musb_urb_completion(struct musb *musb, u8 epnum, u8 is_in)
 		__func__, epnum, urb->actual_length, urb);
 	channel->status = MUSB_DMA_STATUS_FREE;
 
-	musb_advance_schedule(musb, urb, hw_ep, is_in);
+	musb->hops.advance_schedule(musb, urb, hw_ep, is_in);
 }
 #else
 static void sprd_musb_urb_completion(struct musb *musb, u8 epnum, u8 is_in)
@@ -1376,10 +1021,8 @@ irqreturn_t sprd_dma_interrupt(struct musb *musb, u32 int_hsdma)
 				epnum = bchannel;
 				musb_ep = &musb->endpoints[epnum].ep_in;
 			}
-			if (musb_ep->end_point.linkfifo)
-				musb_linknode_clear(musb, is_tx, epnum);
 
-			dev_info(musb->controller, "dma interrupt clear channel\n");
+			dev_dbg(musb->controller, "dma interrupt clear channel\n");
 		}
 
 		if (bchannel > 15) {
@@ -1391,10 +1034,9 @@ irqreturn_t sprd_dma_interrupt(struct musb *musb, u32 int_hsdma)
 				musb_writel(mbase, MUSB_DMA_CHN_INTR(bchannel),
 					intr);
 				/* callback to give complete */
-				if (musb->xceiv->otg->state
-					== OTG_STATE_B_PERIPHERAL)
+				if (musb->xceiv->otg->state == OTG_STATE_B_PERIPHERAL)
 					sprd_musb_dma_completion(musb,
-					(bchannel - 15), 0);
+								 (bchannel - 15), 0);
 				else
 					sprd_musb_urb_completion(musb,
 					(bchannel - 15), 1);
@@ -1407,19 +1049,17 @@ irqreturn_t sprd_dma_interrupt(struct musb *musb, u32 int_hsdma)
 				musb_writel(mbase, MUSB_DMA_CHN_INTR(bchannel),
 					intr);
 				/* callback to give complete */
-				if (musb->xceiv->otg->state
-					== OTG_STATE_B_PERIPHERAL)
-					sprd_musb_dma_completion(musb,
-					bchannel, 1);
+				if (musb->xceiv->otg->state == OTG_STATE_B_PERIPHERAL)
+					sprd_musb_dma_completion(musb, bchannel, 1);
 				else
-					sprd_musb_urb_completion(musb,
-								bchannel, 0);
+					sprd_musb_urb_completion(musb, bchannel, 0);
 			}
 		}
 	}
 
 	return IRQ_HANDLED;
 }
+EXPORT_SYMBOL_GPL(sprd_dma_interrupt);
 
 void sprd_musb_dma_controller_destroy(struct dma_controller *c)
 {
@@ -1433,7 +1073,7 @@ void sprd_musb_dma_controller_destroy(struct dma_controller *c)
 EXPORT_SYMBOL_GPL(sprd_musb_dma_controller_destroy);
 
 struct dma_controller *sprd_musb_dma_controller_create(struct musb *musb,
-						    void __iomem *base)
+						       void __iomem *base)
 {
 	struct sprd_musb_dma_controller *controller;
 

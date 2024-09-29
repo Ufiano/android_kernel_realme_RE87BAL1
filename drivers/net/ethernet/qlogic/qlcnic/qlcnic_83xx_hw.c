@@ -386,8 +386,9 @@ int qlcnic_83xx_setup_intr(struct qlcnic_adapter *adapter)
 	}
 
 	/* setup interrupt mapping table for fw */
-	ahw->intr_tbl = vzalloc(num_msix *
-				sizeof(struct qlcnic_intrpt_config));
+	ahw->intr_tbl =
+		vzalloc(array_size(num_msix,
+				   sizeof(struct qlcnic_intrpt_config)));
 	if (!ahw->intr_tbl)
 		return -ENOMEM;
 
@@ -478,7 +479,7 @@ irqreturn_t qlcnic_83xx_clear_legacy_intr(struct qlcnic_adapter *adapter)
 	wmb();
 
 	/* clear the interrupt trigger control register */
-	writel(0, adapter->isr_int_vec);
+	writel_relaxed(0, adapter->isr_int_vec);
 	intr_val = readl(adapter->isr_int_vec);
 	do {
 		intr_val = readl(adapter->tgt_status_reg);
@@ -3157,8 +3158,10 @@ int qlcnic_83xx_flash_read32(struct qlcnic_adapter *adapter, u32 flash_addr,
 
 		indirect_addr = QLC_83XX_FLASH_DIRECT_DATA(addr);
 		ret = QLCRD32(adapter, indirect_addr, &err);
-		if (err == -EIO)
+		if (err == -EIO) {
+			qlcnic_83xx_unlock_flash(adapter);
 			return err;
+		}
 
 		word = ret;
 		*(u32 *)p_data  = word;
@@ -4234,7 +4237,6 @@ static void qlcnic_83xx_io_resume(struct pci_dev *pdev)
 {
 	struct qlcnic_adapter *adapter = pci_get_drvdata(pdev);
 
-	pci_cleanup_aer_uncorrect_error_status(pdev);
 	if (test_and_clear_bit(__QLCNIC_AER, &adapter->state))
 		qlcnic_83xx_aer_start_poll_work(adapter);
 }

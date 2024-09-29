@@ -1,15 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Spreadtrum pin controller driver
  * Copyright (C) 2017 Spreadtrum  - http://www.spreadtrum.com
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
  */
 
 #include <linux/debugfs.h>
@@ -35,6 +27,8 @@
 #include "pinctrl-sprd.h"
 
 #define PINCTRL_BIT_MASK(width)		(~(~0UL << (width)))
+#define PINCTRL_REG_OFFSET		0x20
+#define PINCTRL_REG_MISC_OFFSET		0x4020
 #define PINCTRL_REG_LEN			0x4
 
 #define PIN_FUNC_MASK			(BIT(4) | BIT(5))
@@ -481,6 +475,7 @@ static int sprd_pinconf_get(struct pinctrl_dev *pctldev, unsigned int pin_id,
 		case PIN_CONFIG_BIAS_HIGH_IMPEDANCE:
 			if ((reg & SLEEP_OUTPUT) || (reg & SLEEP_INPUT))
 				return -EINVAL;
+
 			arg = 1;
 			break;
 		case PIN_CONFIG_DRIVE_STRENGTH:
@@ -504,7 +499,7 @@ static int sprd_pinconf_get(struct pinctrl_dev *pctldev, unsigned int pin_id,
 			break;
 		case PIN_CONFIG_BIAS_DISABLE:
 			if ((reg & (SLEEP_PULL_DOWN | SLEEP_PULL_UP)) ||
-				(reg & (PULL_DOWN | PULL_UP_WPUSP)))
+			    (reg & (PULL_DOWN | PULL_UP_WPUSP)))
 				return -EINVAL;
 
 			arg = 1;
@@ -634,7 +629,7 @@ static int sprd_pinconf_set(struct pinctrl_dev *pctldev, unsigned int pin_id,
 					val |= TGLDSP_SLEEP_MODE;
 				if (arg & AGDSP_SLEEP)
 					val |= AGDSP_SLEEP_MODE;
-				if (arg == NONE_SLEEP)
+				if (arg & NONE_SLEEP)
 					val |= NONE_SLEEP_MODE;
 
 				mask = SLEEP_MODE_MASK;
@@ -842,7 +837,7 @@ static void sprd_pinconf_group_dbg_show(struct pinctrl_dev *pctldev,
 
 	grp = &info->groups[selector];
 
-	seq_printf(s, "\n");
+	seq_putc(s, '\n');
 	for (i = 0; i < grp->npins; i++, config++) {
 		unsigned int pin_id = grp->pins[i];
 
@@ -903,8 +898,9 @@ static int sprd_pinctrl_parse_groups(struct device_node *np,
 
 	grp->name = np->name;
 	grp->npins = ret;
-	grp->pins = devm_kzalloc(sprd_pctl->dev, grp->npins *
-				 sizeof(unsigned int), GFP_KERNEL);
+	grp->pins = devm_kcalloc(sprd_pctl->dev,
+				 grp->npins, sizeof(unsigned int),
+				 GFP_KERNEL);
 	if (!grp->pins)
 		return -ENOMEM;
 
@@ -955,14 +951,15 @@ static int sprd_pinctrl_parse_dt(struct sprd_pinctrl *sprd_pctl)
 	if (!info->ngroups)
 		return 0;
 
-	info->groups = devm_kzalloc(sprd_pctl->dev, info->ngroups *
+	info->groups = devm_kcalloc(sprd_pctl->dev,
+				    info->ngroups,
 				    sizeof(struct sprd_pin_group),
 				    GFP_KERNEL);
 	if (!info->groups)
 		return -ENOMEM;
 
-	info->grp_names = devm_kzalloc(sprd_pctl->dev,
-				       info->ngroups * sizeof(char *),
+	info->grp_names = devm_kcalloc(sprd_pctl->dev,
+				       info->ngroups, sizeof(char *),
 				       GFP_KERNEL);
 	if (!info->grp_names)
 		return -ENOMEM;
@@ -1009,8 +1006,8 @@ static int sprd_pinctrl_add_pins(struct sprd_pinctrl *sprd_pctl,
 	unsigned int i;
 
 	info->npins = pins_cnt;
-	info->pins = devm_kzalloc(sprd_pctl->dev,
-				  info->npins * sizeof(struct sprd_pin),
+	info->pins = devm_kcalloc(sprd_pctl->dev,
+				  info->npins, sizeof(struct sprd_pin),
 				  GFP_KERNEL);
 	if (!info->pins)
 		return -ENOMEM;
@@ -1029,14 +1026,14 @@ static int sprd_pinctrl_add_pins(struct sprd_pinctrl *sprd_pctl,
 			pin->bit_width = sprd_soc_pin_info[i].bit_width;
 			ctrl_pin++;
 		} else if (pin->type == COMMON_PIN) {
-			pin->reg = (unsigned long)(sprd_pctl->base +
+			pin->reg = (unsigned long)sprd_pctl->base +
 				sprd_pctl->common_pin_offset + PINCTRL_REG_LEN *
-				(i - ctrl_pin));
+				(i - ctrl_pin);
 			com_pin++;
 		} else if (pin->type == MISC_PIN) {
-			pin->reg = (unsigned long)(sprd_pctl->base +
+			pin->reg = (unsigned long)sprd_pctl->base +
 				sprd_pctl->misc_pin_offset + PINCTRL_REG_LEN *
-				(i - ctrl_pin - com_pin));
+				(i - ctrl_pin - com_pin);
 		}
 	}
 
@@ -1059,7 +1056,6 @@ int sprd_pinctrl_core_probe(struct platform_device *pdev,
 	struct sprd_pinctrl *sprd_pctl;
 	struct sprd_pinctrl_soc_info *pinctrl_info;
 	struct pinctrl_pin_desc *pin_desc;
-	struct resource *res;
 	int ret, i;
 
 	sprd_pctl = devm_kzalloc(&pdev->dev, sizeof(struct sprd_pinctrl),
@@ -1067,8 +1063,7 @@ int sprd_pinctrl_core_probe(struct platform_device *pdev,
 	if (!sprd_pctl)
 		return -ENOMEM;
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	sprd_pctl->base = devm_ioremap_resource(&pdev->dev, res);
+	sprd_pctl->base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(sprd_pctl->base))
 		return PTR_ERR(sprd_pctl->base);
 
@@ -1090,7 +1085,8 @@ int sprd_pinctrl_core_probe(struct platform_device *pdev,
 		return ret;
 	}
 
-	pin_desc = devm_kzalloc(&pdev->dev, pinctrl_info->npins *
+	pin_desc = devm_kcalloc(&pdev->dev,
+				pinctrl_info->npins,
 				sizeof(struct pinctrl_pin_desc),
 				GFP_KERNEL);
 	if (!pin_desc)
@@ -1111,7 +1107,6 @@ int sprd_pinctrl_core_probe(struct platform_device *pdev,
 		dev_err(&pdev->dev, "fail to parse dt properties\n");
 		return ret;
 	}
-
 	sprd_pctl->pctl = pinctrl_register(&sprd_pinctrl_desc,
 					   &pdev->dev, (void *)sprd_pctl);
 	if (IS_ERR(sprd_pctl->pctl)) {
@@ -1121,6 +1116,7 @@ int sprd_pinctrl_core_probe(struct platform_device *pdev,
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(sprd_pinctrl_core_probe);
 
 int sprd_pinctrl_remove(struct platform_device *pdev)
 {
@@ -1129,6 +1125,7 @@ int sprd_pinctrl_remove(struct platform_device *pdev)
 	pinctrl_unregister(sprd_pctl->pctl);
 	return 0;
 }
+EXPORT_SYMBOL_GPL(sprd_pinctrl_remove);
 
 void sprd_pinctrl_shutdown(struct platform_device *pdev)
 {
@@ -1143,6 +1140,7 @@ void sprd_pinctrl_shutdown(struct platform_device *pdev)
 		return;
 	pinctrl_select_state(pinctl, state);
 }
+EXPORT_SYMBOL_GPL(sprd_pinctrl_shutdown);
 
 MODULE_DESCRIPTION("SPREADTRUM Pin Controller Driver");
 MODULE_AUTHOR("Baolin Wang <baolin.wang@spreadtrum.com>");

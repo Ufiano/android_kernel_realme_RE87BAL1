@@ -1,7 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * SPDX-License-Identifier: GPL-2.0
+ * Copyright (C) 2021 Unisoc, Inc.
  */
 
 #include <linux/clk.h>
@@ -473,7 +472,7 @@ static int sprd_i2c_hw_clk_init(struct sprd_i2c_hw *i2c_dev)
 		clk_parent = NULL;
 	}
 
-	if (clk_i2c && !clk_set_parent(clk_i2c, clk_parent))
+	if (!!clk_i2c && !!clk_parent && !clk_set_parent(clk_i2c, clk_parent))
 		i2c_dev->src_clk = clk_get_rate(clk_i2c);
 	else
 		i2c_dev->src_clk = I2C_SOURCE_CLK_26M;
@@ -683,3 +682,5 @@ static struct platform_driver sprd_i2c_hw_driver = {
 };
 
 module_platform_driver(sprd_i2c_hw_driver);
+MODULE_DESCRIPTION("Spreadtrum hardware I2C support");
+MODULE_LICENSE("GPL v2");

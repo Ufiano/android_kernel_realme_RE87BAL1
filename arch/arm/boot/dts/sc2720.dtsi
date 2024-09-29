@@ -51,14 +51,14 @@
 		};
 
 		rtc@200 {
-			compatible = "sprd,sc27xx-rtc", "sprd,sc2720-rtc", "sprd,sc2721-rtc";
+			compatible = "sprd,sc2731-rtc", "sprd,sc2720-rtc", "sprd,sc2721-rtc";
 			reg = <0x200>;
 			interrupt-parent = <&sc2720_pmic>;
 			interrupts = <1 IRQ_TYPE_LEVEL_HIGH>;
 		};
 
 		pmic_eic: gpio-controller@280 {
-			compatible = "sprd,sc27xx-eic", "sprd,sc2720-eic";
+			compatible = "sprd,sc27xx-eic", "sprd,sc2720-eic", "sprd,sc2731-eic";
 			reg = <0x280>;
 			interrupt-parent = <&sc2720_pmic>;
 			interrupts = <4 IRQ_TYPE_LEVEL_HIGH>;
@@ -116,8 +116,8 @@
 		};
 
 		sprd_audio_codec_ana: audio-codec@700 {
-			compatible = "sprd,sc2720-audio-codec",
-				"sprd,sc27xx-audio-codec";
+			compatible = "unisoc,sc2720-audio-codec",
+				"unisoc,sc27xx-audio-codec";
 			#sound-dai-cells = <1>;
 			reg = <0x700>;
 			interrupts = <5 IRQ_TYPE_NONE>;

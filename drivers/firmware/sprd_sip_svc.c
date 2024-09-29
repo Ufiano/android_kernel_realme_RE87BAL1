@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (C) 2012-2019 Spreadtrum Communications Inc.
  *
@@ -18,6 +19,7 @@
 #include <linux/arm-smccc.h>
 #include <linux/errno.h>
 #include <linux/init.h>
+#include <linux/module.h>
 #include <linux/printk.h>
 #include <linux/sprd_sip_svc.h>
 #include <linux/string.h>
@@ -118,27 +120,6 @@
 			   ARM_SMCCC_OWNER_SIP,				\
 			   0x0202)
 
-/* SIP storage operations */
-#define	SPRD_SIP_SVC_STORAGE_REV					\
-	ARM_SMCCC_CALL_VAL(ARM_SMCCC_FAST_CALL,				\
-			   ARM_SMCCC_SMC_32,				\
-			   ARM_SMCCC_OWNER_SIP,				\
-			   0x0300)
-
-#if IS_ENABLED(CONFIG_SCSI_UFS_CRYPTO)
-#define SPRD_SIP_SVC_STORAGE_UFS_CRYPTO_ENABLE                          \
-	ARM_SMCCC_CALL_VAL(ARM_SMCCC_FAST_CALL,				\
-			   ARM_SMCCC_SMC_32,				\
-			   ARM_SMCCC_OWNER_SIP,				\
-			   0x0301)
-
-#define SPRD_SIP_SVC_STORAGE_UFS_CRYPTO_DISABLE                         \
-	ARM_SMCCC_CALL_VAL(ARM_SMCCC_FAST_CALL,				\
-			   ARM_SMCCC_SMC_32,				\
-			   ARM_SMCCC_OWNER_SIP,				\
-			   0x0302)
-#endif
-
 /* SIP power operations */
 #define SPRD_SIP_SVC_PWR_REV						\
 	ARM_SMCCC_CALL_VAL(ARM_SMCCC_FAST_CALL,				\
@@ -151,55 +132,6 @@
 			   ARM_SMCCC_SMC_32,				\
 			   ARM_SMCCC_OWNER_SIP,				\
 			   0x0501)
-
-/* SIP dvfs operations */
-#define SPRD_SIP_SVC_DVFS_REV						\
-	ARM_SMCCC_CALL_VAL(ARM_SMCCC_FAST_CALL,				\
-			   ARM_SMCCC_SMC_32,				\
-			   ARM_SMCCC_OWNER_SIP,				\
-			   0x0600)
-
-#define SPRD_SIP_SVC_DVFS_CHIP_CONFIG					\
-	ARM_SMCCC_CALL_VAL(ARM_SMCCC_FAST_CALL,				\
-			   ARM_SMCCC_SMC_32,				\
-			   ARM_SMCCC_OWNER_SIP,				\
-			   0x0601)
-
-#define SPRD_SIP_SVC_DVFS_PHY_ENABLE					\
-	ARM_SMCCC_CALL_VAL(ARM_SMCCC_FAST_CALL,				\
-			   ARM_SMCCC_SMC_32,				\
-			   ARM_SMCCC_OWNER_SIP,				\
-			   0x0602)
-
-#define SPRD_SIP_SVC_DVFS_TABLE_UPDATE					\
-	ARM_SMCCC_CALL_VAL(ARM_SMCCC_FAST_CALL,				\
-			   ARM_SMCCC_SMC_32,				\
-			   ARM_SMCCC_OWNER_SIP,				\
-			   0x0603)
-
-#define SPRD_SIP_SVC_DVFS_CLUSTER_CONFIG				\
-	ARM_SMCCC_CALL_VAL(ARM_SMCCC_FAST_CALL,				\
-			   ARM_SMCCC_SMC_32,				\
-			   ARM_SMCCC_OWNER_SIP,				\
-			   0x0604)
-
-#define SPRD_SIP_SVC_DVFS_FREQ_SET					\
-	ARM_SMCCC_CALL_VAL(ARM_SMCCC_FAST_CALL,				\
-			   ARM_SMCCC_SMC_32,				\
-			   ARM_SMCCC_OWNER_SIP,				\
-			   0x0605)
-
-#define SPRD_SIP_SVC_DVFS_FREQ_GET					\
-	ARM_SMCCC_CALL_VAL(ARM_SMCCC_FAST_CALL,				\
-			   ARM_SMCCC_SMC_32,				\
-			   ARM_SMCCC_OWNER_SIP,				\
-			   0x0606)
-
-#define SPRD_SIP_SVC_DVFS_INDEX_INFO					\
-	ARM_SMCCC_CALL_VAL(ARM_SMCCC_FAST_CALL,				\
-			   ARM_SMCCC_SMC_32,				\
-			   ARM_SMCCC_OWNER_SIP,				\
-			   0x0607)
 
 #define SPRD_SIP_RET_UNK	0xFFFFFFFFUL
 
@@ -294,31 +226,34 @@ static int sprd_sip_svc_perf_get_parent(u32 id, u32 *p_parent_id)
 	return sprd_sip_remap_err(res.a0);
 }
 
-static int sprd_sip_svc_dbg_set_hang_hdl(uintptr_t hdl, uintptr_t pgd)
+static int sprd_sip_svc_dbg_set_hang_hdl(uintptr_t hdl,
+					 uintptr_t pgd,
+					 unsigned long level)
 {
 	struct arm_smccc_res res;
-
+	pr_notice("hdl for sprd svc sip : func_addr = 0x%lx, pdg = 0x%lx, level = 0x%lx\n",
+		  hdl, pgd, level);
 #ifdef CONFIG_ARM64
 	arm_smccc_smc(SPRD_SIP_SVC_DBG_SET_HANG_HDL_AARCH64,
-		      hdl, pgd, 0, 0, 0, 0, 0, &res);
+		      hdl, pgd, level, 0, 0, 0, 0, &res);
 #else
 	arm_smccc_smc(SPRD_SIP_SVC_DBG_SET_HANG_HDL_AARCH32,
-		      hdl, pgd, 0, 0, 0, 0, 0, &res);
+		      hdl, pgd, level, 0, 0, 0, 0, &res);
 #endif
 
 	return sprd_sip_remap_err(res.a0);
 }
 
-static int sprd_sip_svc_dbg_get_hang_ctx(uintptr_t id, uintptr_t *val)
+static int sprd_sip_svc_dbg_get_hang_ctx(unsigned long id, unsigned long core_id, uintptr_t *val)
 {
 	struct arm_smccc_res res;
 
 #ifdef CONFIG_ARM64
 	arm_smccc_smc(SPRD_SIP_SVC_DBG_GET_HANG_CTX_AARCH64,
-		      id, 0, 0, 0, 0, 0, 0, &res);
+		      id, core_id, 0, 0, 0, 0, 0, &res);
 #else
 	arm_smccc_smc(SPRD_SIP_SVC_DBG_GET_HANG_CTX_AARCH32,
-		      id, 0, 0, 0, 0, 0, 0, &res);
+		      id, core_id, 0, 0, 0, 0, 0, &res);
 #endif
 
 	if (val != NULL)
@@ -327,35 +262,11 @@ static int sprd_sip_svc_dbg_get_hang_ctx(uintptr_t id, uintptr_t *val)
 	return sprd_sip_remap_err(res.a0);
 }
 
-#if IS_ENABLED(CONFIG_SCSI_UFS_CRYPTO)
-static int sprd_sip_svc_storage_ufs_crypto_enable(void)
+static int sprd_sip_svc_pwr_get_wakeup_source(u32 *major, u32 *second, u32 *thrid)
 {
 	struct arm_smccc_res res;
 
-	arm_smccc_smc(SPRD_SIP_SVC_STORAGE_UFS_CRYPTO_ENABLE,
-			0, 0, 0, 0, 0, 0, 0, &res);
-
-	return sprd_sip_remap_err(res.a0);
-}
-
-static int sprd_sip_svc_storage_ufs_crypto_disable(void)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_smc(SPRD_SIP_SVC_STORAGE_UFS_CRYPTO_DISABLE,
-			0, 0, 0, 0, 0, 0, 0, &res);
-
-	return sprd_sip_remap_err(res.a0);
-}
-#endif
-
-static int sprd_sip_svc_pwr_get_wakeup_source(u32 *major,
-					      u32 *second, u32 *thrid)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_smc(SPRD_SIP_SVC_PWR_GET_WAKEUP_SOURCE_GET,
-		      0, 0, 0, 0, 0, 0, 0, &res);
+	arm_smccc_smc(SPRD_SIP_SVC_PWR_GET_WAKEUP_SOURCE_GET, 0, 0, 0, 0, 0, 0, 0, &res);
 
 	if (major != NULL)
 		*major = res.a1;
@@ -369,91 +280,6 @@ static int sprd_sip_svc_pwr_get_wakeup_source(u32 *major,
 	return res.a0;
 }
 
-static int sprd_sip_svc_dvfs_chip_config(u32 ver)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_smc(SPRD_SIP_SVC_DVFS_CHIP_CONFIG,
-				ver, 0, 0, 0, 0, 0, 0, &res);
-
-	return sprd_sip_remap_err(res.a0);
-}
-
-static int sprd_sip_svc_dvfs_phy_enable(u32 cluster)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_smc(SPRD_SIP_SVC_DVFS_PHY_ENABLE,
-				cluster, 0, 0, 0, 0, 0, 0, &res);
-
-	return sprd_sip_remap_err(res.a0);
-}
-
-static int sprd_sip_svc_dvfs_table_update(u32 cluster, u32 *num, u32 temp)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_smc(SPRD_SIP_SVC_DVFS_TABLE_UPDATE,
-				cluster, temp, 0, 0, 0, 0, 0, &res);
-
-	if (num)
-		*num = res.a1;
-
-	return sprd_sip_remap_err(res.a0);
-}
-
-static int sprd_sip_svc_dvfs_cluster_config(u32 cluster,
-					    u32 bin, u32 margin, u32 step)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_smc(SPRD_SIP_SVC_DVFS_CLUSTER_CONFIG,
-				cluster, bin, margin, step, 0, 0, 0, &res);
-
-	return sprd_sip_remap_err(res.a0);
-}
-
-static int sprd_sip_svc_dvfs_freq_set(u32 cluster, u32 index)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_smc(SPRD_SIP_SVC_DVFS_FREQ_SET,
-					cluster, index, 0, 0, 0, 0, 0, &res);
-
-	return sprd_sip_remap_err(res.a0);
-}
-
-static int sprd_sip_svc_dvfs_freq_get(u32 cluster, u64 *freq)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_smc(SPRD_SIP_SVC_DVFS_FREQ_GET,
-					cluster, 0, 0, 0, 0, 0, 0, &res);
-
-	if (freq)
-		*freq = res.a1;
-
-	return sprd_sip_remap_err(res.a0);
-}
-
-
-static int sprd_sip_svc_dvfs_index_info(u32 cluster,
-					u32 index, u64 *freq, u64 *vol)
-{
-	struct arm_smccc_res res;
-
-	arm_smccc_smc(SPRD_SIP_SVC_DVFS_INDEX_INFO,
-				cluster, index, 0, 0, 0, 0, 0, &res);
-
-	if (freq)
-		*freq = res.a1;
-
-	if (vol)
-		*vol = res.a2;
-
-	return sprd_sip_remap_err(res.a0);
-}
-
 static int __init sprd_sip_svc_init(void)
 {
 	int ret = 0;
@@ -461,8 +287,8 @@ static int __init sprd_sip_svc_init(void)
 
 	/* init perf_ops */
 	arm_smccc_smc(SPRD_SIP_SVC_PERF_REV, 0, 0, 0, 0, 0, 0, 0, &res);
-	sprd_sip_svc_handle.perf_ops.rev.major_ver = (u32)(res.a0);
-	sprd_sip_svc_handle.perf_ops.rev.minor_ver = (u32)(res.a1);
+	sprd_sip_svc_handle.perf_ops.rev.major_ver = res.a0;
+	sprd_sip_svc_handle.perf_ops.rev.minor_ver = res.a1;
 
 	sprd_sip_svc_handle.perf_ops.set_freq = sprd_sip_svc_perf_set_freq;
 	sprd_sip_svc_handle.perf_ops.get_freq = sprd_sip_svc_perf_get_freq;
@@ -479,8 +305,8 @@ static int __init sprd_sip_svc_init(void)
 
 	/* init debug_ops */
 	arm_smccc_smc(SPRD_SIP_SVC_DBG_REV, 0, 0, 0, 0, 0, 0, 0, &res);
-	sprd_sip_svc_handle.dbg_ops.rev.major_ver = (u32)(res.a0);
-	sprd_sip_svc_handle.dbg_ops.rev.minor_ver = (u32)(res.a1);
+	sprd_sip_svc_handle.dbg_ops.rev.major_ver = res.a0;
+	sprd_sip_svc_handle.dbg_ops.rev.minor_ver = res.a1;
 
 	sprd_sip_svc_handle.dbg_ops.set_hang_hdl =
 				sprd_sip_svc_dbg_set_hang_hdl;
@@ -491,59 +317,21 @@ static int __init sprd_sip_svc_init(void)
 		sprd_sip_svc_handle.dbg_ops.rev.major_ver,
 		sprd_sip_svc_handle.dbg_ops.rev.minor_ver);
 
-	/* init storage_ops */
-	arm_smccc_smc(SPRD_SIP_SVC_STORAGE_REV, 0, 0, 0, 0, 0, 0, 0, &res);
-	sprd_sip_svc_handle.storage_ops.rev.major_ver = (u32)(res.a0);
-	sprd_sip_svc_handle.storage_ops.rev.minor_ver = (u32)(res.a1);
-
-#if IS_ENABLED(CONFIG_SCSI_UFS_CRYPTO)
-	sprd_sip_svc_handle.storage_ops.ufs_crypto_enable  = sprd_sip_svc_storage_ufs_crypto_enable;
-	sprd_sip_svc_handle.storage_ops.ufs_crypto_disable = sprd_sip_svc_storage_ufs_crypto_disable;
-#endif
-
-	pr_notice("SPRD SIP SVC STORAGE:v%d.%d detected in firmware.\n",
-		sprd_sip_svc_handle.storage_ops.rev.major_ver,
-		sprd_sip_svc_handle.storage_ops.rev.minor_ver);
-
 	/* init pwr_ops */
 	arm_smccc_smc(SPRD_SIP_SVC_PWR_REV, 0, 0, 0, 0, 0, 0, 0, &res);
 	sprd_sip_svc_handle.pwr_ops.rev.major_ver = res.a0;
 	sprd_sip_svc_handle.pwr_ops.rev.minor_ver = res.a1;
 
-	sprd_sip_svc_handle.pwr_ops.get_wakeup_source =
-					     sprd_sip_svc_pwr_get_wakeup_source;
+	sprd_sip_svc_handle.pwr_ops.get_wakeup_source = sprd_sip_svc_pwr_get_wakeup_source;
 
 	pr_notice("SPRD SIP SVC PWR:v%d.%d detected in firmware.\n",
 		sprd_sip_svc_handle.pwr_ops.rev.major_ver,
 		sprd_sip_svc_handle.pwr_ops.rev.minor_ver);
 
-	/* init dvfs_ops */
-	arm_smccc_smc(SPRD_SIP_SVC_DVFS_REV, 0, 0, 0, 0, 0, 0, 0, &res);
-	sprd_sip_svc_handle.dvfs_ops.rev.major_ver = (u32)(res.a0);
-	sprd_sip_svc_handle.dvfs_ops.rev.minor_ver = (u32)(res.a1);
-
-	sprd_sip_svc_handle.dvfs_ops.chip_config =
-				sprd_sip_svc_dvfs_chip_config;
-
-	sprd_sip_svc_handle.dvfs_ops.phy_enable =
-				sprd_sip_svc_dvfs_phy_enable;
-	sprd_sip_svc_handle.dvfs_ops.table_update =
-				sprd_sip_svc_dvfs_table_update;
-	sprd_sip_svc_handle.dvfs_ops.cluster_config =
-				sprd_sip_svc_dvfs_cluster_config;
-
-	sprd_sip_svc_handle.dvfs_ops.freq_set =
-				sprd_sip_svc_dvfs_freq_set;
-	sprd_sip_svc_handle.dvfs_ops.freq_get =
-				sprd_sip_svc_dvfs_freq_get;
-	sprd_sip_svc_handle.dvfs_ops.index_info =
-				sprd_sip_svc_dvfs_index_info;
-
-	pr_notice("SPRD SIP SVC DVFS:v%d.%d detected in firmware.\n",
-		  sprd_sip_svc_handle.dvfs_ops.rev.major_ver,
-		  sprd_sip_svc_handle.dvfs_ops.rev.minor_ver);
-
 	return ret;
 }
 
-arch_initcall(sprd_sip_svc_init);
+subsys_initcall(sprd_sip_svc_init);
+
+MODULE_DESCRIPTION("sprd implementation-specific services");
+MODULE_LICENSE("GPL v2");

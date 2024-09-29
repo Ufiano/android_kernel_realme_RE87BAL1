@@ -145,7 +145,7 @@ static int sprd_rtc_lock_alarm(struct sprd_rtc *rtc, bool lock)
 		val |= SPRD_RTC_ALM_UNLOCK | SPRD_RTC_POWEROFF_ALM_FLAG;
 
 	ret = regmap_write(rtc->regmap, rtc->base + SPRD_RTC_INT_CLR,
-			SPRD_RTC_SPG_UPD_EN);
+			   SPRD_RTC_SPG_UPD_EN);
 	if (ret)
 		return ret;
 
@@ -154,7 +154,7 @@ static int sprd_rtc_lock_alarm(struct sprd_rtc *rtc, bool lock)
 		return ret;
 
 	/*
-	 * It takes too long to resume alarmtimer deviceï¼about 200ms, which
+	 * It takes too long to resume alarmtimer device，about 200ms, which
 	 * affects the system resume time. The reason is that the system would
 	 * lock alarm if there are not alarms in the timerqueue, and the sprd
 	 * chip spec claims that requires about 125ms to take effect when set
@@ -175,7 +175,6 @@ static int sprd_rtc_lock_alarm(struct sprd_rtc *rtc, bool lock)
 				       (val & SPRD_RTC_SPG_UPD_EN),
 				       SPRD_RTC_POLL_DELAY_US,
 				       SPRD_RTC_POLL_TIMEOUT);
-
 	if (ret)
 		dev_err(rtc->dev, "failed to update SPG value:%d\n", ret);
 
@@ -641,10 +640,8 @@ static int sprd_rtc_probe(struct platform_device *pdev)
 	}
 
 	rtc->irq = platform_get_irq(pdev, 0);
-	if (rtc->irq < 0) {
-		dev_err(&pdev->dev, "failed to get RTC irq number\n");
+	if (rtc->irq < 0)
 		return rtc->irq;
-	}
 
 	rtc->rtc = devm_rtc_allocate_device(&pdev->dev);
 	if (IS_ERR(rtc->rtc))
@@ -683,7 +680,6 @@ static int sprd_rtc_probe(struct platform_device *pdev)
 	rtc->rtc->range_max = 5662310399LL;
 	ret = rtc_register_device(rtc->rtc);
 	if (ret) {
-		dev_err(&pdev->dev, "failed to register rtc device\n");
 		device_init_wakeup(&pdev->dev, 0);
 		return ret;
 	}
@@ -699,9 +695,6 @@ static int sprd_rtc_remove(struct platform_device *pdev)
 
 static const struct of_device_id sprd_rtc_of_match[] = {
 	{ .compatible = "sprd,sc2731-rtc", },
-	{ .compatible = "sprd,sc2730-rtc", },
-	{ .compatible = "sprd,sc2721-rtc", },
-	{ .compatible = "sprd,ump96xx-rtc", },
 	{ },
 };
 MODULE_DEVICE_TABLE(of, sprd_rtc_of_match);

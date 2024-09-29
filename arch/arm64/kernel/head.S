@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Low-level CPU initialisation
  * Based on arch/arm/kernel/head.S
@@ -6,18 +7,6 @@
  * Copyright (C) 2003-2012 ARM Ltd.
  * Authors:	Catalin Marinas <catalin.marinas@arm.com>
  *		Will Deacon <will.deacon@arm.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #include <linux/linkage.h>
@@ -31,6 +20,7 @@
 #include <asm/cache.h>
 #include <asm/cputype.h>
 #include <asm/elf.h>
+#include <asm/image.h>
 #include <asm/kernel-pgtable.h>
 #include <asm/kvm_arm.h>
 #include <asm/memory.h>
@@ -92,7 +82,7 @@ _head:
 	.quad	0				// reserved
 	.quad	0				// reserved
 	.quad	0				// reserved
-	.ascii	"ARM\x64"			// Magic number
+	.ascii	ARM64_IMAGE_MAGIC		// Magic number
 #ifdef CONFIG_EFI
 	.long	pe_header - _head		// Offset to the PE header.
 
@@ -159,54 +149,124 @@ ENDPROC(preserve_boot_args)
  *	ptrs:	#imm pointers per table page
  *
  * Preserves:	virt
- * Corrupts:	tmp1, tmp2
+ * Corrupts:	ptrs, tmp1, tmp2
  * Returns:	tbl -> next level table page address
  */
 	.macro	create_table_entry, tbl, virt, shift, ptrs, tmp1, tmp2
-	lsr	\tmp1, \virt, #\shift
-	and	\tmp1, \tmp1, #\ptrs - 1	// table index
-	add	\tmp2, \tbl, #PAGE_SIZE
+	add	\tmp1, \tbl, #PAGE_SIZE
+	phys_to_pte \tmp2, \tmp1
 	orr	\tmp2, \tmp2, #PMD_TYPE_TABLE	// address of next table and entry type
+	lsr	\tmp1, \virt, #\shift
+	sub	\ptrs, \ptrs, #1
+	and	\tmp1, \tmp1, \ptrs		// table index
 	str	\tmp2, [\tbl, \tmp1, lsl #3]
 	add	\tbl, \tbl, #PAGE_SIZE		// next level table page
 	.endm
 
 /*
- * Macro to populate the PGD (and possibily PUD) for the corresponding
- * block entry in the next level (tbl) for the given virtual address.
+ * Macro to populate page table entries, these entries can be pointers to the next level
+ * or last level entries pointing to physical memory.
  *
- * Preserves:	tbl, next, virt
- * Corrupts:	tmp1, tmp2
+ *	tbl:	page table address
+ *	rtbl:	pointer to page table or physical memory
+ *	index:	start index to write
+ *	eindex:	end index to write - [index, eindex] written to
+ *	flags:	flags for pagetable entry to or in
+ *	inc:	increment to rtbl between each entry
+ *	tmp1:	temporary variable
+ *
+ * Preserves:	tbl, eindex, flags, inc
+ * Corrupts:	index, tmp1
+ * Returns:	rtbl
  */
-	.macro	create_pgd_entry, tbl, virt, tmp1, tmp2
-	create_table_entry \tbl, \virt, PGDIR_SHIFT, PTRS_PER_PGD, \tmp1, \tmp2
-#if SWAPPER_PGTABLE_LEVELS > 3
-	create_table_entry \tbl, \virt, PUD_SHIFT, PTRS_PER_PUD, \tmp1, \tmp2
-#endif
-#if SWAPPER_PGTABLE_LEVELS > 2
-	create_table_entry \tbl, \virt, SWAPPER_TABLE_SHIFT, PTRS_PER_PTE, \tmp1, \tmp2
-#endif
+	.macro populate_entries, tbl, rtbl, index, eindex, flags, inc, tmp1
+.Lpe\@:	phys_to_pte \tmp1, \rtbl
+	orr	\tmp1, \tmp1, \flags	// tmp1 = table entry
+	str	\tmp1, [\tbl, \index, lsl #3]
+	add	\rtbl, \rtbl, \inc	// rtbl = pa next level
+	add	\index, \index, #1
+	cmp	\index, \eindex
+	b.ls	.Lpe\@
 	.endm
 
 /*
- * Macro to populate block entries in the page table for the start..end
- * virtual range (inclusive).
+ * Compute indices of table entries from virtual address range. If multiple entries
+ * were needed in the previous page table level then the next page table level is assumed
+ * to be composed of multiple pages. (This effectively scales the end index).
  *
- * Preserves:	tbl, flags
- * Corrupts:	phys, start, end, pstate
+ *	vstart:	virtual address of start of range
+ *	vend:	virtual address of end of range
+ *	shift:	shift used to transform virtual address into index
+ *	ptrs:	number of entries in page table
+ *	istart:	index in table corresponding to vstart
+ *	iend:	index in table corresponding to vend
+ *	count:	On entry: how many extra entries were required in previous level, scales
+ *			  our end index.
+ *		On exit: returns how many extra entries required for next page table level
+ *
+ * Preserves:	vstart, vend, shift, ptrs
+ * Returns:	istart, iend, count
  */
-	.macro	create_block_map, tbl, flags, phys, start, end
-	lsr	\phys, \phys, #SWAPPER_BLOCK_SHIFT
-	lsr	\start, \start, #SWAPPER_BLOCK_SHIFT
-	and	\start, \start, #PTRS_PER_PTE - 1	// table index
-	orr	\phys, \flags, \phys, lsl #SWAPPER_BLOCK_SHIFT	// table entry
-	lsr	\end, \end, #SWAPPER_BLOCK_SHIFT
-	and	\end, \end, #PTRS_PER_PTE - 1		// table end index
-9999:	str	\phys, [\tbl, \start, lsl #3]		// store the entry
-	add	\start, \start, #1			// next entry
-	add	\phys, \phys, #SWAPPER_BLOCK_SIZE		// next block
-	cmp	\start, \end
-	b.ls	9999b
+	.macro compute_indices, vstart, vend, shift, ptrs, istart, iend, count
+	lsr	\iend, \vend, \shift
+	mov	\istart, \ptrs
+	sub	\istart, \istart, #1
+	and	\iend, \iend, \istart	// iend = (vend >> shift) & (ptrs - 1)
+	mov	\istart, \ptrs
+	mul	\istart, \istart, \count
+	add	\iend, \iend, \istart	// iend += (count - 1) * ptrs
+					// our entries span multiple tables
+
+	lsr	\istart, \vstart, \shift
+	mov	\count, \ptrs
+	sub	\count, \count, #1
+	and	\istart, \istart, \count
+
+	sub	\count, \iend, \istart
+	.endm
+
+/*
+ * Map memory for specified virtual address range. Each level of page table needed supports
+ * multiple entries. If a level requires n entries the next page table level is assumed to be
+ * formed from n pages.
+ *
+ *	tbl:	location of page table
+ *	rtbl:	address to be used for first level page table entry (typically tbl + PAGE_SIZE)
+ *	vstart:	start address to map
+ *	vend:	end address to map - we map [vstart, vend]
+ *	flags:	flags to use to map last level entries
+ *	phys:	physical address corresponding to vstart - physical memory is contiguous
+ *	pgds:	the number of pgd entries
+ *
+ * Temporaries:	istart, iend, tmp, count, sv - these need to be different registers
+ * Preserves:	vstart, vend, flags
+ * Corrupts:	tbl, rtbl, istart, iend, tmp, count, sv
+ */
+	.macro map_memory, tbl, rtbl, vstart, vend, flags, phys, pgds, istart, iend, tmp, count, sv
+	add \rtbl, \tbl, #PAGE_SIZE
+	mov \sv, \rtbl
+	mov \count, #0
+	compute_indices \vstart, \vend, #PGDIR_SHIFT, \pgds, \istart, \iend, \count
+	populate_entries \tbl, \rtbl, \istart, \iend, #PMD_TYPE_TABLE, #PAGE_SIZE, \tmp
+	mov \tbl, \sv
+	mov \sv, \rtbl
+
+#if SWAPPER_PGTABLE_LEVELS > 3
+	compute_indices \vstart, \vend, #PUD_SHIFT, #PTRS_PER_PUD, \istart, \iend, \count
+	populate_entries \tbl, \rtbl, \istart, \iend, #PMD_TYPE_TABLE, #PAGE_SIZE, \tmp
+	mov \tbl, \sv
+	mov \sv, \rtbl
+#endif
+
+#if SWAPPER_PGTABLE_LEVELS > 2
+	compute_indices \vstart, \vend, #SWAPPER_TABLE_SHIFT, #PTRS_PER_PMD, \istart, \iend, \count
+	populate_entries \tbl, \rtbl, \istart, \iend, #PMD_TYPE_TABLE, #PAGE_SIZE, \tmp
+	mov \tbl, \sv
+#endif
+
+	compute_indices \vstart, \vend, #SWAPPER_BLOCK_SHIFT, #PTRS_PER_PTE, \istart, \iend, \count
+	bic \count, \phys, #SWAPPER_BLOCK_SIZE - 1
+	populate_entries \tbl, \count, \istart, \iend, \flags, #SWAPPER_BLOCK_SIZE, \tmp
 	.endm
 
 /*
@@ -220,18 +280,22 @@ __create_page_tables:
 	mov	x28, lr
 
 	/*
-	 * Invalidate the idmap and swapper page tables to avoid potential
-	 * dirty cache lines being evicted.
+	 * Invalidate the init page tables to avoid potential dirty cache lines
+	 * being evicted. Other page tables are allocated in rodata as part of
+	 * the kernel image, and thus are clean to the PoC per the boot
+	 * protocol.
 	 */
-	adrp	x0, idmap_pg_dir
-	ldr	x1, =(IDMAP_DIR_SIZE + SWAPPER_DIR_SIZE + RESERVED_TTBR0_SIZE)
+	adrp	x0, init_pg_dir
+	adrp	x1, init_pg_end
+	sub	x1, x1, x0
 	bl	__inval_dcache_area
 
 	/*
-	 * Clear the idmap and swapper page tables.
+	 * Clear the init page tables.
 	 */
-	adrp	x0, idmap_pg_dir
-	ldr	x1, =(IDMAP_DIR_SIZE + SWAPPER_DIR_SIZE + RESERVED_TTBR0_SIZE)
+	adrp	x0, init_pg_dir
+	adrp	x1, init_pg_end
+	sub	x1, x1, x0
 1:	stp	xzr, xzr, [x0], #16
 	stp	xzr, xzr, [x0], #16
 	stp	xzr, xzr, [x0], #16
@@ -247,16 +311,47 @@ __create_page_tables:
 	adrp	x0, idmap_pg_dir
 	adrp	x3, __idmap_text_start		// __pa(__idmap_text_start)
 
-#ifndef CONFIG_ARM64_VA_BITS_48
-#define EXTRA_SHIFT	(PGDIR_SHIFT + PAGE_SHIFT - 3)
-#define EXTRA_PTRS	(1 << (48 - EXTRA_SHIFT))
+#ifdef CONFIG_ARM64_VA_BITS_52
+	mrs_s	x6, SYS_ID_AA64MMFR2_EL1
+	and	x6, x6, #(0xf << ID_AA64MMFR2_LVA_SHIFT)
+	mov	x5, #52
+	cbnz	x6, 1f
+#endif
+	mov	x5, #VA_BITS_MIN
+1:
+	adr_l	x6, vabits_actual
+	str	x5, [x6]
+	dmb	sy
+	dc	ivac, x6		// Invalidate potentially stale cache line
 
 	/*
-	 * If VA_BITS < 48, it may be too small to allow for an ID mapping to be
-	 * created that covers system RAM if that is located sufficiently high
-	 * in the physical address space. So for the ID map, use an extended
-	 * virtual range in that case, by configuring an additional translation
-	 * level.
+	 * VA_BITS may be too small to allow for an ID mapping to be created
+	 * that covers system RAM if that is located sufficiently high in the
+	 * physical address space. So for the ID map, use an extended virtual
+	 * range in that case, and configure an additional translation level
+	 * if needed.
+	 *
+	 * Calculate the maximum allowed value for TCR_EL1.T0SZ so that the
+	 * entire ID map region can be mapped. As T0SZ == (64 - #bits used),
+	 * this number conveniently equals the number of leading zeroes in
+	 * the physical address of __idmap_text_end.
+	 */
+	adrp	x5, __idmap_text_end
+	clz	x5, x5
+	cmp	x5, TCR_T0SZ(VA_BITS_MIN) // default T0SZ small enough?
+	b.ge	1f			// .. then skip VA range extension
+
+	adr_l	x6, idmap_t0sz
+	str	x5, [x6]
+	dmb	sy
+	dc	ivac, x6		// Invalidate potentially stale cache line
+
+#if (VA_BITS < 48)
+#define EXTRA_SHIFT	(PGDIR_SHIFT + PAGE_SHIFT - 3)
+#define EXTRA_PTRS	(1 << (PHYS_MASK_SHIFT - EXTRA_SHIFT))
+
+	/*
+	 * If VA_BITS < 48, we have to configure an additional table level.
 	 * First, we have to verify our assumption that the current value of
 	 * VA_BITS was chosen such that all translation levels are fully
 	 * utilised, and that lowering T0SZ will always result in an additional
@@ -266,52 +361,52 @@ __create_page_tables:
 #error "Mismatch between VA_BITS and page size/number of translation levels"
 #endif
 
+	mov	x4, EXTRA_PTRS
+	create_table_entry x0, x3, EXTRA_SHIFT, x4, x5, x6
+#else
 	/*
-	 * Calculate the maximum allowed value for TCR_EL1.T0SZ so that the
-	 * entire ID map region can be mapped. As T0SZ == (64 - #bits used),
-	 * this number conveniently equals the number of leading zeroes in
-	 * the physical address of __idmap_text_end.
+	 * If VA_BITS == 48, we don't have to configure an additional
+	 * translation level, but the top-level table has more entries.
 	 */
-	adrp	x5, __idmap_text_end
-	clz	x5, x5
-	cmp	x5, TCR_T0SZ(VA_BITS)	// default T0SZ small enough?
-	b.ge	1f			// .. then skip additional level
-
-	adr_l	x6, idmap_t0sz
-	str	x5, [x6]
-	dmb	sy
-	dc	ivac, x6		// Invalidate potentially stale cache line
-
-	create_table_entry x0, x3, EXTRA_SHIFT, EXTRA_PTRS, x5, x6
-1:
+	mov	x4, #1 << (PHYS_MASK_SHIFT - PGDIR_SHIFT)
+	str_l	x4, idmap_ptrs_per_pgd, x5
 #endif
-
-	create_pgd_entry x0, x3, x5, x6
+1:
+	ldr_l	x4, idmap_ptrs_per_pgd
 	mov	x5, x3				// __pa(__idmap_text_start)
 	adr_l	x6, __idmap_text_end		// __pa(__idmap_text_end)
-	create_block_map x0, x7, x3, x5, x6
+
+	map_memory x0, x1, x3, x6, x7, x3, x4, x10, x11, x12, x13, x14
 
 	/*
 	 * Map the kernel image (starting with PHYS_OFFSET).
 	 */
-	adrp	x0, swapper_pg_dir
+	adrp	x0, init_pg_dir
 	mov_q	x5, KIMAGE_VADDR + TEXT_OFFSET	// compile time __va(_text)
 	add	x5, x5, x23			// add KASLR displacement
-	create_pgd_entry x0, x5, x3, x6
+	mov	x4, PTRS_PER_PGD
 	adrp	x6, _end			// runtime __pa(_end)
 	adrp	x3, _text			// runtime __pa(_text)
 	sub	x6, x6, x3			// _end - _text
 	add	x6, x6, x5			// runtime __va(_end)
-	create_block_map x0, x7, x3, x5, x6
+
+	map_memory x0, x1, x5, x6, x7, x3, x4, x10, x11, x12, x13, x14
 
 	/*
 	 * Since the page tables have been populated with non-cacheable
-	 * accesses (MMU disabled), invalidate the idmap and swapper page
-	 * tables again to remove any speculatively loaded cache lines.
+	 * accesses (MMU disabled), invalidate those tables again to
+	 * remove any speculatively loaded cache lines.
 	 */
-	adrp	x0, idmap_pg_dir
-	ldr	x1, =(IDMAP_DIR_SIZE + SWAPPER_DIR_SIZE + RESERVED_TTBR0_SIZE)
 	dmb	sy
+
+	adrp	x0, idmap_pg_dir
+	adrp	x1, idmap_pg_end
+	sub	x1, x1, x0
+	bl	__inval_dcache_area
+
+	adrp	x0, init_pg_dir
+	adrp	x1, init_pg_end
+	sub	x1, x1, x0
 	bl	__inval_dcache_area
 
 	ret	x28
@@ -382,6 +477,7 @@ ENDPROC(__primary_switched)
 
 ENTRY(kimage_vaddr)
 	.quad		_text - TEXT_OFFSET
+EXPORT_SYMBOL(kimage_vaddr)
 
 /*
  * If we're fortunate enough to boot at EL2, ensure that the world is
@@ -411,7 +507,7 @@ ENTRY(el2_setup)
 	 * kernel is intended to run at EL2.
 	 */
 	mrs	x2, id_aa64mmfr1_el1
-	ubfx	x2, x2, #8, #4
+	ubfx	x2, x2, #ID_AA64MMFR1_VHE_SHIFT, #4
 #else
 	mov	x2, xzr
 #endif
@@ -444,7 +540,7 @@ set_hcr:
 #ifdef CONFIG_ARM_GIC_V3
 	/* GICv3 system register access */
 	mrs	x0, id_aa64pfr0_el1
-	ubfx	x0, x0, #24, #4
+	ubfx	x0, x0, #ID_AA64PFR0_GIC_SHIFT, #4
 	cbz	x0, 3f
 
 	mrs_s	x0, SYS_ICC_SRE_EL2
@@ -470,8 +566,8 @@ set_hcr:
 #endif
 
 	/* EL2 debug */
-	mrs	x1, id_aa64dfr0_el1		// Check ID_AA64DFR0_EL1 PMUVer
-	sbfx	x0, x1, #8, #4
+	mrs	x1, id_aa64dfr0_el1
+	sbfx	x0, x1, #ID_AA64DFR0_PMUVER_SHIFT, #4
 	cmp	x0, #1
 	b.lt	4f				// Skip if no PMU present
 	mrs	x0, pmcr_el0			// Disable debug access traps
@@ -480,16 +576,30 @@ set_hcr:
 	csel	x3, xzr, x0, lt			// all PMU counters from EL1
 
 	/* Statistical profiling */
-	ubfx	x0, x1, #32, #4			// Check ID_AA64DFR0_EL1 PMSVer
-	cbz	x0, 6f				// Skip if SPE not present
-	cbnz	x2, 5f				// VHE?
+	ubfx	x0, x1, #ID_AA64DFR0_PMSVER_SHIFT, #4
+	cbz	x0, 7f				// Skip if SPE not present
+	cbnz	x2, 6f				// VHE?
+	mrs_s	x4, SYS_PMBIDR_EL1		// If SPE available at EL2,
+	and	x4, x4, #(1 << SYS_PMBIDR_EL1_P_SHIFT)
+	cbnz	x4, 5f				// then permit sampling of physical
+	mov	x4, #(1 << SYS_PMSCR_EL2_PCT_SHIFT | \
+		      1 << SYS_PMSCR_EL2_PA_SHIFT)
+	msr_s	SYS_PMSCR_EL2, x4		// addresses and physical counter
+5:
 	mov	x1, #(MDCR_EL2_E2PB_MASK << MDCR_EL2_E2PB_SHIFT)
 	orr	x3, x3, x1			// If we don't have VHE, then
-	b	6f				// use EL1&0 translation.
-5:						// For VHE, use EL2 translation
+	b	7f				// use EL1&0 translation.
+6:						// For VHE, use EL2 translation
 	orr	x3, x3, #MDCR_EL2_TPMS		// and disable access from EL1
-6:
+7:
 	msr	mdcr_el2, x3			// Configure debug traps
+
+	/* LORegions */
+	mrs	x1, id_aa64mmfr1_el1
+	ubfx	x0, x1, #ID_AA64MMFR1_LOR_SHIFT, 4
+	cbz	x0, 1f
+	msr_s	SYS_LORC_EL1, xzr
+1:
 
 	/* Stage-2 translation */
 	msr	vttbr_el2, xzr
@@ -515,8 +625,19 @@ install_el2_stub:
 	mov	x0, #0x33ff
 	msr	cptr_el2, x0			// Disable copro. traps to EL2
 
+	/* SVE register access */
+	mrs	x1, id_aa64pfr0_el1
+	ubfx	x1, x1, #ID_AA64PFR0_SVE_SHIFT, #4
+	cbz	x1, 7f
+
+	bic	x0, x0, #CPTR_EL2_TZ		// Also disable SVE traps
+	msr	cptr_el2, x0			// Disable copro. traps to EL2
+	isb
+	mov	x1, #ZCR_ELx_LEN_MASK		// SVE: Enable full vector
+	msr_s	SYS_ZCR_EL2, x1			// length for EL1.
+
 	/* Hypervisor stub */
-	adr_l	x0, __hyp_stub_vectors
+7:	adr_l	x0, __hyp_stub_vectors
 	msr	vbar_el2, x0
 
 	/* spsr */
@@ -603,6 +724,7 @@ secondary_startup:
 	 */
 	bl	__cpu_secondary_check52bitva
 	bl	__cpu_setup			// initialise processor
+	adrp	x1, swapper_pg_dir
 	bl	__enable_mmu
 	ldr	x8, =__secondary_switched
 	br	x8
@@ -615,8 +737,10 @@ __secondary_switched:
 
 	adr_l	x0, secondary_data
 	ldr	x1, [x0, #CPU_BOOT_STACK]	// get secondary_data.stack
+	cbz	x1, __secondary_too_slow
 	mov	sp, x1
 	ldr	x2, [x0, #CPU_BOOT_TASK]
+	cbz	x2, __secondary_too_slow
 	msr	sp_el0, x2
 #ifdef CONFIG_SHADOW_CALL_STACK
 	ldr	x18, [x2, #TSK_TI_SCS]		// set shadow call stack
@@ -626,6 +750,12 @@ __secondary_switched:
 	mov	x30, #0
 	b	secondary_start_kernel
 ENDPROC(__secondary_switched)
+
+__secondary_too_slow:
+	wfe
+	wfi
+	b	__secondary_too_slow
+ENDPROC(__secondary_too_slow)
 
 /*
  * The booting CPU updates the failed status @__early_cpu_boot_status,
@@ -649,6 +779,7 @@ ENDPROC(__secondary_switched)
  * Enable the MMU.
  *
  *  x0  = SCTLR_EL1 value for turning on the MMU.
+ *  x1  = TTBR1_EL1 value
  *
  * Returns to the caller via x30/lr. This requires the caller to be covered
  * by the .idmap.text section.
@@ -657,15 +788,17 @@ ENDPROC(__secondary_switched)
  * If it isn't, park the CPU
  */
 ENTRY(__enable_mmu)
-	mrs	x1, ID_AA64MMFR0_EL1
-	ubfx	x2, x1, #ID_AA64MMFR0_TGRAN_SHIFT, 4
+	mrs	x2, ID_AA64MMFR0_EL1
+	ubfx	x2, x2, #ID_AA64MMFR0_TGRAN_SHIFT, 4
 	cmp	x2, #ID_AA64MMFR0_TGRAN_SUPPORTED
 	b.ne	__no_granule_support
-	update_early_cpu_boot_status 0, x1, x2
-	adrp	x1, idmap_pg_dir
-	adrp	x2, swapper_pg_dir
-	msr	ttbr0_el1, x1			// load TTBR0
-	msr	ttbr1_el1, x2			// load TTBR1
+	update_early_cpu_boot_status 0, x2, x3
+	adrp	x2, idmap_pg_dir
+	phys_to_ttbr x1, x1
+	phys_to_ttbr x2, x2
+	msr	ttbr0_el1, x2			// load TTBR0
+	offset_ttbr1 x1, x3
+	msr	ttbr1_el1, x1			// load TTBR1
 	isb
 	msr	sctlr_el1, x0
 	isb
@@ -681,8 +814,8 @@ ENTRY(__enable_mmu)
 ENDPROC(__enable_mmu)
 
 ENTRY(__cpu_secondary_check52bitva)
-#ifdef CONFIG_ARM64_52BIT_VA
-	ldr_l	x0, vabits_user
+#ifdef CONFIG_ARM64_VA_BITS_52
+	ldr_l	x0, vabits_actual
 	cmp	x0, #52
 	b.ne	2f
 
@@ -690,13 +823,8 @@ ENTRY(__cpu_secondary_check52bitva)
 	and	x0, x0, #(0xf << ID_AA64MMFR2_LVA_SHIFT)
 	cbnz	x0, 2f
 
-	adr_l	x0, va52mismatch
-	mov	w1, #1
-	strb	w1, [x0]
-	dmb	sy
-	dc	ivac, x0	// Invalidate potentially stale cache line
-
-	update_early_cpu_boot_status CPU_STUCK_IN_KERNEL, x0, x1
+	update_early_cpu_boot_status \
+		CPU_STUCK_IN_KERNEL | CPU_STUCK_REASON_52_BIT_VA, x0, x1
 1:	wfe
 	wfi
 	b	1b
@@ -707,7 +835,8 @@ ENDPROC(__cpu_secondary_check52bitva)
 
 __no_granule_support:
 	/* Indicate that this CPU can't boot and is stuck in the kernel */
-	update_early_cpu_boot_status CPU_STUCK_IN_KERNEL, x1, x2
+	update_early_cpu_boot_status \
+		CPU_STUCK_IN_KERNEL | CPU_STUCK_REASON_NO_GRAN, x1, x2
 1:
 	wfe
 	wfi
@@ -826,6 +955,7 @@ __primary_switch:
 	mrs	x20, sctlr_el1			// preserve old SCTLR_EL1 value
 #endif
 
+	adrp	x1, init_pg_dir
 	bl	__enable_mmu
 #ifdef CONFIG_RELOCATABLE
 #ifdef CONFIG_RELR
@@ -849,6 +979,7 @@ __primary_switch:
 
 	tlbi	vmalle1				// Remove any stale TLB entries
 	dsb	nsh
+	isb
 
 	msr	sctlr_el1, x19			// re-enable the MMU
 	isb

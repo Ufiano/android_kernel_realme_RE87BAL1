@@ -10,7 +10,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
  * General Public License for more details.
  */
-#ifdef CONFIG_RPMB_INTF_DEV
+#if IS_ENABLED(CONFIG_RPMB_INTF_DEV)
 int __init rpmb_cdev_init(void);
 void __exit rpmb_cdev_exit(void);
 void rpmb_cdev_prepare(struct rpmb_dev *rdev);

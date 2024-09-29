@@ -25,10 +25,6 @@
 #define FALSE								(0)
 #define TRUE								(1)
 
-typedef int (*marlin_reset_callback) (void *para);
-extern marlin_reset_callback marlin_reset_func;
-extern void *marlin_callback_para;
-
 /* sync with wcn_get_chip_type() and wcn_chip_name */
 enum wcn_chip_id_type {
 	WCN_CHIP_ID_INVALID,
@@ -79,4 +75,6 @@ const char *strno(enum wcn_sub_sys subsys);
 void wcn_chip_power_on(void);
 void wcn_chip_power_off(void);
 void mdbg_assert_interface(char *str);
+char *gnss_firmware_path_get(void);
+
 #endif

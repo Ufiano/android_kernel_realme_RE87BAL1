@@ -17,12 +17,6 @@ void lockup_detector_soft_poweroff(void);
 void lockup_detector_cleanup(void);
 bool is_hardlockup(void);
 
-#ifdef CONFIG_SPRD_CORE_CTL
-extern void watchdog_enable(unsigned int cpu);
-extern void watchdog_disable(unsigned int cpu);
-extern bool watchdog_configured(unsigned int cpu);
-#endif
-
 extern int watchdog_user_enabled;
 extern int nmi_watchdog_user_enabled;
 extern int soft_watchdog_user_enabled;
@@ -43,17 +37,6 @@ extern int sysctl_hardlockup_all_cpu_backtrace;
 static inline void lockup_detector_init(void) { }
 static inline void lockup_detector_soft_poweroff(void) { }
 static inline void lockup_detector_cleanup(void) { }
-
-#ifdef CONFIG_SPRD_CORE_CTL
-static inline void watchdog_enable(unsigned int cpu) {}
-static inline void watchdog_disable(unsigned int cpu) {}
-static inline bool watchdog_configured(unsigned int cpu)
-{
-	return true;
-}
-
-#endif
-
 #endif /* !CONFIG_LOCKUP_DETECTOR */
 
 #ifdef CONFIG_SOFTLOCKUP_DETECTOR
@@ -62,12 +45,18 @@ extern void touch_softlockup_watchdog(void);
 extern void touch_softlockup_watchdog_sync(void);
 extern void touch_all_softlockup_watchdogs(void);
 extern unsigned int  softlockup_panic;
-#else
+
+extern int lockup_detector_online_cpu(unsigned int cpu);
+extern int lockup_detector_offline_cpu(unsigned int cpu);
+#else /* CONFIG_SOFTLOCKUP_DETECTOR */
 static inline void touch_softlockup_watchdog_sched(void) { }
 static inline void touch_softlockup_watchdog(void) { }
 static inline void touch_softlockup_watchdog_sync(void) { }
 static inline void touch_all_softlockup_watchdogs(void) { }
-#endif
+
+#define lockup_detector_online_cpu	NULL
+#define lockup_detector_offline_cpu	NULL
+#endif /* CONFIG_SOFTLOCKUP_DETECTOR */
 
 #ifdef CONFIG_DETECT_HUNG_TASK
 void reset_hung_task_detector(void);

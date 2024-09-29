@@ -12,26 +12,27 @@
 	(req_mode) << SPRD_DMA_REQ_SHIFT | (int_type))
 
 /*
- * enum sprd_dma_chn_mode: define the DMA channel mode
+ * The Spreadtrum DMA controller supports channel 2-stage tansfer, that means
+ * we can request 2 dma channels, one for source channel, and another one for
+ * destination channel. Each channel is independent, and has its own
+ * configurations. Once the source channel's transaction is done, it will
+ * trigger the destination channel's transaction automatically by hardware
+ * signal.
  *
- * The Spreadtrum DMA controller supports two stage channels mode,
- * that means there are two dma channels, one for source channel,
- * and another for destination channel. Each of the channel is
- * independent, and has its own configurations, but if source
- * channel transfer is done, which will trigger destination channel
- * automatically by hardware signal.
+ * To support 2-stage tansfer, we must configure the channel mode and trigger
+ * mode as below definition.
+ */
+
+/*
+ * enum sprd_dma_chn_mode: define the DMA channel mode for 2-stage transfer
+ * @SPRD_DMA_CHN_MODE_NONE: No channel mode setting which means channel doesn't
+ * support the 2-stage transfer.
+ * @SPRD_DMA_SRC_CHN0: Channel used as source channel 0.
+ * @SPRD_DMA_SRC_CHN1: Channel used as source channel 1.
+ * @SPRD_DMA_DST_CHN0: Channel used as destination channel 0.
+ * @SPRD_DMA_DST_CHN1: Channel used as destination channel 1.
  *
- * @SPRD_DMA_CHN_MODE_NONE: channel do not support two stage mode
- * @SPRD_DMA_SRC_CHN0: channel used as source channel 0
- * @SPRD_DMA_SRC_CHN1: channel used as source channel 1
- * @SPRD_DMA_DST_CHN0: channel used as destination channel 0
- * @SPRD_DMA_DST_CHN1: channel used as destination channel 1
- *
- * There are two source channels and two destination channels.
- * Source channel request mode means the channel is used as the
- * triggering channel in dma two stage channels mode.
- * Destination channel request mode means the channel is used as the
- * trigged channel in dma two stage channels mode.
+ * Now the DMA controller can supports 2 groups 2-stage transfer.
  */
 enum sprd_dma_chn_mode {
 	SPRD_DMA_CHN_MODE_NONE,
@@ -42,20 +43,17 @@ enum sprd_dma_chn_mode {
 };
 
 /*
- * enum sprd_dma_trg_mode: define the DMA channel trigger mode
- *
- * Refer to "enum sprd_dma_chn_mode" of the description of DMA two
- * stage channels mode.
- *
- * @SPRD_DMA_NO_TRG: channel do not support two stage mode
- * @SPRD_DMA_FRAG_DONE_TRG: if source channel's fragment request is done,
- * it will trigger destination channel
- * @SPRD_DMA_BLOCK_DONE_TRG: if source channel's block request is done,
- * it will trigger destination channel
- * @SPRD_DMA_TRANS_DONE_TRG: if source channel's transfer request is done,
- * it will trigger destination channel
- * @SPRD_DMA_LIST_DONE_TRG: if source channel's link-list request is done,
- * it will trigger destination channel
+ * enum sprd_dma_trg_mode: define the DMA channel trigger mode for 2-stage
+ * transfer
+ * @SPRD_DMA_NO_TRG: No trigger setting.
+ * @SPRD_DMA_FRAG_DONE_TRG: Trigger the transaction of destination channel
+ * automatically once the source channel's fragment request is done.
+ * @SPRD_DMA_BLOCK_DONE_TRG: Trigger the transaction of destination channel
+ * automatically once the source channel's block request is done.
+ * @SPRD_DMA_TRANS_DONE_TRG: Trigger the transaction of destination channel
+ * automatically once the source channel's transfer request is done.
+ * @SPRD_DMA_LIST_DONE_TRG: Trigger the transaction of destination channel
+ * automatically once the source channel's link-list request is done.
  */
 enum sprd_dma_trg_mode {
 	SPRD_DMA_NO_TRG,
@@ -103,14 +101,6 @@ enum sprd_dma_req_mode {
  * is done.
  * @SPRD_DMA_CFGERR_INT: configure error interrupt when configuration is
  * incorrect.
- * @SPRD_DMA_SRC_CHN0_INT: interrupt occurred when source channel0
- * transfer is done.
- * @SPRD_DMA_SRC_CHN1_INT: interrupt occurred when source channel1
- * transfer is done.
- * @SPRD_DMA_DST_CHN0_INT: interrupt occurred when destination channel0
- * transfer is done.
- * @SPRD_DMA_DST_CHN1_INT: interrupt occurred when destination channel1
- * transfer is done.
  */
 enum sprd_dma_int_type {
 	SPRD_DMA_NO_INT,
@@ -132,9 +122,9 @@ enum sprd_dma_int_type {
  * struct sprd_dma_linklist - DMA link-list address structure
  * @virt_addr: link-list virtual address to configure link-list node
  * @phy_addr: link-list physical address to link DMA transfer
- * @wrap_ptr: wrap address for wrap mode, if transfer address is equal
- * to the wrap address, the current destination address will wrap to
- * the destination initial configuration address.
+ * @wrap_addr: the wrap address for link-list mode, which means once the
+ * transfer address reaches the wrap address, the next transfer address
+ * will jump to the address specified by wrap_to register.
  *
  * The Spreadtrum DMA controller supports the link-list mode, that means slaves
  * can supply several groups configurations (each configuration represents one
@@ -198,7 +188,7 @@ enum sprd_dma_int_type {
 struct sprd_dma_linklist {
 	unsigned long virt_addr;
 	phys_addr_t phy_addr;
-	phys_addr_t wrap_ptr;
+	phys_addr_t wrap_addr;
 };
 
 #endif

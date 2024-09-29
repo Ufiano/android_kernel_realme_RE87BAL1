@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 #ifndef _IMSBR_PACKET_H
 #define _IMSBR_PACKET_H
 
@@ -20,6 +21,18 @@ struct imsbr_packet {
 	 */
 	char	packet[0];
 };
+
+#ifdef CONFIG_SPRD_IMS_BRIDGE_TEST
+
+struct call_p_function{
+	struct sk_buff *(*pkt2skb) (void *pkt, int pktlen);
+	void (*dumpcap) (struct sk_buff *skb);
+	void (*frag_send) (struct sk_buff *skb);
+};
+
+void call_packet_function(struct call_p_function *cpf);
+
+#endif
 
 #define IMSBR_PACKET_MAXSZ \
 	(IMSBR_DATA_BLKSZ - sizeof(struct imsbr_packet))

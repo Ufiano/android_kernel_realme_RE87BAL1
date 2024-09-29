@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-// Copyright (C) 2018 Spreadtrum Communications Inc.
+// Copyright (C) 2020 Spreadtrum Communications Inc.
 
 #include <linux/interrupt.h>
 #include <linux/miscdevice.h>
@@ -205,7 +205,7 @@ static void sprd_apb_busmon_get_hw_cfg(struct sprd_apb_busmonitor *apb_bm)
 		cfg->busmon_cfg |= SPRD_APB_BM_MATCH_DATA |
 			SPRD_APB_BM_MATCH_DET;
 
-	if (!of_property_read_u32(np, "sprd,hang-timeout", &timeout))
+	if (of_property_read_u32(np, "sprd,hang-timeout", &timeout))
 		cfg->busmon_cfg |= SPRD_APB_BM_TIMEOUT(timeout) |
 			SPRD_APB_BM_HANG_DET;
 
@@ -567,9 +567,6 @@ static int sprd_apb_busmon_remove(struct platform_device *pdev)
 
 static const struct of_device_id sprd_apb_bm_of_match[] = {
 	{ .compatible = "sprd,apb-busmonitor", },
-	{ .compatible = "sprd,sharkl5-apb-busmonitor", },
-	{ .compatible = "sprd,roc1-apb-busmonitor", },
-	{ .compatible = "sprd,orca-apb-busmonitor", },
 	{ /* sentinel */ },
 };
 

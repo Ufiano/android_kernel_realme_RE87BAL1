@@ -44,7 +44,6 @@ static const struct of_device_id sprd_ptm_of_match[] = {
 	{ .compatible = "sprd,orca-ptm", .data = &ptm_v2_data},
 	{ .compatible = "sprd,sharkl5pro-ptm", .data = &ptm_v2_data},
 	{ .compatible = "sprd,qogirl6-ptm", .data = &ptm_v2_data},
-	{ .compatible = "sprd,qogirn6pro-ptm", .data = &ptm_v2_data},
 	{ },
 };
 static struct attribute_group ptm_legacy_group;
@@ -366,7 +365,7 @@ sprd_ptm_legacy_time_handler(struct hrtimer *timer)
 	}
 	wr_cnt = sdev->mode_info.legacy.bm_buf_write_cnt;
 	/* count stop time stamp */
-	ts_val = ktime_get_boot_ns();
+	ts_val = ktime_get_boottime_ns();
 	bm_info[wr_cnt].t_stop = (u32)ts_val;
 	bm_info[wr_cnt].count = num++;
 	/* it should clear ptm eb before read ptm data */
@@ -413,7 +412,6 @@ static int sprd_ptm_legacy_thread(void *data)
 {
 	struct sprd_ptm_dev *sdev = (struct sprd_ptm_dev *)data;
 	struct file *bm_perf_file = NULL;
-	mm_segment_t old_fs;
 	u32 bm_read_cnt = 0;
 	int rval;
 
@@ -435,16 +433,12 @@ static int sprd_ptm_legacy_thread(void *data)
 		else
 			bm_read_cnt = 0;
 
-		old_fs = get_fs();
-		set_fs(get_ds());
-		rval = vfs_write(bm_perf_file,
+		rval = kernel_write(bm_perf_file,
 			sdev->mode_info.legacy.per_buf +
 			bm_read_cnt * sizeof(struct bm_per_info),
 			sizeof(struct bm_per_info)
 			* (BM_PER_CNT_RECORD_SIZE >> 1),
 			&bm_perf_file->f_pos);
-
-		set_fs(old_fs);
 
 		/*raw back file write*/
 		if (bm_perf_file->f_pos >= (sizeof(struct bm_per_info)
@@ -1116,19 +1110,11 @@ static int sprd_ptm_probe(struct platform_device *pdev)
 		return PTR_ERR(sdev->clk_cs_src);
 	}
 	/* get pub clk */
-	regmap = syscon_regmap_lookup_by_name(pdev->dev.of_node, "enable");
+	regmap = syscon_regmap_lookup_by_phandle_args(pdev->dev.of_node, "enable-syscon", 2, args);
 	if (IS_ERR(regmap))
-		dev_warn(&pdev->dev, "failed to get syscon-name: enable\n");
+		dev_warn(&pdev->dev, "failed to get enable-syscon\n");
 	else {
-		ret = syscon_get_args_by_name(pdev->dev.of_node, "enable", 2, args);
-
-		if (ret == 2)
-			regmap_update_bits(regmap, args[0], args[1], args[1]);
-		else {
-			dev_err(&pdev->dev, "get the offset and clear bit fail\n");
-			return -EINVAL;
-		}
-
+		regmap_update_bits(regmap, args[0], args[1], args[1]);
 	}
 
 	sdev->pvt_data = ptm_ver_info;
@@ -1215,6 +1201,5 @@ static struct platform_driver sprd_ptm_driver = {
 module_platform_driver(sprd_ptm_driver);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Eric Long<eric.long@spreadtrum.com>");
-MODULE_AUTHOR("Aiden Cheng<aiden.cheng@spreadtrum.com>");
-MODULE_DESCRIPTION("spreadtrum platform ptm driver");
+MODULE_AUTHOR("Bobs Wang<bobs.wang@unisoc.com>");
+MODULE_DESCRIPTION("Unisoc platform ptm driver");

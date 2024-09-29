@@ -308,34 +308,25 @@ static int dpu_glb_parse_dt(struct dpu_context *ctx,
 				struct device_node *np)
 {
 	unsigned int syscon_args[2];
-	int ret;
 
-	disp_reset.regmap = syscon_regmap_lookup_by_name(np, "disp_reset");
+	disp_reset.regmap = syscon_regmap_lookup_by_phandle_args(np,
+			"disp-reset-syscon", 2, syscon_args);
 	if (IS_ERR(disp_reset.regmap)) {
-		pr_warn("failed to map dpu glb reg: reset\n");
+		pr_warn("failed to get disp_reset syscon\n");
 		return PTR_ERR(disp_reset.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "disp_reset", 2, syscon_args);
-	if (ret == 2) {
+	} else {
 		disp_reset.enable_reg = syscon_args[0];
 		disp_reset.mask_bit = syscon_args[1];
-	} else {
-		pr_warn("failed to parse dpu glb reg: reset\n");
 	}
 
-	mmu_reset.regmap = syscon_regmap_lookup_by_name(np, "iommu_reset");
+	mmu_reset.regmap = syscon_regmap_lookup_by_phandle_args(np,
+			"iommu-reset-syscon", 2, syscon_args);
 	if (IS_ERR(mmu_reset.regmap)) {
 		pr_warn("failed to map mmu glb reg: reset\n");
 		return PTR_ERR(mmu_reset.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "iommu_reset", 2, syscon_args);
-	if (ret == 2) {
+	} else {
 		mmu_reset.enable_reg = syscon_args[0];
 		mmu_reset.mask_bit = syscon_args[1];
-	} else {
-		pr_warn("failed to parse mmu glb reg: reset\n");
 	}
 
 	clk_ap_ahb_disp_eb =
@@ -402,39 +393,20 @@ static void dpu_power_domain(struct dpu_context *ctx, int enable)
 
 }
 
-static struct dpu_clk_ops dpu_clk_ops = {
+const struct dpu_clk_ops qogirl6_dpu_clk_ops = {
 	.parse_dt = dpu_clk_parse_dt,
 	.init = dpu_clk_init,
 	.enable = dpu_clk_enable,
 	.disable = dpu_clk_disable,
 };
 
-static struct dpu_glb_ops dpu_glb_ops = {
+const struct dpu_glb_ops qogirl6_dpu_glb_ops = {
 	.parse_dt = dpu_glb_parse_dt,
 	.reset = dpu_reset,
 	.enable = dpu_glb_enable,
 	.disable = dpu_glb_disable,
 	.power = dpu_power_domain,
 };
-
-static struct ops_entry clk_entry = {
-	.ver = "qogirl6",
-	.ops = &dpu_clk_ops,
-};
-
-static struct ops_entry glb_entry = {
-	.ver = "qogirl6",
-	.ops = &dpu_glb_ops,
-};
-
-static int __init dpu_glb_register(void)
-{
-	dpu_clk_ops_register(&clk_entry);
-	dpu_glb_ops_register(&glb_entry);
-	return 0;
-}
-
-subsys_initcall(dpu_glb_register);
 
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Pony.Wu@unisoc.com");

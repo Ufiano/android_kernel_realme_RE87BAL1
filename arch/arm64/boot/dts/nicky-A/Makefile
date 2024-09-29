@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: GPL-2.0
+
 ifeq ($(BSP_BUILD_ANDROID_OS),y)
 
 ifeq ($(BSP_BUILD_FAMILY),qogirl6)
@@ -21,5 +22,4 @@ endif
 endif #//BSP_BUILD_ANDROID_OS
 
 always		:= $(dtb-y) $(dtbo-y)
-subdir-y	:= $(dts-dirs)
 clean-files	:= *.dtb *.dtbo

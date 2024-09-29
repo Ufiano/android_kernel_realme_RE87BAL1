@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0
 
 menuconfig TYPEC
 	tristate "USB Type-C Support"
@@ -52,13 +53,24 @@ source "drivers/usb/typec/ucsi/Kconfig"
 config TYPEC_TPS6598X
 	tristate "TI TPS6598x USB Power Delivery controller driver"
 	depends on I2C
+	select REGMAP_I2C
+	help
+	  Say Y or M here if your system has TI TPS65982 or TPS65983 USB Power
+	  Delivery controller.
+
+	  If you choose to build this driver as a dynamically linked module, the
+	  module will be called tps6598x.ko.
 
 config USB_SC27XX_TYPEC
 	tristate "Spreadtrum SC27XX Serials PMICs Typec Controller"
 	depends on MFD_SC27XX_PMIC || MFD_UMP96XX_PMIC || COMPILE_TEST
 	default n
 	help
+	  If PMIC chip is Speadtrum SC27xx serials platform, select this configuration.
+	  Otherwise keep the default value.
 	  Select this when you want to enable Spreadtrum Type-C v1.1 module.
+
+source "drivers/usb/typec/mux/Kconfig"
 
 source "drivers/usb/typec/altmodes/Kconfig"
 

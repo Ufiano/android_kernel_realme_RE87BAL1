@@ -37,8 +37,14 @@
 #include <linux/fs.h>
 #include <linux/delay.h>
 #include <linux/workqueue.h>
+#include <linux/mm_inline.h>
+#include <linux/proc_fs.h>
+#include <linux/of_reserved_mem.h>
+
+#include "internal.h"
 
 #define  DEFAULT_PROC_ADJ    900
+#define  SHOW_RESERVED_MEM	1
 #ifdef CONFIG_SPRD_DEBUG
 #define EMEM_SHOW_INTERVAL	2
 #else
@@ -100,10 +106,10 @@ static void dump_tasks_info(void)
 
 static void enhance_meminfo(u64 interval)
 {
-	struct timeval val;
-	static u64 last_time = 0;
+	struct timespec64 val;
+	static u64 last_time;
 
-	do_gettimeofday(&val);
+	ktime_get_real_ts64(&val);
 	if (val.tv_sec - last_time > interval) {
 		pr_info("++++++++++++++++++++++E_SHOW_MEM_BEGIN++++++++++++++++++++\n");
 		pr_info("The killed process adj = %d\n", sysctl_emem_trigger);
@@ -121,6 +127,12 @@ static void emem_workfn(struct work_struct *work)
 			enhance_meminfo(EMEM_SHOW_INTERVAL);
 		else
 			enhance_meminfo(EMEM_SHOW_KILL_ADJ900_INTERVAL);
+
+		if (sysctl_emem_trigger == SHOW_RESERVED_MEM) {
+			sysctl_emem_trigger++;
+			pr_info("Resrved memory info:\n");
+			show_reserved_memory_info();
+		}
 	}
 }
 
@@ -166,10 +178,42 @@ static struct notifier_block tasks_e_show_mem_notifier = {
 	.notifier_call = tasks_e_show_mem_handler,
 };
 
+static ssize_t emem_trigger_write(struct file *file, const char __user *buf,
+				size_t count, loff_t *ppos)
+{
+	char buffer[12];
+	int trigger_adj;
+	int ret;
+
+	memset(buffer, 0, sizeof(buffer));
+	if (count > sizeof(buffer) - 1)
+		count = sizeof(buffer) - 1;
+
+	if (copy_from_user(buffer, buf, count))
+		return -EFAULT;
+
+	ret = kstrtoint(buffer, 0, &trigger_adj);
+	if (ret)
+		return ret;
+
+	sysctl_emem_trigger = trigger_adj;
+	if (sysctl_emem_trigger <= DEFAULT_PROC_ADJ) {
+		spin_lock(&emem_lock);
+		queue_work(system_power_efficient_wq, &emem_work);
+		spin_unlock(&emem_lock);
+	}
+	return count;
+}
+
+const struct file_operations proc_emem_trigger_operations = {
+	.write		= emem_trigger_write,
+};
+
 static int __init emem_init(void)
 {
 	INIT_WORK(&emem_work, emem_workfn);
 	register_e_show_mem_notifier(&tasks_e_show_mem_notifier);
+	proc_create("emem_trigger", S_IWUSR, NULL, &proc_emem_trigger_operations);
 	return 0;
 }
 

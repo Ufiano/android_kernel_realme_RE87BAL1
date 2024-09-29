@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * File:shub_common.h
  *
@@ -14,42 +15,44 @@
 
 #include <linux/iio/iio.h>
 #include <linux/irq_work.h>
+#include <linux/module.h>
 #include <linux/workqueue.h>
 #include "shub_protocol.h"
 
-#define MAIN_VERSION	"2016_1116"
-#define MODNAME				"sprd-sensor"
+#define MAIN_VERSION		"2016_1116"
+#define MODNAME			"sprd-sensor"
 #undef pr_fmt
-#define pr_fmt(fmt)  MODNAME ": %s %d:" fmt, __func__, __LINE__
-#define TRANSFER_NODE       "/dev/spipe_pm0"
-#define CALIBRATION_NODE    "/mnt/vendor/productinfo/sensor_calibration_data/"
+#define pr_fmt(fmt)		MODNAME ": %s %d:" fmt, __func__, __LINE__
+#define TRANSFER_NODE		"/dev/spipe_pm0"
+#define CALIBRATION_NODE	"/mnt/vendor/productinfo/sensor_calibration_data/"
 /* calibration data format */
 #define CALIBRATION_DATA_LENGTH	30
-#define CALIB_PATH_MAX_LENG		100
+#define CALIB_PATH_MAX_LENG	100
 
-#define READ_BUFF_SIZE				128
+#define READ_BUFF_SIZE		128
 #define SERIAL_READ_BUFFER_MAX	128
 #define SERIAL_WRITE_BUFFER_MAX	1024
 
 /* MUST equal to the iio total channel bytes size */
-#define MAX_CM4_MSG_SIZE			40
-#define SYNC_TIME_DELAY_MS		10000
+#define MAX_CM4_MSG_SIZE	40
+#define SYNC_TIME_DELAY_MS	10000
 
-/* dont open the macro,
+/*
+ * dont open the macro,
  * system crash if sensor run long time
  */
-#define SHUB_DATA_DUMP	0
-#define SHUB_DEBUG_TS	0
+#define SHUB_DATA_DUMP		0
+#define SHUB_DEBUG_TS		0
 /*
  * Description:
  * Define All kind of Sensors
  */
-#define HANDLE_SENSOR_ID_BASE				0
-#define HANDLE_SENSOR_WAKEUP_ID_BASE		0x32
-#define HANDLE_COMPOSITE_ID_BASE					0x64
-#define HANDLE_COMPOSITE_WAKEUP_ID_BASE		0x96
-#define HANDLE_MCU_EVENT_BASE			0xc8
-#define HANDLE_MAX						0xff
+#define HANDLE_SENSOR_ID_BASE		0
+#define HANDLE_SENSOR_WAKEUP_ID_BASE	0x32
+#define HANDLE_COMPOSITE_ID_BASE	0x64
+#define HANDLE_COMPOSITE_WAKEUP_ID_BASE	0x96
+#define HANDLE_MCU_EVENT_BASE		0xc8
+#define HANDLE_MAX			0xff
 
 enum sensor_id {
 	SENSOR_ID_START = HANDLE_SENSOR_ID_BASE,
@@ -153,7 +156,7 @@ enum composite_wakeup_sensor_id {
 	SENSOR_COMPOSITE_WAKE_UP_AIR_RECOGNITION,
 	SENSOR_COMPOSITE_WAKE_UP_PDR,
 	SENSOR_WAKE_UP_COLOR_TEMP = SENSOR_COLOR_TEMP +
-				HANDLE_COMPOSITE_WAKEUP_ID_BASE,
+				    HANDLE_COMPOSITE_WAKEUP_ID_BASE,
 	SENSOR_COMPOSITE_WAKE_UP_SENSOR_ID_END
 };
 

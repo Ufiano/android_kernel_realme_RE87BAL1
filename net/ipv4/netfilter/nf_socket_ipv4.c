@@ -1,11 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (C) 2007-2008 BalaBit IT Ltd.
  * Author: Krisztian Kovacs
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
  */
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include <linux/module.h>
@@ -100,7 +96,6 @@ struct sock *nf_sk_lookup_slow_v4(struct net *net, const struct sk_buff *skb,
 	__be16 uninitialized_var(dport), uninitialized_var(sport);
 	const struct iphdr *iph = ip_hdr(skb);
 	struct sk_buff *data_skb = NULL;
-	struct sock *sk = skb->sk;
 	u8 uninitialized_var(protocol);
 #if IS_ENABLED(CONFIG_NF_CONNTRACK)
 	enum ip_conntrack_info ctinfo;
@@ -156,14 +151,8 @@ struct sock *nf_sk_lookup_slow_v4(struct net *net, const struct sk_buff *skb,
 	}
 #endif
 
-	if (sk)
-		refcount_inc(&sk->sk_refcnt);
-	else
-		sk = nf_socket_get_sock_v4(dev_net(skb->dev), data_skb, doff,
-					   protocol, saddr, daddr, sport,
-					   dport, indev);
-
-	return sk;
+	return nf_socket_get_sock_v4(net, data_skb, doff, protocol, saddr,
+				     daddr, sport, dport, indev);
 }
 EXPORT_SYMBOL_GPL(nf_sk_lookup_slow_v4);
 

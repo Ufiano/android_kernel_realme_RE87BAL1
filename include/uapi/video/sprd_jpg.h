@@ -13,10 +13,18 @@
 #ifndef _SPRD_JPG_H
 #define _SPRD_JPG_H
 
+#ifdef __KERNEL__
+#include <linux/types.h>
 #include <linux/ioctl.h>
 #ifdef CONFIG_COMPAT
 #include <linux/compat.h>
 #endif
+#else // Not __KERNEL__
+#include <stdio.h>
+#include <sys/ioctl.h>
+#endif
+#define SPRD_JPG_MAP_SIZE 0x6000
+
 
 #define SPRD_JPG_IOCTL_MAGIC 'm'
 #define JPG_CONFIG_FREQ _IOW(SPRD_JPG_IOCTL_MAGIC, 1, unsigned int)
@@ -33,6 +41,7 @@
 #define JPG_GET_IOMMU_STATUS _IO(SPRD_JPG_IOCTL_MAGIC, 13)
 #define JPG_VERSION _IO(SPRD_JPG_IOCTL_MAGIC, 14)
 
+#ifdef __KERNEL__
 #ifdef CONFIG_COMPAT
 #define COMPAT_JPG_GET_IOVA    _IOWR(SPRD_JPG_IOCTL_MAGIC, 11, struct compat_jpg_iommu_map_data)
 #define COMPAT_JPG_FREE_IOVA   _IOW(SPRD_JPG_IOCTL_MAGIC, 12, struct compat_jpg_iommu_map_data)
@@ -42,6 +51,7 @@ struct compat_jpg_iommu_map_data {
 	compat_size_t size;
 	compat_ulong_t iova_addr;
 };
+#endif
 #endif
 
 struct jpg_iommu_map_data {
@@ -88,20 +98,19 @@ enum sprd_jpg_frequency_e {
 #define INTS_BSM 0
 
 /*
-*ioctl command description
-the JPG module user must mmap the jpg module address space to user-space
-to access the hardware.
-JPG_ACQUAIRE:aquaire the jpg module lock
-JPG_RELEASE:release the jpg module lock
-all other commands must be sent only when the JPG user posses the lock
-JPG_ENABLE:enable jpg module clock
-JPG_DISABLE:disable jpg module clock
-JPG_START:all the preparing work is done and start the jpg module,
-	the jpg module finishes
-its job after this command retruns.
-JPG_RESET:reset jpg module hardware
-JPG_CONFIG_FREQ/JPG_GET_FREQ:set/get jpg module frequency,the parameter is of
-type sprd_jpg_frequency_e, the smaller the faster
-*/
+ *ioctl command description
+ *the JPG module user must mmap the jpg module address space to user-space
+ *to access the hardware.
+ *JPG_ACQUAIRE:aquaire the jpg module lock
+ *JPG_RELEASE:release the jpg module lock
+ *all other commands must be sent only when the JPG user posses the lock
+ *JPG_ENABLE:enable jpg module clock
+ *JPG_DISABLE:disable jpg module clock
+ *JPG_START:all the preparing work is done and start the jpg module,
+ *the jpg module finishes its job after this command retruns.
+ *JPG_RESET:reset jpg module hardware
+ *JPG_CONFIG_FREQ/JPG_GET_FREQ:set/get jpg module frequency,the parameter is of
+ *type sprd_jpg_frequency_e, the smaller the faster.
+ */
 
 #endif

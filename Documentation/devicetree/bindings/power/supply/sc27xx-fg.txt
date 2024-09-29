@@ -6,27 +6,21 @@ Required properties:
   "sprd,sc2721-fgu",
   "sprd,sc2723-fgu",
   "sprd,sc2730-fgu",
-  "sprd,sc2731-fgu",
-  "sprd,ump9620-fgu".
+  "sprd,sc2731-fgu".
 - reg: The address offset of fuel gauge unit.
 - battery-detect-gpios: GPIO for battery detection.
 - io-channels: Specify the IIO ADC channels to get temperature and charge voltage.
-- io-channel-names: Should be "bat-temp" and "charge-vol"
-- sprd,calib-resistance-real: The real resistance of coulomb counter chip in microohms
-  is used to calibrate cur_1000ma_adc.
-- sprd,calib-resistance-spec: The specification resistance of coulomb counter chip in microohms
-  is used to calibrate cur_1000ma_adc.
+- io-channel-names: Should be "bat-temp" or "charge-vol".
 - nvmem-cells: A phandle to the calibration cells provided by eFuse device.
 - nvmem-cell-names: Should be "fgu_calib".
+- sprd,calib-resistance-micro-ohms: Specify the real resistance of coulomb counter
+  chip in micro Ohms.
 - monitored-battery: Phandle of battery characteristics devicetree node.
   See Documentation/devicetree/bindings/power/supply/battery.txt
 
 Optional Properties:
-- sprd,comp-resistance-mohm: The coulomb counter internal resistance and the board
+- sprd,comp-resistance-micro-ohms: The coulomb counter internal resistance and the board
   ground resistance.
-  Due to the ntc resistor is connected to the coulomb counter internal resistance of 20 million
-  and the board ground impedance at 1850mv. so need to compensate for coulomb resistance and
-  voltage loss to ground impedance.
 
 Example:
 
@@ -59,13 +53,12 @@ Example:
 			compatible = "sprd,sc2731-fgu";
 			reg = <0xa00>;
 			battery-detect-gpios = <&pmic_eic 9 GPIO_ACTIVE_HIGH>;
-			io-channels = <&pmic_adc 5>;
-			io-channel-names = "bat-temp";
+			io-channels = <&pmic_adc 5>, <&pmic_adc 14>;
+			io-channel-names = "bat-temp", "charge-vol";
 			nvmem-cells = <&fgu_calib>;
 			nvmem-cell-names = "fgu_calib";
 			monitored-battery = <&bat>;
-			sprd,calib-resistance-real = <21500>;
-			sprd,calib-resistance-spec = <20000>;
-			sprd,comp-resistance-mohm = <30>;
+			sprd,calib-resistance-micro-ohms = <21500>;
+			sprd,comp-resistance-micro-ohms = <30>;
 		};
 	};

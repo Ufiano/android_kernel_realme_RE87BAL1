@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (C) 2012-2015 Spreadtrum Communications Inc.
  *
@@ -74,24 +75,8 @@ struct sprd_sip_svc_perf_ops {
 struct sprd_sip_svc_dbg_ops {
 	struct sprd_sip_svc_rev_info rev;
 
-	int (*set_hang_hdl)(uintptr_t hdl, uintptr_t pgd);
-	int (*get_hang_ctx)(uintptr_t id, uintptr_t *val);
-};
-
-/**
- * struct sprd_sip_svc_storage_ops - represents the various operations
- * 	provided by SPRD SIP STORAGE
- *
- * @ufs_crypto_enable: make crypto cfg field configurable to normal world
- * @ufs_crypto_disable: make crypto cfg field non-configurable to normal world
- */
-struct sprd_sip_svc_storage_ops {
-	struct sprd_sip_svc_rev_info rev;
-
-#if IS_ENABLED(CONFIG_SCSI_UFS_CRYPTO)
-	int (*ufs_crypto_enable)(void);
-	int (*ufs_crypto_disable)(void);
-#endif
+	int (*set_hang_hdl)(uintptr_t hdl, uintptr_t pdg, unsigned long level);
+	int (*get_hang_ctx)(unsigned long id, unsigned long core_id, uintptr_t *val);
 };
 
 /**
@@ -108,47 +93,15 @@ struct sprd_sip_svc_pwr_ops {
 };
 
 /**
- * struct sprd_sip_svc_dvfs_ops - represents the various operations
- *      provided by SPRD SIP DVFS
- *
- * @chip_config: set the chip version
- *
- * @phy_enable: enable cluster dvfs
- * @table_update: update dvfs table for cluster
- * @cluster_config: set the cluster information
- *
- * @freq_set: set cluster frequency
- * @freq_get: get cluster current frequency
- * @index_info: get freq and volt of index
- *
- */
-struct sprd_sip_svc_dvfs_ops {
-	struct sprd_sip_svc_rev_info rev;
-
-	int (*chip_config)(u32 ver);
-
-	int (*phy_enable)(u32 cluster);
-	int (*table_update)(u32 cluster, u32 *num, u32 temp);
-	int (*cluster_config)(u32 cluster, u32 bin, u32 margin, u32 step);
-
-	int (*freq_set)(u32 cluster, u32 index);
-	int (*freq_get)(u32 cluster, u64 *freq);
-	int (*index_info)(u32 cluster, u32 index, u64 *freq, u64 *vol);
-};
-
-/**
  * struct sprd_sip_svc_handle - Handle returned to SPRD SIP clients for usage
  *
  * @perf_ops: pointer to set of performance operations
  * @dbg_ops: pointer to set of dbg operations
- * @storage_ops: pointer to set of storage operations
  */
 struct sprd_sip_svc_handle {
 	struct sprd_sip_svc_perf_ops perf_ops;
 	struct sprd_sip_svc_dbg_ops dbg_ops;
-	struct sprd_sip_svc_storage_ops storage_ops;
 	struct sprd_sip_svc_pwr_ops pwr_ops;
-	struct sprd_sip_svc_dvfs_ops dvfs_ops;
 };
 
 /**

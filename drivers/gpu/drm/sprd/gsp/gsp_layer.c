@@ -1,25 +1,15 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/dma-direction.h>
 #include <linux/dma-buf.h>
 #include <linux/sprd_iommu.h>
-#include <linux/sprd_ion.h>
+#include <linux/ion.h>
 #include <drm/gsp_cfg.h>
 #include "gsp_debug.h"
 #include "gsp_layer.h"
-#include "ion.h"
-
 
 int gsp_layer_to_type(struct gsp_layer *layer)
 {
@@ -118,9 +108,8 @@ int gsp_layer_need_iommu(struct gsp_layer *layer)
 	struct gsp_buf *buf = NULL;
 
 	buf = gsp_layer_to_buf(layer);
-	return gsp_layer_is_enable(layer)
-		&& gsp_layer_has_share_fd(layer)
-		&& buf->is_iova;
+	return gsp_layer_is_enable(layer) &&
+		gsp_layer_has_share_fd(layer) && buf->is_iova;
 }
 
 void gsp_layer_addr_set(struct gsp_layer *layer, u32 iova_addr)
@@ -157,9 +146,6 @@ int gsp_layer_get_dmabuf(struct gsp_layer *layer)
 {
 	int fd = -1;
 	int ret = -1;
-	size_t size = 0;
-	bool reserved = false;
-	unsigned long phys_addr = 0;
 	struct gsp_buf *buf = NULL;
 	struct dma_buf *dmabuf = NULL;
 	struct ion_buffer *ionbuf = NULL;
@@ -177,29 +163,7 @@ int gsp_layer_get_dmabuf(struct gsp_layer *layer)
 
 	ionbuf = (struct ion_buffer *)dmabuf->priv;
 	buf->size = ionbuf->size;
-
-	ret = sprd_ion_is_reserved(fd, buf->dmabuf, &reserved);
-	if (ret) {
-		GSP_ERR("gsp layer[%d] ion reserved judgement failed\n",
-			gsp_layer_to_type(layer));
-		goto done;
-	}
-
-	if (reserved == false) {
-		buf->is_iova = 1;
-	} else {
-		buf->is_iova = 0;
-		ret = sprd_ion_get_phys_addr(fd, buf->dmabuf,
-					     &phys_addr, &size);
-		if (ret) {
-			GSP_ERR("gsp layer[%d] get ion phys addr failed\n",
-				gsp_layer_to_type(layer));
-			goto done;
-		}
-		GSP_DEBUG("gsp layer[%d] ion phys addr: %lx\n",
-			  gsp_layer_to_type(layer), phys_addr);
-		gsp_layer_addr_set(layer, (u32)phys_addr);
-	}
+	buf->is_iova = 1;
 
 	GSP_DEBUG("layer[%d] get dmabuf success\n", gsp_layer_to_type(layer));
 	ret = 0;
@@ -236,8 +200,7 @@ void gsp_layer_dmabuf_unmap(struct gsp_layer *layer)
 	map = gsp_layer_to_buf_map(layer);
 
 	if (map->table) {
-		dma_buf_unmap_attachment(map->attachment, map->table,
-					 map->dir);
+		dma_buf_unmap_attachment(map->attachment, map->table, map->dir);
 		map->table = NULL;
 	}
 
@@ -249,8 +212,7 @@ void gsp_layer_dmabuf_unmap(struct gsp_layer *layer)
 	GSP_DEBUG("gsp layer dmabuf unmap\n");
 }
 
-int gsp_layer_dmabuf_map(struct gsp_layer *layer,
-			 struct device *dev)
+int gsp_layer_dmabuf_map(struct gsp_layer *layer, struct device *dev)
 {
 	int ret = -1;
 	struct gsp_buf *buf = NULL;
@@ -325,19 +287,17 @@ int gsp_layer_iommu_map(struct gsp_layer *layer, struct device *dev)
 		gsp_layer_addr_set(layer, iommu_data.iova_addr);
 	}
 done:
-	if (ret < 0) {
+	if (ret < 0)
 		GSP_ERR("gsp layer[%d] buf map failed\n",
 			gsp_layer_to_type(layer));
-	} else {
+	else
 		GSP_DEBUG("gsp layer[%d] buf map success\n",
-			  gsp_layer_to_type(layer));
-	}
+			gsp_layer_to_type(layer));
 
 	return ret;
 }
 
-void gsp_layer_iommu_unmap(struct gsp_layer *layer,
-			 struct device *dev)
+void gsp_layer_iommu_unmap(struct gsp_layer *layer, struct device *dev)
 {
 	struct gsp_buf *buf = NULL;
 	struct gsp_addr_data *addr = NULL;
@@ -347,7 +307,7 @@ void gsp_layer_iommu_unmap(struct gsp_layer *layer,
 
 	buf = gsp_layer_to_buf(layer);
 	addr = gsp_layer_to_addr(layer);
-	if (buf->size != 0 && addr->addr_y != 0) {
+	if (buf->size && addr->addr_y) {
 		/* fill iommu data with gsp buf information */
 		iommu_data.iova_size = buf->size;
 		iommu_data.iova_addr = addr->addr_y;

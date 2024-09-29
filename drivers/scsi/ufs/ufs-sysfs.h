@@ -9,6 +9,9 @@
 
 #include "ufshcd.h"
 
-void ufs_sysfs_add_nodes(struct device *dev);
+void ufs_sysfs_add_nodes(struct ufs_hba *hba);
 void ufs_sysfs_remove_nodes(struct device *dev);
+
+extern const struct attribute_group ufs_sysfs_unit_descriptor_group;
+extern const struct attribute_group ufs_sysfs_lun_attributes_group;
 #endif

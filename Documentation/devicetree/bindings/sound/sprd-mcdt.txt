@@ -1,20 +1,19 @@
-* Spreadtrum sound audio mcdt driver
+Spreadtrum Multi-Channel Data Transfer Binding
 
-This node models spreadtrum sound audio muti channel data trasmit driver
+The Multi-channel data transfer controller is used for sound stream
+transmission between audio subsystem and other AP/CP subsystem. It
+supports 10 DAC channel and 10 ADC channel, and each channel can be
+configured with DMA mode or interrupt mode.
 
 Required properties:
-
-- compatible = "sprd,sharkl5-mcdt", "sprd,roc1-mcdt", "sprd,sharkl5pro-mcdt";
-- reg : register addreess and size of mcdt
-- interrupts : interrupt number
-- sprd,ap-addr-offset : mcdt address mapping offset between ap and audio cp
-	used for transform agcp addr from ap addrss of mcdt.
+- compatible: Should be "sprd,sc9860-mcdt".
+- reg: Should contain registers address and length.
+- interrupts: Should contain one interrupt shared by all channel.
 
 Example:
 
-mcdt@33490000{
-	compatible = "sprd,sharkl5-mcdt";
-	reg = <0 0x33490000 0 0x170>;
-	interrupts = <GIC_SPI 182 IRQ_TYPE_LEVEL_HIGH>;
-	sprd,ap-addr-offset = <0x32000000>;
+mcdt@41490000 {
+	compatible = "sprd,sc9860-mcdt";
+	reg = <0 0x41490000 0 0x170>;
+	interrupts = <GIC_SPI 48 IRQ_TYPE_LEVEL_HIGH>;
 };

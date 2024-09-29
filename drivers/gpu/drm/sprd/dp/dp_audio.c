@@ -4,7 +4,7 @@
  * Copyright (C) 2020 Unisoc Inc.
  */
 
-#include <sound/hdmi-codec.h>
+#include <sound/sprd-dp-codec.h>
 #include "dw_dptx.h"
 #include "sprd_dp.h"
 
@@ -12,9 +12,10 @@ void dptx_audio_params_reset(struct audio_params *params)
 {
 	params->data_width = 24;
 	params->num_channels = 2;
-	params->inf_type = 0;
+	params->inf_type = AIF_DP_I2S;
 	params->ats_ver = 17;
 	params->mute = 0;
+	params->rate = 48000;
 }
 
 void dptx_audio_sdp_en(struct dptx *dptx)
@@ -61,8 +62,6 @@ void dptx_audio_infoframe_sdp_send(struct dptx *dptx)
 	u32 reg;
 	u32 audio_infoframe_header = AUDIO_INFOFREAME_HEADER;
 	u32 audio_infoframe_data[3] = {0x00000710, 0x0, 0x0};
-
-	/* TODO hdmi_audio_infoframe_pack */
 
 	dptx->sdp_list[0].payload[0] = audio_infoframe_header;
 	dptx_writel(dptx, DPTX_SDP_BANK, audio_infoframe_header);
@@ -198,6 +197,13 @@ void dptx_audio_core_config(struct dptx *dptx)
 	reg |= aparams->ats_ver << DPTX_AUD_CONFIG1_ATS_VER_SHFIT;
 	dptx_writel(dptx, DPTX_AUD_CONFIG1, reg);
 
+	if (aparams->rate == 192000) {
+		reg = dptx_readl(dptx, DPTX_AUD_CONFIG1);
+		reg &= ~DPTX_AUD_CONFIG1_HBR_MODE_MASK;
+		reg |= aparams->rate << DPTX_AUD_CONFIG1_HBR_MODE_SHIFT;
+		dptx_writel(dptx, DPTX_AUD_CONFIG1, reg);
+	}
+
 	dptx_en_audio_channel(dptx, aparams->num_channels, 1);
 }
 
@@ -236,78 +242,69 @@ void dptx_audio_data_width_change(struct dptx *dptx)
 	dptx_writel(dptx, DPTX_AUD_CONFIG1, reg);
 }
 
-static int sprd_dp_audio_hw_params(struct device *dev, void *data,
-				  struct hdmi_codec_daifmt *daifmt,
-				  struct hdmi_codec_params *params)
+static void sprd_dp_audio_shutdown(struct device *dev)
 {
-	struct sprd_dp *dp = dev_get_drvdata(dev);
-	struct audio_params *aparams;
+	struct sprd_dp_codec_pdata *pdata = dev_get_drvdata(dev);
+	struct sprd_dp *dp = pdata->private;
 
-	aparams = &dp->snps_dptx->aparams;
-	aparams->data_width = params->sample_width;
-	aparams->num_channels = params->channels;
+	if (dp->snps_dptx->active)
+		dptx_audio_stop(dp->snps_dptx);
+}
 
-	if (daifmt->fmt == HDMI_I2S) {
-		aparams->inf_type = 0;
-	} else {
-		DRM_DEV_ERROR(dev, "Invalid format %d\n", daifmt->fmt);
-		return -EINVAL;
-	}
+static int sprd_dp_audio_hw_params(struct device *dev, void *data)
+{
+	struct sprd_dp_codec_pdata *pdata = dev_get_drvdata(dev);
+	struct sprd_dp *dp = pdata->private;
+	struct sprd_dp_codec_params *params = data;
+	struct audio_params *aparams = &dp->snps_dptx->aparams;
 
-	/* TODO add struct hdmi_audio_infoframe cea */
-	dptx_audio_config(dp->snps_dptx);
+	aparams->data_width = params->data_width;
+	aparams->num_channels = params->channel;
+	aparams->inf_type = params->aif_type;
+	aparams->rate = params->rate;
+
+	if (dp->snps_dptx->active)
+		dptx_audio_config(dp->snps_dptx);
 
 	return 0;
 }
 
-static void sprd_dp_audio_shutdown(struct device *dev, void *data)
+static int sprd_dp_audio_digital_mute(struct device *dev, bool enable)
 {
-	struct sprd_dp *dp = dev_get_drvdata(dev);
+	struct sprd_dp_codec_pdata *pdata = dev_get_drvdata(dev);
+	struct sprd_dp *dp = pdata->private;
 
-	dptx_audio_stop(dp->snps_dptx);
-}
-
-static int sprd_dp_audio_digital_mute(struct device *dev, void *data,
-				     bool enable)
-{
-	struct sprd_dp *dp = dev_get_drvdata(dev);
-
-	/* TODO check dp clock and mutex */
-	dptx_audio_mute(dp->snps_dptx, enable);
+	if (dp->snps_dptx->active)
+		dptx_audio_mute(dp->snps_dptx, enable);
 
 	return 0;
 }
 
-static int sprd_dp_audio_get_eld(struct device *dev, void *data,
-				u8 *buf, size_t len)
-{
-	struct sprd_dp *dp = dev_get_drvdata(dev);
-
-	memcpy(buf, dp->connector.eld, min(sizeof(dp->connector.eld), len));
-
-	return 0;
-}
-
-static const struct hdmi_codec_ops audio_codec_ops = {
-	.hw_params = sprd_dp_audio_hw_params,
+static const struct sprd_dp_codec_ops dp_codec_ops = {
 	.audio_shutdown = sprd_dp_audio_shutdown,
+	.hw_params = sprd_dp_audio_hw_params,
 	.digital_mute = sprd_dp_audio_digital_mute,
-	.get_eld = sprd_dp_audio_get_eld,
 };
 
 int sprd_dp_audio_codec_init(struct device *dev)
 {
 	struct sprd_dp *dp = dev_get_drvdata(dev);
-	struct hdmi_codec_pdata codec_data = {
+	struct sprd_dp_codec_pdata pdata = {
+		.ops = &dp_codec_ops,
 		.i2s = 1,
 		.spdif = 1,
-		.ops = &audio_codec_ops,
 		.max_i2s_channels = 8,
 	};
 
+	if (!dp) {
+		DRM_DEV_ERROR(dev, "Faied to get dp module\n");
+		return -EINVAL;
+	}
+
+	pdata.private = dp;
 	dp->audio_pdev = platform_device_register_data(
-			 dev, HDMI_CODEC_DRV_NAME, PLATFORM_DEVID_AUTO,
-			 &codec_data, sizeof(codec_data));
+			 dev, SPRD_DP_CODEC_DRV_NAME, PLATFORM_DEVID_AUTO,
+			 &pdata, sizeof(pdata));
 
 	return PTR_ERR_OR_ZERO(dp->audio_pdev);
 }

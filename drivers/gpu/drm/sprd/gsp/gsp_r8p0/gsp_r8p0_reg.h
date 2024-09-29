@@ -1,14 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #ifndef _GSP_R8P0_REG_H
@@ -27,7 +19,7 @@
 #define R8P0_GSP_MOD_CFG(base)		(base + 0x008 + 0x1000)
 #define R8P0_GSP_SECURE_CFG(base)	(base + 0x00C + 0x1000)
 
-/*Destination reg 1*/
+/* Destination reg 1 */
 #define R8P0_DES_DATA_CFG(base)		(base + 0x010 + 0x1000)
 #define R8P0_DES_Y_ADDR(base)		(base + 0x014 + 0x1000)
 #define R8P0_DES_U_ADDR(base)		(base + 0x018 + 0x1000)
@@ -37,7 +29,7 @@
 #define R8P0_WORK_AREA_SIZE(base)	(base + 0x028 + 0x1000)
 #define R8P0_WORK_AREA_XY(base)		(base + 0x02C + 0x1000)
 
-/*LAYERIMG*/
+/* LAYERIMG */
 #define R8P0_LIMG_CFG(base)		(base + 0x030 + 0x1000)
 #define R8P0_LIMG_Y_ADDR(base)		(base + 0x034 + 0x1000)
 #define R8P0_LIMG_U_ADDR(base)		(base + 0x038 + 0x1000)
@@ -56,7 +48,7 @@
 #define R8P0_LIMG_BASE_ADDR(base)	(base + 0x030 + 0x1000)
 #define R8P0_LIMG_OFFSET 0x040
 
-/*LAYEROSD*/
+/* LAYEROSD */
 #define R8P0_LOSD_CFG(base)		(base + 0x0B0 + 0x1000)
 #define R8P0_LOSD_R_ADDR(base)		(base + 0x0B4 + 0x1000)
 #define R8P0_LOSD_PITCH(base)		(base + 0x0B8 + 0x1000)

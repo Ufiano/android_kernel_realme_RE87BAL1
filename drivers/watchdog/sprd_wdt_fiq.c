@@ -12,6 +12,7 @@
  * General Public License for more details.
  */
 
+#include <linux/alarmtimer.h>
 #include <linux/bitops.h>
 #include <linux/clk.h>
 #include <linux/device.h>
@@ -64,6 +65,14 @@
 #define SPRD_WDT_FIQ_CNT_HIGH_SHIFT		16
 #define SPRD_WDT_FIQ_LOW_VALUE_MASK		GENMASK(15, 0)
 #define SPRD_WDT_FIQ_LOAD_TIMEOUT		1000
+
+#define SPRD_DSWDTEN_MAGIC "enabled"
+#define SPRD_DSWDTEN_MAGIC_LEN_MAX  10
+
+#define SPRD_WDT_SLEEP_KICKTIME		540
+#define SPRD_WDT_SLEEP_PRETIMEOUT	(600-570)
+#define SPRD_WDT_SLEEP_TIMEOUT		600
+
 #define SPRD_WDT_SYSCORE_SUSPEND_RESUME
 
 struct sprd_wdt_fiq {
@@ -72,6 +81,8 @@ struct sprd_wdt_fiq {
 	struct clk *enable;
 	struct clk *rtc_enable;
 	struct mutex *lock;
+	struct alarm sleep_tmr;
+	bool sleep_en;
 	const struct sprd_wdt_fiq_data *data;
 };
 
@@ -89,6 +100,34 @@ static struct sprd_wdt_fiq_data sprd_wdt_fiq_common = {
 static struct sprd_wdt_fiq_data sprd_wdt_fiq_sharkl3 = {
 	.eb_always_on = true,
 };
+
+static bool sprd_dswdt_fiq_en(void)
+{
+	struct device_node *cmdline_node;
+	const char *cmd_line, *dswdten_name_p;
+	char dswdten_value[SPRD_DSWDTEN_MAGIC_LEN_MAX] = "NULL";
+	int ret;
+
+	cmdline_node = of_find_node_by_path("/chosen");
+	ret = of_property_read_string(cmdline_node, "bootargs", &cmd_line);
+
+	if (ret) {
+		pr_err("can't not parse bootargs property\n");
+		return false;
+	}
+
+	dswdten_name_p = strstr(cmd_line, "androidboot.dswdten=");
+	if (!dswdten_name_p) {
+		pr_err("can't find androidboot.dswdten\n");
+		return false;
+	}
+
+	sscanf(dswdten_name_p, "androidboot.dswdten=%8s", dswdten_value);
+	if (strncmp(dswdten_value, SPRD_DSWDTEN_MAGIC, strlen(SPRD_DSWDTEN_MAGIC)))
+		return false;
+
+	return true;
+}
 
 static inline struct sprd_wdt_fiq *to_sprd_wdt_fiq(struct watchdog_device *wdd)
 {
@@ -130,6 +169,8 @@ static int sprd_wdt_fiq_load_value(struct sprd_wdt_fiq *wdt, u32 timeout,
 	u32 tmr_step = timeout * SPRD_WDT_FIQ_CNT_STEP;
 	u32 prtmr_step = pretimeout * SPRD_WDT_FIQ_CNT_STEP;
 
+	pr_info("sprd_wdt: sprd wdt load value timeout =%d, pretimeout =%d\n",
+	       timeout, pretimeout);
 	sprd_wdt_fiq_unlock(wdt);
 	writel_relaxed((tmr_step >> SPRD_WDT_FIQ_CNT_HIGH_SHIFT) &
 		      SPRD_WDT_FIQ_LOW_VALUE_MASK,
@@ -200,6 +241,7 @@ static int sprd_wdt_fiq_start(struct watchdog_device *wdd)
 	u32 val;
 	int ret;
 
+	pr_err("ap watchdog sprd_wdt_fiq start: timeout = %d, pretimeout = %d\n", wdd->timeout, wdd->pretimeout);
 	ret = sprd_wdt_fiq_load_value(wdt, wdd->timeout, wdd->pretimeout);
 	if (ret)
 		return ret;
@@ -286,6 +328,93 @@ int sprd_wdt_fiq_get_dev(struct watchdog_device **wdd)
 }
 EXPORT_SYMBOL(sprd_wdt_fiq_get_dev);
 
+int sprd_wdt_fiq_syscore_suspend(void)
+{
+#ifdef SPRD_WDT_SYSCORE_SUSPEND_RESUME
+	if (!wdt_fiq)
+		return -ENODEV;
+
+	if (wdt_fiq->sleep_en) {
+		if (watchdog_active(&wdt_fiq->wdd)) {
+			sprd_wdt_fiq_load_value(wdt_fiq, SPRD_WDT_SLEEP_TIMEOUT, SPRD_WDT_SLEEP_PRETIMEOUT);
+		} else {
+			sprd_wdt_fiq_disable(wdt_fiq);
+		}
+	} else {
+		if (watchdog_active(&wdt_fiq->wdd))
+			sprd_wdt_fiq_stop(&wdt_fiq->wdd);
+
+		if (!wdt_fiq->data->eb_always_on)
+			sprd_wdt_fiq_disable(wdt_fiq);
+	}
+#endif
+	return 0;
+}
+EXPORT_SYMBOL(sprd_wdt_fiq_syscore_suspend);
+
+void sprd_wdt_fiq_syscore_resume(void)
+{
+#ifdef SPRD_WDT_SYSCORE_SUSPEND_RESUME
+	int ret;
+
+	if (!wdt_fiq)
+		return;
+
+	if (wdt_fiq->sleep_en) {
+		if (!watchdog_active(&wdt_fiq->wdd)) {
+			ret = sprd_wdt_fiq_enable(wdt_fiq);
+			if (ret)
+				return;
+		}
+	} else {
+		ret = sprd_wdt_fiq_enable(wdt_fiq);
+		if (ret)
+			return;
+	}
+
+	if (watchdog_active(&wdt_fiq->wdd)) {
+		ret = sprd_wdt_fiq_start(&wdt_fiq->wdd);
+		if (ret) {
+			sprd_wdt_fiq_disable(wdt_fiq);
+			return;
+		}
+	}
+#endif
+}
+EXPORT_SYMBOL(sprd_wdt_fiq_syscore_resume);
+
+static int __maybe_unused sprd_wdt_fiq_alarm_prepare(struct device *dev)
+{
+	struct sprd_wdt_fiq *wdt = dev_get_drvdata(dev);
+	ktime_t now, add;
+
+	if (wdt_fiq->sleep_en) {
+		if (watchdog_active(&wdt->wdd)) {
+			now = ktime_get_boottime();
+			add = ktime_set(SPRD_WDT_SLEEP_KICKTIME, 0);
+			alarm_start(&wdt->sleep_tmr, ktime_add(now, add));
+			pr_info("sprd_wdt:alarm start end\n");
+		}
+	}
+	return 0;
+}
+
+static void __maybe_unused sprd_wdt_fiq_alarm_complete(struct device *dev)
+{
+	struct sprd_wdt_fiq *wdt = dev_get_drvdata(dev);
+
+	 if (wdt_fiq->sleep_en) {
+		if (watchdog_active(&wdt->wdd)) {
+			alarm_cancel(&wdt->sleep_tmr);
+			pr_info("sprd_wdt:alarm_cancel end\n");
+		}
+	}
+}
+
+static struct syscore_ops sprd_wdt_fiq_syscore_ops = {
+	.resume = sprd_wdt_fiq_syscore_resume,
+	.suspend = sprd_wdt_fiq_syscore_suspend
+};
 
 static const struct watchdog_ops sprd_wdt_fiq_ops = {
 	.owner = THIS_MODULE,
@@ -303,6 +432,13 @@ static const struct watchdog_info sprd_wdt_fiq_info = {
 		   WDIOF_KEEPALIVEPING,
 	.identity = "Spreadtrum Watchdog Timer",
 };
+
+static enum alarmtimer_restart sprd_wdt_sleep_callback(struct alarm *p,
+						       ktime_t t)
+{
+	pr_err("sprd_wdt: sprd wdt sleep callback\n");
+	return ALARMTIMER_NORESTART;
+}
 
 static int sprd_wdt_fiq_probe(struct platform_device *pdev)
 {
@@ -349,6 +485,7 @@ static int sprd_wdt_fiq_probe(struct platform_device *pdev)
 	wdt->wdd.max_timeout = SPRD_WDT_FIQ_MAX_TIMEOUT;
 	wdt->wdd.timeout = SPRD_WDT_FIQ_MAX_TIMEOUT;
 
+	wdt->sleep_en = sprd_dswdt_fiq_en();
 	ret = sprd_wdt_fiq_enable(wdt);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to enable wdt\n");
@@ -361,7 +498,14 @@ static int sprd_wdt_fiq_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	register_syscore_ops(&sprd_wdt_fiq_syscore_ops);
 	wdt_fiq = wdt;
+
+	if (wdt->sleep_en) {
+		alarm_init(&wdt_fiq->sleep_tmr, ALARM_BOOTTIME,
+			   sprd_wdt_sleep_callback);
+	}
+
 	platform_set_drvdata(pdev, wdt);
 
 	return 0;
@@ -404,56 +548,9 @@ static int __maybe_unused sprd_wdt_fiq_pm_resume(struct device *dev)
 	return 0;
 }
 
-#ifdef SPRD_WDT_SYSCORE_SUSPEND_RESUME
-static int sprd_wdt_fiq_syscore_suspend(void)
-{
-	if (!wdt_fiq)
-		return -ENODEV;
-
-	if (watchdog_active(&wdt_fiq->wdd))
-		sprd_wdt_fiq_stop(&wdt_fiq->wdd);
-
-	if (!wdt_fiq->data->eb_always_on)
-		sprd_wdt_fiq_disable(wdt_fiq);
-
-	return 0;
-}
-
-static void sprd_wdt_fiq_syscore_resume(void)
-{
-	int ret;
-
-	if (!wdt_fiq)
-		return;
-
-	ret = sprd_wdt_fiq_enable(wdt_fiq);
-	if (ret)
-		return;
-
-	if (watchdog_active(&wdt_fiq->wdd)) {
-		ret = sprd_wdt_fiq_start(&wdt_fiq->wdd);
-		if (ret) {
-			sprd_wdt_fiq_disable(wdt_fiq);
-			return;
-		}
-	}
-}
-
-static struct syscore_ops sprd_wdt_fiq_syscore_ops = {
-	.resume = sprd_wdt_fiq_syscore_resume,
-	.suspend = sprd_wdt_fiq_syscore_suspend
-};
-
-static int __init sprd_wdt_fiq_init_ops(void)
-{
-	register_syscore_ops(&sprd_wdt_fiq_syscore_ops);
-	return 0;
-}
-
-late_initcall(sprd_wdt_fiq_init_ops);
-#endif
-
 static const struct dev_pm_ops sprd_wdt_fiq_pm_ops = {
+	.prepare = sprd_wdt_fiq_alarm_prepare,
+	.complete = sprd_wdt_fiq_alarm_complete,
 	SET_SYSTEM_SLEEP_PM_OPS(sprd_wdt_fiq_pm_suspend,
 				sprd_wdt_fiq_pm_resume)
 };

@@ -17,9 +17,10 @@
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/time.h>
-#if IS_ENABLED(CONFIG_SCSI_UFS_CRYPTO)
+#if 0
 #include <linux/sprd_sip_svc.h>
 #endif
+#include <linux/nvmem-consumer.h>
 #include "ufshcd.h"
 #include "ufshcd-pltfrm.h"
 #include "ufshci.h"
@@ -42,6 +43,34 @@ static inline void ufs_sprd_rmwl(void __iomem *base, u32 mask, u32 val, u32 reg)
 	tmp &= ~mask;
 	tmp |= (val & mask);
 	writel(tmp, (base) + (reg));
+}
+
+static int ufs_efuse_calib_data(struct platform_device *pdev,
+				const char *cell_name)
+{
+	struct nvmem_cell *cell;
+	void *buf;
+	u32 calib_data;
+	size_t len;
+
+	if (!pdev)
+		return -EINVAL;
+
+	cell = nvmem_cell_get(&pdev->dev, cell_name);
+	if (IS_ERR_OR_NULL(cell))
+		return PTR_ERR(cell);
+
+	buf = nvmem_cell_read(cell, &len);
+	if (IS_ERR_OR_NULL(buf)) {
+		nvmem_cell_put(cell);
+		return PTR_ERR(buf);
+	}
+
+	memcpy(&calib_data, buf, min(len, sizeof(u32)));
+
+	kfree(buf);
+	nvmem_cell_put(cell);
+	return calib_data;
 }
 
 void ufs_sprd_reset(struct ufs_sprd_host *host)
@@ -76,22 +105,13 @@ static int ufs_sprd_get_syscon_reg(struct device_node *np,
 {
 	struct regmap *regmap;
 	u32 syscon_args[2];
-	int ret;
 
-	regmap = syscon_regmap_lookup_by_name(np, name);
+	regmap = syscon_regmap_lookup_by_phandle_args(np, name, 2, syscon_args);
 	if (IS_ERR(regmap)) {
 		pr_err("read ufs syscon %s regmap fail\n", name);
 		reg->regmap = NULL;
 		reg->reg = 0x0;
 		reg->mask = 0x0;
-		return -EINVAL;
-	}
-
-	ret = syscon_get_args_by_name(np, name, 2, syscon_args);
-	if (ret < 0)
-		return ret;
-	else if (ret != 2) {
-		pr_err("read ufs syscon %s fail,ret = %d\n", name, ret);
 		return -EINVAL;
 	}
 	reg->regmap = regmap;
@@ -113,7 +133,7 @@ static int ufs_sprd_init(struct ufs_hba *hba)
 	struct ufs_sprd_host *host;
 	int ret = 0;
 
-#if IS_ENABLED(CONFIG_SCSI_UFS_CRYPTO)
+#if 0
 	struct sprd_sip_svc_handle *svc_handle;
 #endif
 
@@ -123,6 +143,30 @@ static int ufs_sprd_init(struct ufs_hba *hba)
 
 	host->hba = hba;
 	ufshcd_set_variant(hba, host);
+
+	host->ufs_lane_calib_data1 = ufs_efuse_calib_data(pdev,
+							  "ufs_cali_lane1");
+	if (host->ufs_lane_calib_data1 == -EPROBE_DEFER) {
+		dev_err(&pdev->dev,
+			"%s:get ufs_lane_calib_data1 failed!\n", __func__);
+		ret =  -EPROBE_DEFER;
+		goto out_variant_clear;
+	}
+
+	dev_err(&pdev->dev, "%s: ufs_lane_calib_data1: %x\n",
+		__func__, host->ufs_lane_calib_data1);
+
+	host->ufs_lane_calib_data0 = ufs_efuse_calib_data(pdev,
+							  "ufs_cali_lane0");
+	if (host->ufs_lane_calib_data0 == -EPROBE_DEFER) {
+		dev_err(&pdev->dev,
+			"%s:get ufs_lane_calib_data1 failed!\n", __func__);
+		ret =  -EPROBE_DEFER;
+		goto out_variant_clear;
+	}
+
+	dev_err(&pdev->dev, "%s: ufs_lane_calib_data0: %x\n",
+		__func__, host->ufs_lane_calib_data0);
 
 	host->vdd_mphy = devm_regulator_get(dev, "vdd-mphy");
 	ret = regulator_enable(host->vdd_mphy);
@@ -149,6 +193,17 @@ static int ufs_sprd_init(struct ufs_hba *hba)
 	if (ret < 0)
 		 return -ENODEV;
 
+	ret = ufs_sprd_get_syscon_reg(dev->of_node, &host->ufsdev_refclk_en,
+				      "ufsdev_refclk_en");
+	if (ret < 0)
+		return -ENODEV;
+
+	ret = ufs_sprd_get_syscon_reg(dev->of_node,
+					&host->usb31pllv_ref2mphy_en,
+				      "usb31pllv_ref2mphy_en");
+	if (ret < 0)
+		return -ENODEV;
+
 	host->hclk = devm_clk_get(&pdev->dev, "ufs_hclk");
 	if (IS_ERR(host->hclk)) {
 		dev_warn(&pdev->dev,
@@ -165,7 +220,7 @@ static int ufs_sprd_init(struct ufs_hba *hba)
 
 	clk_set_parent(host->hclk, host->hclk_source);
 
-#if IS_ENABLED(CONFIG_SCSI_UFS_CRYPTO)
+#if 0
 	regmap_update_bits(host->ap_ahb_ufs_rst.regmap,
 					  host->ap_ahb_ufs_rst.reg,
 					  host->ap_ahb_ufs_rst.mask,
@@ -202,6 +257,9 @@ static int ufs_sprd_init(struct ufs_hba *hba)
 		     UFSHCD_CAP_HIBERN8_WITH_CLK_GATING;
 
 	return 0;
+
+out_variant_clear:
+	return ret;
 }
 
 /**
@@ -298,6 +356,182 @@ static int ufs_sprd_phy_init(struct ufs_hba *hba)
 			   host->phy_sram_init_done.mask);
 
 	ufshcd_dme_set(hba, UIC_ARG_MIB(VS_MPHYCFGUPDT), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xb0);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x10);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xaf);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x10);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118),
+			    (host->ufs_lane_calib_data0 >> 24) & 0xff);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xb1);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x10);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xb8);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x10);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xb0);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x10);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x40);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118),
+			    (host->ufs_lane_calib_data0 >> 24) & 0xff);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xb0);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x11);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xaf);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x11);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118),
+			    (host->ufs_lane_calib_data1 >> 24) & 0xff);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xb1);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x11);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xb8);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x11);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xb0);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x11);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x41);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118),
+			    (host->ufs_lane_calib_data1 >> 24) & 0xff);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xb0);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x10);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xaf);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x10);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118),
+			    (host->ufs_lane_calib_data0 >> 16) & 0xff);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xb1);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x10);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118), 0x02);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xb8);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x10);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xb0);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x10);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x40);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118),
+			    (host->ufs_lane_calib_data0 >> 16) & 0xff);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xb0);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x11);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xaf);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x11);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118),
+			    (host->ufs_lane_calib_data1 >> 16) & 0xff);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xb1);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x11);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118), 0x02);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xb8);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x11);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0xb0);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x11);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
+
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8116), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8117), 0x41);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8118),
+			    (host->ufs_lane_calib_data1 >> 16) & 0xff);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x8119), 0x00);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0x811c), 0x01);
+	ufshcd_dme_set(hba, UIC_ARG_MIB(0xd085), 0x01);
 	ufshcd_dme_set(hba, UIC_ARG_MIB(VS_MPHYDISABLE), 0x0);
 
 	return ret;
@@ -307,7 +541,7 @@ static int ufs_sprd_hce_enable_notify(struct ufs_hba *hba,
 				      enum ufs_notify_change_status status)
 {
 	int err = 0;
-#if IS_ENABLED(CONFIG_SCSI_UFS_CRYPTO)
+#if 0
 	int ret = 0;
 	struct sprd_sip_svc_handle *svc_handle;
 #endif
@@ -316,7 +550,7 @@ static int ufs_sprd_hce_enable_notify(struct ufs_hba *hba,
 	case PRE_CHANGE:
 		/* Do hardware reset before host controller enable. */
 		ufs_sprd_hw_init(hba);
-#if IS_ENABLED(CONFIG_SCSI_UFS_CRYPTO)
+#if 0
 		ufshcd_writel(hba, CONTROLLER_ENABLE, REG_CONTROLLER_ENABLE);
 		svc_handle = sprd_sip_svc_get_handle();
 		if (!svc_handle) {
@@ -385,7 +619,8 @@ static int ufs_sprd_pwr_change_notify(struct ufs_hba *hba,
 		break;
 	case POST_CHANGE:
 		/* Set auto h8 ilde time to 10ms */
-		ufshcd_auto_hibern8_enable(hba);
+		ufshcd_writel(hba,
+			AUTO_H8_IDLE_TIME_10MS, REG_AUTO_HIBERNATE_IDLE_TIMER);
 		break;
 	default:
 		err = -EINVAL;
@@ -400,17 +635,44 @@ static void ufs_sprd_hibern8_notify(struct ufs_hba *hba,
 				enum uic_cmd_dme cmd,
 				enum ufs_notify_change_status status)
 {
+	struct ufs_sprd_host *host = ufshcd_get_variant(hba);
+
 	switch (status) {
 	case PRE_CHANGE:
 		if (cmd == UIC_CMD_DME_HIBER_ENTER) {
-			/* Set auto h8 ilde time to 0ms */
-			ufshcd_auto_hibern8_disable(hba);
+			ufshcd_writel(hba,
+				0x0, REG_AUTO_HIBERNATE_IDLE_TIMER);
+		}
+
+		if (cmd == UIC_CMD_DME_HIBER_EXIT) {
+			regmap_update_bits(host->ufsdev_refclk_en.regmap,
+					   host->ufsdev_refclk_en.reg,
+					   host->ufsdev_refclk_en.mask,
+					   host->ufsdev_refclk_en.mask);
+
+			regmap_update_bits(host->usb31pllv_ref2mphy_en.regmap,
+					   host->usb31pllv_ref2mphy_en.reg,
+					   host->usb31pllv_ref2mphy_en.mask,
+					   host->usb31pllv_ref2mphy_en.mask);
 		}
 		break;
 	case POST_CHANGE:
 		if (cmd == UIC_CMD_DME_HIBER_EXIT) {
-			/* Set auto h8 ilde time to 10ms */
-			ufshcd_auto_hibern8_enable(hba);
+			ufshcd_writel(hba,
+				AUTO_H8_IDLE_TIME_10MS,
+				REG_AUTO_HIBERNATE_IDLE_TIMER);
+		}
+
+		if (cmd == UIC_CMD_DME_HIBER_ENTER) {
+			regmap_update_bits(host->ufsdev_refclk_en.regmap,
+					   host->ufsdev_refclk_en.reg,
+					   host->ufsdev_refclk_en.mask,
+					   0);
+
+			regmap_update_bits(host->usb31pllv_ref2mphy_en.regmap,
+					   host->usb31pllv_ref2mphy_en.reg,
+					   host->usb31pllv_ref2mphy_en.mask,
+					   0);
 		}
 		break;
 	default:

@@ -1,18 +1,10 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
+
 #ifndef _GSP_KCFG_H
 #define _GSP_KCFG_H
-
 
 #include <linux/completion.h>
 #include <linux/time.h>
@@ -23,8 +15,6 @@ struct gsp_core;
 struct gsp_workqueue;
 
 #define GSP_WAIT_COMPLETION_TIMEOUT msecs_to_jiffies(3000)
-
-
 
 struct gsp_kcfg {
 	struct gsp_cfg *cfg;
@@ -76,13 +66,13 @@ int gsp_kcfg_is_pulled(struct gsp_kcfg *kcfg);
 void gsp_kcfg_set_pulled(struct gsp_kcfg *kcfg);
 
 void gsp_kcfg_init(struct gsp_kcfg *kcfg, struct gsp_core *core,
-		   struct gsp_workqueue *wq);
+		struct gsp_workqueue *wq);
 
 void gsp_kcfg_list_init(struct gsp_kcfg_list *kl, bool aync,
 			bool split, size_t sizei, int num);
 
 int gsp_kcfg_list_acquire(struct gsp_dev *gsp,
-			  struct gsp_kcfg_list *kl, int num);
+			struct gsp_kcfg_list *kl, int num);
 
 int gsp_kcfg_list_fill(struct gsp_kcfg_list *kl, void __user *arg);
 int gsp_kcfg_list_push(struct gsp_kcfg_list *kl);

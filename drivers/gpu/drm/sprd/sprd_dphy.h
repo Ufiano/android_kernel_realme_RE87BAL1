@@ -1,12 +1,18 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (C) 2020 Unisoc Inc.
+ */
+
 #ifndef _SPRD_DPHY_H_
 #define _SPRD_DPHY_H_
 
 #include <asm/types.h>
-#include <drm/drmP.h>
 #include <linux/device.h>
 #include <linux/mutex.h>
 #include <linux/of.h>
 #include <linux/regmap.h>
+
+#include <drm/drm_print.h>
 
 #include "disp_lib.h"
 
@@ -15,14 +21,13 @@ struct dphy_context {
 	unsigned long ctrlbase;
 	unsigned long apbbase;
 	struct mutex lock;
-	u8 aod_mode;
+	bool enabled;
 	u32 freq;
 	u8 lanes;
+	bool ulps_enable;
 	u8 id;
 	u8 capability;
 	u32 chip_id;
-	bool ulps_enable;
-	bool is_enabled;
 	u8 dphy_ta_get_val;
 };
 
@@ -70,54 +75,32 @@ struct dphy_glb_ops {
 	void (*power)(struct dphy_context *ctx, int enable);
 };
 
-struct sprd_dphy {
-	struct device dev;
-	struct device *dsi_dev;
-	struct dphy_context ctx;
-	struct dphy_ppi_ops *ppi;
-	struct dphy_pll_ops *pll;
-	struct dphy_glb_ops *glb;
-	struct sprd_dphy *master;
-	struct sprd_dphy *slave;
+struct sprd_dphy_ops {
+	const struct dphy_ppi_ops *ppi;
+	const struct dphy_pll_ops *pll;
+	const struct dphy_glb_ops *glb;
 };
 
-extern struct list_head dphy_pll_head;
-extern struct list_head dphy_ppi_head;
-extern struct list_head dphy_glb_head;
+struct sprd_dphy {
+	struct device dev;
+	struct dphy_context ctx;
+	const struct dphy_ppi_ops *ppi;
+	const struct dphy_pll_ops *pll;
+	const struct dphy_glb_ops *glb;
+};
 
-#define dphy_pll_ops_register(entry) \
-	disp_ops_register(entry, &dphy_pll_head)
-#define dphy_ppi_ops_register(entry) \
-	disp_ops_register(entry, &dphy_ppi_head)
-#define dphy_glb_ops_register(entry) \
-	disp_ops_register(entry, &dphy_glb_head)
+int sprd_dphy_enable(struct sprd_dphy *dphy);
+int sprd_dphy_disable(struct sprd_dphy *dphy);
 
-#define dphy_pll_ops_attach(str) \
-	disp_ops_attach(str, &dphy_pll_head)
-#define dphy_ppi_ops_attach(str) \
-	disp_ops_attach(str, &dphy_ppi_head)
-#define dphy_glb_ops_attach(str) \
-	disp_ops_attach(str, &dphy_glb_head)
-
-void sprd_dphy_ulps_enter(struct sprd_dphy *dphy);
-void sprd_dphy_ulps_exit(struct sprd_dphy *dphy);
-int sprd_dphy_resume(struct sprd_dphy *dphy);
-int sprd_dphy_suspend(struct sprd_dphy *dphy);
-
-int sprd_dphy_configure(struct sprd_dphy *dphy);
-void sprd_dphy_reset(struct sprd_dphy *dphy);
-void sprd_dphy_shutdown(struct sprd_dphy *dphy);
-int sprd_dphy_hop_config(struct sprd_dphy *dphy, int delta, int period);
-int sprd_dphy_ssc_en(struct sprd_dphy *dphy, bool en);
-int sprd_dphy_close(struct sprd_dphy *dphy);
-int sprd_dphy_data_ulps_enter(struct sprd_dphy *dphy);
-int sprd_dphy_data_ulps_exit(struct sprd_dphy *dphy);
-int sprd_dphy_clk_ulps_enter(struct sprd_dphy *dphy);
-int sprd_dphy_clk_ulps_exit(struct sprd_dphy *dphy);
-void sprd_dphy_force_pll(struct sprd_dphy *dphy, bool enable);
-void sprd_dphy_hs_clk_en(struct sprd_dphy *dphy, bool enable);
-void sprd_dphy_test_write(struct sprd_dphy *dphy, u8 address, u8 data);
-u8 sprd_dphy_test_read(struct sprd_dphy *dphy, u8 address);
-//void cali_dphy_power_domain(struct dphy_context *ctx, int enable);
+extern const struct dphy_ppi_ops dsi_ctrl_ppi_ops;
+extern const struct dphy_glb_ops pike2_dphy_glb_ops;
+extern const struct dphy_pll_ops sharkle_dphy_pll_ops;
+extern const struct dphy_glb_ops sharkle_dphy_glb_ops;
+extern const struct dphy_glb_ops sharkl3_dphy_glb_ops;
+extern const struct dphy_pll_ops sharkl5_dphy_pll_ops;
+extern const struct dphy_glb_ops sharkl5_dphy_glb_ops;
+extern const struct dphy_glb_ops sharkl5pro_dphy_glb_ops;
+extern const struct dphy_glb_ops qogirl6_dphy_glb_ops;
+extern const struct dphy_glb_ops qogirn6pro_dphy_glb_ops;
 void cali_dphy_glb_disable(struct dphy_context *ctx);
 #endif /* _SPRD_DPHY_H_ */

@@ -131,7 +131,7 @@
 				compatible = "simple-battery";
 				charge-full-design-microamp-hours = <2780000>;
 				charge-term-current-microamp = <120000>;
-				constant_charge_voltage_max_microvolt = <4350000>;
+				constant-charge-voltage-max-microvolt = <4350000>;
 				factory-internal-resistance-micro-ohms = <320000>;
 				voltage-min-design-microvolt = <3450000>;
 				ocv-capacity-celsius = <20>;
@@ -214,8 +214,6 @@
 
 				monitored-battery = <&bat>;
 
-				cm-capacity-track;
-
 				cm-cap-remap-table = <1 2 3>, <2 3 2>, <98 99 2>, <99 100 3>;
 
 				regulator@0 {
@@ -231,20 +229,15 @@
 };
 
 &chosen {
-	bootargs_ext = "androidboot.hardware=sp7731e_1h10 androidboot.dtbo_idx=0";
+	bootargs_ext = "androidboot.hardware=sp7731e_1h10 androidboot.dtbo_idx=0 androidboot.slot_suffix=_a dummy_hcd.num=0";
 };
 
 &reserved_memory {
-	tos_reserved: tos-mem@94020000 {
-		reg = <0x94020000 0x01fe0000>;
-	};
+	#address-cells = <1>;
+	#size-cells = <1>;
 
-	fd_reserved: fd@bf6fc000 {
-		reg = <0xbf6fc000 0x00500000>;
-	};
-
-	wb_reserved: writeback-mem@bfbfc000 {
-		reg = <0xbfbfc000 0x00384000>;
+	fd_reserved: fd@bfa70000 {
+		reg = <0xbfa70000 0x00500000>;
 	};
 
 	pstore_reserved: ramoops@bff80000 {
@@ -329,6 +322,9 @@
 &i2c0 {
 	status = "okay";
 	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
+
 	sensor_main: sensor-main@3c {
 		compatible = "sprd,sensor-main";
 		reg = <0x3c>;
@@ -350,6 +346,7 @@
 		host = "dcam0";
 		sprd,phyid = <0>;
 		csi = <&csi0>;
+		power-domains = <&cam_domain>;
 	};
 
 	sensor_sub: sensor-sub@21 {
@@ -373,12 +370,15 @@
 		host = "dcam0";
 		sprd,phyid = <0>;
 		csi = <&csi0>;
+		power-domains = <&cam_domain>;
 	};
 };
 
 &i2c1 {
 	status = "okay";
 	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	accelerometer@19 {
 		compatible = "st,lis2dh", "st,lis2dh12";
@@ -403,8 +403,11 @@
 &i2c2 {
 	status = "okay";
 	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
+
 	touchscreen@38 {
-		compatible = "adaptive-touchscreen";
+		compatible = "focaltech,ft5436-touchscreen";
 		reg = <0x38>;
 		gpios = <&ap_gpio 63 GPIO_ACTIVE_HIGH
 			&ap_gpio 64 GPIO_ACTIVE_HIGH>;
@@ -412,6 +415,9 @@
 		virtualkeys = <580 60 1320 60 45
 			172 360 1320 60 45
 			158 600 1320 60 45>;
+		surface-width = <720>;
+		surface-height = <1280>;
+		firmware-auto-upgrade;
 		private-data {
 			a8 = /bits/ 8 <0x5A>;
 		};
@@ -438,8 +444,8 @@
 
 &pmic_fgu {
 	monitored-battery = <&bat>;
-	sprd,calib-resistance-real = <20000>;
-	sprd,calib-resistance-spec = <20000>;
+	sprd,calib-resistance-micro-ohms = <20000>;
+	sprd,comp-resistance-mohm = <20>;
 	first-calib-voltage = <3600000>;
 	first-calib-capacity = <50>;
 };
@@ -458,14 +464,21 @@
 
 &dpu {
 	status = "okay";
-	sprd,wb-memory = <&wb_reserved>;
+	/*sprd,wb-memory = <&wb_reserved>;*/
 };
 
 &ion {
+	#address-cells = <1>;
+	#size-cells = <0>;
+
 	heap@4 {
 		reg = <4>;
 		label = "carveout_fd";
 		type = <2>;
 		memory-region = <&fd_reserved>;
 	};
+};
+
+&vddemmccore {
+	regulator-always-on;
 };

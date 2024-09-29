@@ -6,16 +6,16 @@ Required properties:
    "sprd,qogirn6pro-apdu"
  - reg: physical address of the musb and length of APDU memory mapped region.
 	if soc ranges has been configured,
-	APDU physical base addrress need deduct base address.
+	APDU physical base address need deduct base address.
  - sprd,sys-pub-reg: physical base address of pub apb reg,
 	referenced the corresponding syscon.
  - sprd,pub-ise-reg-offset: physical address offset of
-	ise med high addrress config reg at pub apb.
- - sprd,pub-ise-bit-offset: ise med high addrress config bit offset
+	ise med high address config reg at pub apb.
+ - sprd,pub-ise-bit-offset: ise med high address config bit offset
  - sprd,sys-ise-pd-reg: physical base address of pmu reg for ise.
  - sprd,sys-ise-aon-reg: ise clock calibrating reg.
  - sprd,sys-ise-aon-clk-reg: ise clock reg.
- - interrupts: interrupt number for the musb controller
+ - interrupts: interrupt number for the apdu controller
 
 Example:
 -------

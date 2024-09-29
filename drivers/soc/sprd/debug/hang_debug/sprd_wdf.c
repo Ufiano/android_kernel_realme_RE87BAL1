@@ -1,19 +1,13 @@
-/*copyright (C) 2020 unisoc Inc.
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (C) 2018 Spreadtrum Communications Inc.
  *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * it's hardware watchdog feeder code for Phoenix II
  */
-
-/* it's hardware watchdog feeder code for Phoenix II */
 
 #include <linux/init.h>
 #include <linux/mm.h>
+#include <linux/module.h>
 #include <linux/notifier.h>
 #include <linux/percpu.h>
 #include <linux/cpu.h>
@@ -25,8 +19,9 @@
 #include <linux/proc_fs.h>
 #include <uapi/linux/sched/types.h>
 #include <linux/watchdog.h>
+#include <linux/seq_file.h>
 
-#ifdef CONFIG_SPRD_WATCHDOG_FIQ
+#if IS_ENABLED(CONFIG_SPRD_WATCHDOG_FIQ)
 #include <linux/sprd_wdt_fiq.h>
 #endif
 
@@ -34,8 +29,8 @@
 #define pr_fmt(fmt) "sprd_wdf: " fmt
 
 static DEFINE_PER_CPU(struct task_struct *, hang_debug_task_store);
-unsigned int cpu_feed_mask;
-unsigned int cpu_feed_bitmap;
+static unsigned int cpu_feed_mask;
+static unsigned int cpu_feed_bitmap;
 static DEFINE_SPINLOCK(lock);
 static DEFINE_PER_CPU(struct hrtimer, sprd_wdt_hrtimer);
 /* 1: which cpu need to feed, 0: cpu doesn't need to feed */
@@ -95,7 +90,7 @@ static void hang_debug_park(unsigned int cpu)
 	cpu_feed_bitmap = 0;
 	pr_debug("offline cpu = %u\n", cpu);
 	spin_unlock(&lock);
-#ifdef CONFIG_SPRD_WATCHDOG_FIQ
+#if IS_ENABLED(CONFIG_SPRD_WATCHDOG_FIQ)
 	if (wdd->ops->start)
 		wdd->ops->start(wdd);
 #endif
@@ -112,7 +107,7 @@ static void hang_debug_unpark(unsigned int cpu)
 	cpu_feed_bitmap = 0;
 	pr_debug("online cpu = %u\n", cpu);
 	spin_unlock(&lock);
-#ifdef CONFIG_SPRD_WATCHDOG_FIQ
+#if IS_ENABLED(CONFIG_SPRD_WATCHDOG_FIQ)
 	if (wdd->ops->start)
 		wdd->ops->start(wdd);
 #endif
@@ -127,8 +122,8 @@ static void hang_debug_task(unsigned int cpu)
 	if (cpu_feed_mask == cpu_feed_bitmap) {
 		pr_debug("feed wdt cpu_feed_bitmap = 0x%08x\n", cpu_feed_bitmap);
 		cpu_feed_bitmap = 0;
+#if IS_ENABLED(CONFIG_SPRD_WATCHDOG_FIQ)
 		spin_unlock(&lock);
-#ifdef CONFIG_SPRD_WATCHDOG_FIQ
 		if (wdd->ops->start)
 			wdd->ops->start(wdd);
 #endif
@@ -148,10 +143,10 @@ static void hang_debug_task(unsigned int cpu)
 static struct smp_hotplug_thread hang_debug_threads = {
 	.store			= &hang_debug_task_store,
 	.thread_should_run	= hang_debug_should_run,
-	.create 		= hang_debug_create,
+	.create			= hang_debug_create,
 	.thread_fn		= hang_debug_task,
-	.thread_comm		= "hang_debug/%u",
-	.setup 			= sprd_wdf_hrtimer_enable,
+	.thread_comm	= "hang_debug/%u",
+	.setup			= sprd_wdf_hrtimer_enable,
 	.park			= hang_debug_park,
 	.unpark			= hang_debug_unpark,
 };
@@ -207,14 +202,14 @@ static ssize_t hang_debug_proc_write(struct file *file, const char *buf,
 		}
 
 		pretimeout = timeout;
-		do_div(pretimeout, 2);
+		pretimeout = div_u64(pretimeout, 2);
 
 		g_interval = timeout;
-		do_div(g_interval, 5);
+		g_interval = div_u64(g_interval, 5);
 
 		pr_notice("timeout = %llu interval = %llu\n", g_timeout, g_interval);
 
-#ifdef CONFIG_SPRD_WATCHDOG_FIQ
+#if IS_ENABLED(CONFIG_SPRD_WATCHDOG_FIQ)
 		if (wdd->ops->start)
 			wdd->ops->start(wdd);
 		if (wdd->ops->set_timeout)
@@ -257,7 +252,7 @@ void sprd_wdf_wdt_disable(int disable)
 			hrtimer_cancel(per_cpu_ptr(&sprd_wdt_hrtimer, cpu));
 			per_cpu(g_enable, cpu) = 0;
 		}
-#ifdef CONFIG_SPRD_WATCHDOG_FIQ
+#if IS_ENABLED(CONFIG_SPRD_WATCHDOG_FIQ)
 		if (wdd->ops->stop)
 			wdd->ops->stop(wdd);
 #endif
@@ -268,7 +263,7 @@ void sprd_wdf_wdt_disable(int disable)
 			per_cpu(g_enable, cpu) = 1;
 			wake_up_process(per_cpu(hang_debug_task_store, cpu));
 		}
-#ifdef CONFIG_SPRD_WATCHDOG_FIQ
+#if IS_ENABLED(CONFIG_SPRD_WATCHDOG_FIQ)
 		if (wdd->ops->set_timeout)
 			wdd->ops->set_timeout(wdd, (u32)g_timeout);
 		if (wdd->ops->set_pretimeout)
@@ -278,7 +273,6 @@ void sprd_wdf_wdt_disable(int disable)
 #endif
 	}
 }
-
 EXPORT_SYMBOL(sprd_wdf_wdt_disable);
 
 static ssize_t wdt_disable_proc_write(struct file *file, const char *buf,
@@ -318,13 +312,13 @@ static struct notifier_block wdf_panic_event_nb = {
 	.priority	= INT_MIN,
 };
 
-static int sprd_hang_debug_init(void)
+static int __init sprd_hang_debug_init(void)
 {
 	int cpu;
 	struct proc_dir_entry *de = NULL;
 	struct proc_dir_entry *df = NULL;
 
-#ifdef CONFIG_SPRD_WATCHDOG_FIQ
+#if IS_ENABLED(CONFIG_SPRD_WATCHDOG_FIQ)
 	int ret = 0;
 
 	ret = sprd_wdt_fiq_get_dev(&wdd);
@@ -347,11 +341,9 @@ static int sprd_hang_debug_init(void)
 	pr_notice("No config sprd_wdt device\n");
 #endif
 
-	cpu_hotplug_disable();
 	for_each_online_cpu(cpu) {
 		cpu_feed_mask |= (1 << cpu);
 	}
-	cpu_hotplug_enable();
 
 	BUG_ON(smpboot_register_percpu_thread(&hang_debug_threads));
 
@@ -374,3 +366,6 @@ static int sprd_hang_debug_init(void)
 }
 
 late_initcall(sprd_hang_debug_init);
+
+MODULE_DESCRIPTION("sprd hang debug wdf driver");
+MODULE_LICENSE("GPL v2");

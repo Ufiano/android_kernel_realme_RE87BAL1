@@ -2419,6 +2419,8 @@ static int sprd_img_k_release(struct inode *node, struct file *file)
 	if (group->dev_inited & (1 << 0))
 		complete(&((struct camera_dev *)group->dev[0])->irq_com);
 
+	camerafile->private_key = 0;
+
 	pr_info("sprd_img: release start.\n");
 	if (atomic_dec_return(&group->camera_opened) == 0) {
 		for (i = 0; i < group->dcam_count; i++) {
@@ -4042,16 +4044,17 @@ static long sprd_img_k_ioctl(struct file *file, uint32_t cmd,
 		goto exit;
 	}
 
-	io_ctrl = dcam_ioctl_get_fun(cmd);
-	if (io_ctrl != NULL) {
-		ret = io_ctrl(camerafile, arg, cmd);
-		if (ret) {
-			pr_err("fail to cmd %d\n", _IOC_NR(cmd));
-			goto exit;
-		}
-	} else {
-		pr_debug("fail to get valid cmd 0x%x 0x%x\n", cmd,
-			 _IOC_NR(cmd));
+	if(cmd == SPRD_IMG_IO_SET_KEY || camerafile->private_key == 1) {
+		io_ctrl = dcam_ioctl_get_fun(cmd);
+		if (io_ctrl != NULL) {
+			ret = io_ctrl(camerafile, arg, cmd);
+			if (ret) {
+				pr_err("fail to cmd %d\n", _IOC_NR(cmd));
+				goto exit;
+			}
+		} else {
+			pr_debug("fail to get valid cmd 0x%x 0x%x\n", cmd,
+				 _IOC_NR(cmd));
 	}
 exit:
 	return 0;

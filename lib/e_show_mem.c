@@ -16,6 +16,9 @@
 #include <linux/mm.h>
 #include <linux/notifier.h>
 #include <linux/swap.h>
+#ifdef CONFIG_ION
+#include <linux/ion.h>
+#endif
 
 static BLOCKING_NOTIFIER_HEAD(e_show_mem_notify_list);
 
@@ -55,6 +58,14 @@ void enhanced_show_mem(enum e_show_mem_type type)
 		(si.bufferram) << (PAGE_SHIFT - 10),
 		total_swapcache_pages() << (PAGE_SHIFT - 10));
 
+#ifdef CONFIG_ION
+	pr_info("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
+	pr_info("Enhanced Mem-info :ION\n");
+	pr_info("Total allocated from Buddy: %8lu kB\n",
+			get_ion_heap_total_pages() << (PAGE_SHIFT - 10));
+	pr_info("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
+#endif
+
 	blocking_notifier_call_chain(&e_show_mem_notify_list,
 				(unsigned long)type, &used);
 }
@@ -64,14 +75,15 @@ void enhanced_mem(enum e_show_mem_type type)
 	/* Module used pages */
 	unsigned long used = 0;
 
-	pr_info("++++++++++++++++++++++E_SHOW_MEM_BEGIN++++++++++++++++++++\n");
+	pr_info("Enhanced Mem-Info:");
 	if (E_SHOW_MEM_BASIC == type)
 		pr_info("E_SHOW_MEM_BASIC\n");
 	else if (E_SHOW_MEM_CLASSIC == type)
 		pr_info("E_SHOW_MEM_CLASSIC\n");
 	else
 		pr_info("E_SHOW_MEM_ALL\n");
+
 	blocking_notifier_call_chain(&e_show_mem_notify_list,
 				(unsigned long)type, &used);
-	pr_info("++++++++++++++++++++++E_SHOW_MEM_END++++++++++++++++++++++\n");
 }
+

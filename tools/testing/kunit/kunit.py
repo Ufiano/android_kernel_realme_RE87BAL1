@@ -1,47 +1,60 @@
 #!/usr/bin/python3
 # SPDX-License-Identifier: GPL-2.0
-
+#
 # A thin wrapper on top of the KUnit Kernel
+#
+# Copyright (C) 2019, Google LLC.
+# Author: Felix Guo <felixguoxiuping@gmail.com>
+# Author: Brendan Higgins <brendanhiggins@google.com>
 
 import argparse
 import sys
 import os
 import time
+import shutil
+
+from collections import namedtuple
+from enum import Enum, auto
 
 import kunit_config
 import kunit_kernel
-import kunit_new_template
 import kunit_parser
-
-from collections import namedtuple
-
-KunitRequest = namedtuple('KunitRequest', ['raw_output','timeout', 'jobs'])
 
 KunitResult = namedtuple('KunitResult', ['status','result'])
 
-class KunitStatus(object):
-	SUCCESS = 'SUCCESS'
-	CONFIG_FAILURE = 'CONFIG_FAILURE'
-	BUILD_FAILURE = 'BUILD_FAILURE'
-	TEST_FAILURE = 'TEST_FAILURE'
+KunitRequest = namedtuple('KunitRequest', ['raw_output','timeout', 'jobs', 'build_dir', 'defconfig'])
+
+class KunitStatus(Enum):
+	SUCCESS = auto()
+	CONFIG_FAILURE = auto()
+	BUILD_FAILURE = auto()
+	TEST_FAILURE = auto()
+
+def create_default_kunitconfig():
+	if not os.path.exists(kunit_kernel.KUNITCONFIG_PATH):
+		shutil.copyfile('arch/um/configs/kunit_defconfig',
+				kunit_kernel.KUNITCONFIG_PATH)
 
 def run_tests(linux: kunit_kernel.LinuxSourceTree,
 	      request: KunitRequest) -> KunitResult:
-	config_start = time.time()
-	config_result = linux.build_reconfig()
-	config_end = time.time()
-	if config_result.status != kunit_kernel.ConfigStatus.SUCCESS:
-		return KunitResult(KunitStatus.CONFIG_FAILURE, config_result)
+	if request.defconfig:
+		create_default_kunitconfig()
 
-	print(kunit_parser.timestamp('Building KUnit Kernel ...'))
+	config_start = time.time()
+	success = linux.build_reconfig(request.build_dir)
+	config_end = time.time()
+	if not success:
+		return KunitResult(KunitStatus.CONFIG_FAILURE, 'could not configure kernel')
+
+	kunit_parser.print_with_timestamp('Building KUnit Kernel ...')
 
 	build_start = time.time()
-	build_result = linux.build_um_kernel(request.jobs)
+	success = linux.build_um_kernel(request.jobs, request.build_dir)
 	build_end = time.time()
-	if build_result.status != kunit_kernel.BuildStatus.SUCCESS:
-		return KunitResult(KunitStatus.BUILD_FAILURE, build_result)
+	if not success:
+		return KunitResult(KunitStatus.BUILD_FAILURE, 'could not build kernel')
 
-	print(kunit_parser.timestamp('Starting KUnit Kernel ...'))
+	kunit_parser.print_with_timestamp('Starting KUnit Kernel ...')
 	test_start = time.time()
 
 	test_result = kunit_parser.TestResult(kunit_parser.TestStatus.SUCCESS,
@@ -49,33 +62,28 @@ def run_tests(linux: kunit_kernel.LinuxSourceTree,
 					      'Tests not Parsed.')
 	if request.raw_output:
 		kunit_parser.raw_output(
-			linux.run_kernel(timeout=request.timeout))
+			linux.run_kernel(timeout=request.timeout,
+					 build_dir=request.build_dir))
 	else:
-		test_result = kunit_parser.parse_run_tests(
-				kunit_parser.isolate_kunit_output(
-				  linux.run_kernel(timeout=request.timeout)))
+		kunit_output = linux.run_kernel(timeout=request.timeout,
+						build_dir=request.build_dir)
+		test_result = kunit_parser.parse_run_tests(kunit_output)
 	test_end = time.time()
 
-	print(kunit_parser.timestamp((
+	kunit_parser.print_with_timestamp((
 		'Elapsed time: %.3fs total, %.3fs configuring, %.3fs ' +
-		'building, %.3fs running.\n') % (
+		'building, %.3fs running\n') % (
 				test_end - config_start,
 				config_end - config_start,
 				build_end - build_start,
-				test_end - test_start)))
+				test_end - test_start))
 
 	if test_result.status != kunit_parser.TestStatus.SUCCESS:
 		return KunitResult(KunitStatus.TEST_FAILURE, test_result)
 	else:
 		return KunitResult(KunitStatus.SUCCESS, test_result)
 
-def print_test_skeletons(cli_args):
-	kunit_new_template.create_skeletons_from_path(
-			cli_args.path,
-			namespace_prefix=cli_args.namespace_prefix,
-			print_test_only=cli_args.print_test_only)
-
-def main(argv, linux):
+def main(argv, linux=None):
 	parser = argparse.ArgumentParser(
 			description='Helps writing and running KUnit tests.')
 	subparser = parser.add_subparsers(dest='subcommand')
@@ -97,29 +105,29 @@ def main(argv, linux):
 				'jobs (commands) to run simultaneously."',
 				type=int, default=8, metavar='jobs')
 
-	new_parser = subparser.add_parser(
-			'new',
-			help='Prints out boilerplate for writing new tests.')
-	new_parser.add_argument('--path',
-				help='Path of source file to be tested.',
-				type=str,
-				required=True)
-	new_parser.add_argument('--namespace_prefix',
-				help='Namespace of the code to be tested.',
-				type=str)
-	new_parser.add_argument('--print_test_only',
-				help='Skip Kconfig and Makefile while printing sample '
-				'test.',
+	run_parser.add_argument('--build_dir',
+				help='As in the make command, it specifies the build '
+				'directory.',
+				type=str, default=None, metavar='build_dir')
+
+	run_parser.add_argument('--defconfig',
+				help='Uses a default kunitconfig.',
 				action='store_true')
 
 	cli_args = parser.parse_args(argv)
 
-	if cli_args.subcommand == 'new':
-		print_test_skeletons(cli_args)
-	elif cli_args.subcommand == 'run':
+	if cli_args.subcommand == 'run':
+		if cli_args.defconfig:
+			create_default_kunitconfig()
+
+		if not linux:
+			linux = kunit_kernel.LinuxSourceTree()
+
 		request = KunitRequest(cli_args.raw_output,
 				       cli_args.timeout,
-				       cli_args.jobs)
+				       cli_args.jobs,
+				       cli_args.build_dir,
+				       cli_args.defconfig)
 		result = run_tests(linux, request)
 		if result.status != KunitStatus.SUCCESS:
 			sys.exit(1)
@@ -127,4 +135,4 @@ def main(argv, linux):
 		parser.print_help()
 
 if __name__ == '__main__':
-	main(sys.argv[1:], kunit_kernel.LinuxSourceTree())
+	main(sys.argv[1:])

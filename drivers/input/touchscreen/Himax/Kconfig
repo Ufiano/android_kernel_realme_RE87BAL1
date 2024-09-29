@@ -2,13 +2,13 @@
 # Himax Touchscreen driver configuration
 #
 config TOUCHSCREEN_HIMAX_83112A
-    bool "HIMAX_83112 TP "
+    tristate "HIMAX_83112 TP "
 	
 	help
 		This enables support for support tp_himaxs.
 
 config TOUCHSCREEN_HIMAX_CHIPSET
-    bool "TOUCHSCREEN_HIMAX_CHIPSET"
+    tristate "TOUCHSCREEN_HIMAX_CHIPSET"
 	help
 		This enables support for support tp_himaxs chipset.
 
@@ -24,13 +24,13 @@ choice
 	default TOUCHSCREEN_HIMAX_INCELL
 
 config TOUCHSCREEN_HIMAX_ONCELL
-    bool "HIMAX chipset on-cell function"
+    tristate "HIMAX chipset on-cell function"
 	depends on TOUCHSCREEN_HIMAX_COMMON
 	help
 		This enables support for HIMAX CHIPSET of on-cell function.
 
 config TOUCHSCREEN_HIMAX_INCELL
-    bool "HIMAX chipset in-cell function"
+    tristate "HIMAX chipset in-cell function"
 	depends on TOUCHSCREEN_HIMAX_COMMON
 	help
 		This enables support for HIMAX CHIPSET of in-cell function.
@@ -109,12 +109,12 @@ config TOUCHSCREEN_HIMAX_IC_HX83102
 # ***************** In-cell End *******************
 
 config TOUCHSCREEN_HIMAX_DEBUG
-    bool "HIMAX debug function"
+    tristate "HIMAX debug function"
 	depends on TOUCHSCREEN_HIMAX_INCELL || TOUCHSCREEN_HIMAX_ONCELL
 	help
 		This enables support for HIMAX debug function.
 config TOUCHSCREEN_HIMAX_INSPECT
-    bool "HIMAX inspect function"
+    tristate "HIMAX inspect function"
 	depends on TOUCHSCREEN_HIMAX_INCELL || TOUCHSCREEN_HIMAX_ONCELL
 	help
 		This enables support for HIMAX inspect function.
@@ -126,7 +126,7 @@ config TOUCHSCREEN_HIMAX_EMBEDDED_FIRMWARE
 		This enables built-in FW inside kernel as binary array
 
 config HMX_DB
-	bool "HIMAX driver test over Dragon Board"
+	tristate "HIMAX driver test over Dragon Board"
 	depends on TOUCHSCREEN_HIMAX_COMMON
 	help
 	  This enables support for HIMAX driver test over Dragon Board.

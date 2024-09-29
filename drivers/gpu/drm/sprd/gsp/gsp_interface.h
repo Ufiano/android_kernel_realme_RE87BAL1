@@ -1,19 +1,10 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #ifndef _GSP_INTERFACE_H
 #define _GSP_INTERFACE_H
-
 
 #include <linux/of.h>
 #include "gsp_core.h"
@@ -41,7 +32,6 @@ struct gsp_interface_ops {
 	 * as do-nothing function at least
 	 */
 	int (*deinit)(struct gsp_interface *interface);
-
 	/*must*/
 	int (*prepare)(struct gsp_interface *interface);
 	/*must*/
@@ -60,8 +50,7 @@ int gsp_interface_is_attached(struct gsp_interface *interface);
 
 char *gsp_interface_to_name(struct gsp_interface *interface);
 
-int gsp_interface_attach(struct gsp_interface **interface,
-			 struct gsp_dev *gsp);
+int gsp_interface_attach(struct gsp_interface **interface, struct gsp_dev *gsp);
 void gsp_interface_detach(struct gsp_interface *interface);
 
 int gsp_interface_prepare(struct gsp_interface *interface);

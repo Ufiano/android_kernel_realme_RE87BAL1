@@ -1,4 +1,4 @@
-/*
+/* SPDX-License-Identifier: GPL-2.0
  * Copyright (C) 2020 Uniso Communications Inc.
  *
  * This software is licensed under the terms of the GNU General Public
@@ -15,8 +15,6 @@
 #define _UFS_SPRD_H_
 #include <linux/bits.h>
 
-extern int ufshcd_uic_change_pwr_mode(struct ufs_hba *hba, u8 mode);
-
 struct syscon_ufs {
 	struct regmap *regmap;
 	u32 reg;
@@ -25,7 +23,9 @@ struct syscon_ufs {
 
 struct ufs_sprd_host {
 	struct ufs_hba *hba;
+	struct scsi_device *sdev_ufs_rpmb;
 	void __iomem *ufs_analog_reg;
+	void __iomem *aon_apb_reg;
 	struct syscon_ufs aon_apb_ufs_en;
 	struct syscon_ufs ap_ahb_ufs_clk;
 	struct syscon_ufs ap_apb_ufs_rst;
@@ -43,6 +43,10 @@ struct ufs_sprd_host {
 	struct clk *pclk;
 
 };
+
+extern int sprd_get_soc_id(sprd_soc_id_type_t soc_id_type, u32 *id, int id_len);
+
+#define AUTO_H8_IDLE_TIME_10MS 0x1001
 
 /* UFS analog registers */
 #define MPHY_2T2R_APB_REG1 0x68
@@ -115,4 +119,5 @@ struct ufs_sprd_host {
 #define	MPHY_APB_HSTXSCLKINV1_VAL BIT(13)
 
 #define AON_VER_UFS 1
+
 #endif/* _UFS_SPRD_H_ */

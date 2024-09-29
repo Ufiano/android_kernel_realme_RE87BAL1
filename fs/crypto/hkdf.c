@@ -52,7 +52,6 @@ static int hkdf_extract(struct crypto_shash *hmac_tfm, const u8 *ikm,
 		return err;
 
 	desc->tfm = hmac_tfm;
-	desc->flags = 0;
 	err = crypto_shash_digest(desc, ikm, ikmlen, prk);
 	shash_desc_zero(desc);
 	return err;
@@ -129,7 +128,6 @@ int fscrypt_hkdf_expand(const struct fscrypt_hkdf *hkdf, u8 context,
 		return -EINVAL;
 
 	desc->tfm = hkdf->hmac_tfm;
-	desc->flags = 0;
 
 	memcpy(prefix, "fscrypt\0", 8);
 	prefix[8] = context;

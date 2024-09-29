@@ -1,12 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * drivers/scsi/ufs/unipro.h
  *
  * Copyright (C) 2013 Samsung Electronics Co., Ltd.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
  */
 
 #ifndef _UNIPRO_H_
@@ -90,23 +86,6 @@
 #define UNIPRO_CB_OFFSET(x)			(0x8000 | x)
 
 /*
- * Synopsys common M-PHY Attributes
- */
-#define CBRATESEL				0x8114
-#define CBCREGADDRLSB				0x8116
-#define CBCREGADDRMSB				0x8117
-#define CBCREGWRLSB				0x8118
-#define CBCREGWRMSB				0x8119
-#define CBCREGRDWRSEL				0x811C
-#define CBCRCTRL				0x811F
-#define CBREFCLKCTRL2				0x8132
-
-/*
- *Synopsys RX implementation specific M-PHY Attributes
- */
-#define RXSQCONTROL				0x8009
-
-/*
  * PHY Adpater attributes
  */
 #define PA_ACTIVETXDATALANES	0x1560
@@ -167,6 +146,12 @@
 #define PA_SLEEPNOCONFIGTIME	0x15A2
 #define PA_STALLNOCONFIGTIME	0x15A3
 #define PA_SAVECONFIGTIME	0x15A4
+#define PA_TXHSADAPTTYPE       0x15D4
+
+/* Adpat type for PA_TXHSADAPTTYPE attribute */
+#define PA_REFRESH_ADAPT       0x00
+#define PA_INITIAL_ADAPT       0x01
+#define PA_NO_ADAPT            0x03
 
 #define PA_TACTIVATE_TIME_UNIT_US	10
 #define PA_HIBERN8_TIME_UNIT_US		100
@@ -176,13 +161,24 @@
 #define VS_DEBUGOMC		0xD09E
 #define VS_POWERSTATE		0xD083
 #define VS_DEBUGSAVECONFIGTIME	0xD0A0
-#define VS_MPHYDISABLE		0xD0C1
+
 
 #define PA_GRANULARITY_MIN_VAL	1
 #define PA_GRANULARITY_MAX_VAL	6
 
 /* PHY Adapter Protocol Constants */
 #define PA_MAXDATALANES	4
+
+#define DL_FC0ProtectionTimeOutVal_Default	8191
+#define DL_TC0ReplayTimeOutVal_Default		65535
+#define DL_AFC0ReqTimeOutVal_Default		32767
+#define DL_FC1ProtectionTimeOutVal_Default	8191
+#define DL_TC1ReplayTimeOutVal_Default		65535
+#define DL_AFC1ReqTimeOutVal_Default		32767
+
+#define DME_LocalFC0ProtectionTimeOutVal	0xD041
+#define DME_LocalTC0ReplayTimeOutVal		0xD042
+#define DME_LocalAFC0ReqTimeOutVal		0xD043
 
 /* PA power modes */
 enum {
@@ -192,6 +188,9 @@ enum {
 	SLOWAUTO_MODE	= 5,
 	UNCHANGED	= 7,
 };
+
+#define PWRMODE_MASK		0xF
+#define PWRMODE_RX_OFFSET	4
 
 /* PA TX/RX Frequency Series */
 enum {
@@ -222,8 +221,10 @@ enum ufs_unipro_ver {
 	UFS_UNIPRO_VER_RESERVED = 0,
 	UFS_UNIPRO_VER_1_40 = 1, /* UniPro version 1.40 */
 	UFS_UNIPRO_VER_1_41 = 2, /* UniPro version 1.41 */
-	UFS_UNIPRO_VER_1_6 = 3,  /* UniPro version 1.6 */
-	UFS_UNIPRO_VER_MAX = 4,  /* UniPro unsupported version */
+	UFS_UNIPRO_VER_1_6  = 3, /* UniPro version 1.6 */
+	UFS_UNIPRO_VER_1_61 = 4, /* UniPro version 1.61 */
+	UFS_UNIPRO_VER_1_8  = 5, /* UniPro version 1.8 */
+	UFS_UNIPRO_VER_MAX  = 6, /* UniPro unsupported version */
 	/* UniPro version field mask in PA_LOCALVERINFO */
 	UFS_UNIPRO_VER_MASK = 0xF,
 };

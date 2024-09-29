@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 #ifndef _IMSBR_NETLINK_H
 #define _IMSBR_NETLINK_H
 

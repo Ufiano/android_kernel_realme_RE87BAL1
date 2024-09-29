@@ -65,12 +65,6 @@ struct sprd_dp {
 	struct notifier_block dp_nb;
 };
 
-extern struct list_head dp_glb_head;
-
-#define dp_glb_ops_register(entry) \
-	disp_ops_register(entry, &dp_glb_head)
-
-#define dp_glb_ops_attach(str) \
-	disp_ops_attach(str, &dp_glb_head)
+extern const struct dp_glb_ops qogirn6pro_dp_glb_ops;
 
 #endif /* __SPRD_DP_H__ */

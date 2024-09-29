@@ -3048,6 +3048,23 @@ exit:
 	return ret;
 }
 
+static int camioctl_key_set(struct camera_module *module, unsigned long arg)
+{
+	int ret = 0;
+	uint32_t param = 0;
+	ret = copy_from_user(&param, (void __user *)arg, sizeof(uint32_t));
+	if (unlikely(ret)) {
+		pr_err("fail to copy from user, ret %d\n", ret);
+		return -EFAULT;
+	}
+	if (param == CAM_IOCTL_PRIVATE_KEY) {
+		module->private_key = 1;
+	}
+
+	pr_info("cam%d get ioctrl permission %d\n", module->idx, module->private_key);
+	return 0;
+}
+
 /* set addr for 4in1 raw which need remosaic
  */
 static int camioctl_4in1_raw_addr_set(struct camera_module *module,
@@ -3750,7 +3767,10 @@ static int camioctl_dcam_raw_fmt_set(struct camera_module *module,unsigned long 
 		pr_err("fail to copy from user, ret %d\n", ret);
 		return -EFAULT;
 	}
-
+	//1231 sprd start
+	pr_debug("sensor raw fmt %d, dcam raw fmt %d, ch%d\n",
+			param.sensor_raw_fmt, param.dcam_raw_fmt, param.ch_id);
+	//1231 sprd end
 	hw = module->grp->hw_info;
 	if (param.ch_id > CAM_CH_CAP && param.ch_id != CAM_CH_VIRTUAL) {
 		pr_err("fail to check param, ch%d\n", param.ch_id);
@@ -3763,11 +3783,12 @@ static int camioctl_dcam_raw_fmt_set(struct camera_module *module,unsigned long 
 	}
 
 	channel = &module->channel[param.ch_id];
-	if (channel->enable == 0) {
+	//1231 sprd start
+	if (channel->enable == 0 && param.ch_id != CAM_CH_RAW) {
 		pr_err("ch%d not enable\n", param.ch_id);
 		return -EFAULT;
 	}
-
+    //1231 sprd end
 	for (i = 0; i < DCAM_RAW_MAX; i++) {
 		if (hw->ip_dcam[0]->raw_fmt_support[i] == DCAM_RAW_MAX)
 			break;

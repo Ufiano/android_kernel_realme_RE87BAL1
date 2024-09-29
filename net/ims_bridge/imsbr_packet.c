@@ -1,5 +1,5 @@
-/*
- * Copyright (C) 2016 Spreadtrum Communications Inc.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (C) 2016 Spreadtrum Communications Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-#define pr_fmt(fmt) "imsbr: " fmt
+#define pr_fmt(fmt) "sprd-imsbr: " fmt
 
 #include <linux/etherdevice.h>
 #include <linux/kernel.h>
@@ -72,7 +72,7 @@ static struct sk_buff *imsbr_allocskb(int size, gfp_t priority)
 	tlen = size + MAX_HEADER;
 	skb = alloc_skb(tlen, priority);
 	if (!skb) {
-		IMSBR_STAT_INC(sk_buff_fail);
+		IMSBR_STAT_INC(imsbr_stats->sk_buff_fail);
 		pr_err("alloc_skb len=%d failed\n", tlen);
 		return NULL;
 	}
@@ -140,7 +140,7 @@ static void imsbr_packet_output_v4(struct sk_buff *skb, struct iphdr *ip)
 
 	rt = ip_route_output_key(&init_net, &fl4);
 	if (IS_ERR(rt)) {
-		IMSBR_STAT_INC(ip_route_fail);
+		IMSBR_STAT_INC(imsbr_stats->ip_route_fail);
 		pr_err_ratelimited("ip_route_output_key s=%pI4 d=%pI4 e=%ld\n",
 				   &ip->saddr, &ip->daddr, PTR_ERR(rt));
 		kfree_skb(skb);
@@ -150,7 +150,7 @@ static void imsbr_packet_output_v4(struct sk_buff *skb, struct iphdr *ip)
 	skb_dst_set(skb, &rt->dst);
 	err = ip_local_out(&init_net, skb->sk, skb);
 	if (unlikely(err)) {
-		IMSBR_STAT_INC(ip_output_fail);
+		IMSBR_STAT_INC(imsbr_stats->ip_output_fail);
 		pr_err_ratelimited("ip_local_out err=%d\n", err);
 	}
 }
@@ -192,16 +192,16 @@ static void imsbr_packet_output_v6(struct sk_buff *skb, struct ipv6hdr *ip6)
 	fl6.flowi6_mark = skb->mark;
 	dst = ip6_route_output(&init_net, NULL, &fl6);
 	if (unlikely(dst->error)) {
-		IMSBR_STAT_INC(ip6_route_fail);
-		pr_err_ratelimited("ip6_route_output s=%pI6c d=%pI6c m=0x%08x e=%d\n",
-				   &ip6->saddr, &ip6->daddr, fl6.flowi6_mark, dst->error);
+		IMSBR_STAT_INC(imsbr_stats->ip6_route_fail);
+		pr_err_ratelimited("ip6_route_output s=%pI6c d=%pI6c e=%d\n",
+				   &ip6->saddr, &ip6->daddr, dst->error);
 		dst_release(dst);
 		goto freeit;
 	}
 
 	dst = xfrm_lookup(&init_net, dst, flowi6_to_flowi(&fl6), NULL, 0);
-	if (unlikely(IS_ERR(dst))) {
-		IMSBR_STAT_INC(xfrm_lookup_fail);
+	if (IS_ERR(dst)) {
+		IMSBR_STAT_INC(imsbr_stats->xfrm_lookup_fail);
 		pr_err_ratelimited("xfrm_lookup s=%pI6c d=%pI6c p=%d e=%ld\n",
 				   &ip6->saddr, &ip6->daddr, ip6->nexthdr,
 				   PTR_ERR(dst));
@@ -213,7 +213,7 @@ freeit:
 	skb_dst_set(skb, dst);
 	err = ip6_local_out(&init_net, skb->sk, skb);
 	if (unlikely(err)) {
-		IMSBR_STAT_INC(ip6_output_fail);
+		IMSBR_STAT_INC(imsbr_stats->ip6_output_fail);
 		pr_err_ratelimited("ip6_local_out err=%d\n", err);
 	}
 }
@@ -278,7 +278,7 @@ static void imsbr_dumpcap(struct sk_buff *skb)
 
 	nskb = skb_realloc_headroom(skb, sizeof(struct ethhdr));
 	if (!nskb) {
-		IMSBR_STAT_INC(sk_buff_fail);
+		IMSBR_STAT_INC(imsbr_stats->sk_buff_fail);
 		pr_err("skb realloc headroom fail, len=%d\n", skb->len);
 		return;
 	}
@@ -326,8 +326,11 @@ static void imsbr_packet_info(char *prefix, struct sk_buff *skb)
 
 static int imsbr_fragsz(void)
 {
+	int min_val;
+
+	min_val = min_t(int, imsbr_frag_size, IMSBR_PACKET_MAXSZ);
 	if (imsbr_frag_size)
-		return min_t(int, imsbr_frag_size, IMSBR_PACKET_MAXSZ);
+		return min_val;
 
 	return IMSBR_PACKET_MAXSZ;
 }
@@ -345,14 +348,14 @@ static void imsbr_frag_send(struct sk_buff *skb)
 	pr_info_ratelimited("pktlen %d exceed max %d, frag it!\n", skb->len,
 			    imsbr_fragsz());
 
-	IMSBR_STAT_INC(frag_create);
+	IMSBR_STAT_INC(imsbr_stats->frag_create);
 
 	while (totlen > 0) {
-		len = min(totlen, imsbr_fragsz());
+		len = totlen < imsbr_fragsz() ? totlen : imsbr_fragsz();
 
 		if (imsbr_sblock_get(&imsbr_data, &blk, len)) {
 			pr_err("frag %d packet fail!\n", skb->len);
-			IMSBR_STAT_INC(frag_fail);
+			IMSBR_STAT_INC(imsbr_stats->frag_fail);
 			return;
 		}
 
@@ -373,15 +376,26 @@ static void imsbr_frag_send(struct sk_buff *skb)
 		offset += len;
 	}
 
-	IMSBR_STAT_INC(frag_ok);
+	IMSBR_STAT_INC(imsbr_stats->frag_ok);
 }
+
+#ifdef CONFIG_SPRD_IMS_BRIDGE_TEST
+
+void call_packet_function(struct call_p_function *cpf)
+{
+	cpf->pkt2skb = imsbr_pkt2skb;
+	cpf->dumpcap = imsbr_dumpcap;
+	cpf->frag_send = imsbr_frag_send;
+}
+
+#endif
 
 void imsbr_packet_relay2cp(struct sk_buff *skb)
 {
 	struct sblock blk;
 	int len = skb->len;
 
-	IMSBR_STAT_INC(pkts_tocp);
+	IMSBR_STAT_INC(imsbr_stats->pkts_tocp);
 	if (__ratelimit(&rlimit_tocp_pkt))
 		imsbr_packet_info("relay packet to cp", skb);
 
@@ -389,7 +403,7 @@ void imsbr_packet_relay2cp(struct sk_buff *skb)
 		imsbr_dumpcap(skb);
 
 	if (skb_linearize(skb)) {
-		IMSBR_STAT_INC(sk_buff_fail);
+		IMSBR_STAT_INC(imsbr_stats->sk_buff_fail);
 		pr_err("linearize fail, len=%d, drop it!\n", len);
 		goto freeit;
 	}
@@ -428,7 +442,7 @@ imsbr_pkt_reasm(struct imsbr_packet *phdr, void *pktdata, int pktlen)
 
 	mutex_lock(&imsbr_reasm_lock);
 	if (phdr->frag_off == 0) {
-		IMSBR_STAT_INC(reasm_request);
+		IMSBR_STAT_INC(imsbr_stats->reasm_request);
 		if (unlikely(reasm_tlen >= huge_pktlen)) {
 			pr_info("start to reasm a huge packet len=%d\n",
 				reasm_tlen);
@@ -458,7 +472,7 @@ imsbr_pkt_reasm(struct imsbr_packet *phdr, void *pktdata, int pktlen)
 		struct sk_buff *skb = imsbr_reasm_skb;
 
 		imsbr_reasm_skb = NULL;
-		IMSBR_STAT_INC(reasm_ok);
+		IMSBR_STAT_INC(imsbr_stats->reasm_ok);
 
 		skb_put(skb, reasm_tlen);
 		mutex_unlock(&imsbr_reasm_lock);
@@ -469,14 +483,14 @@ imsbr_pkt_reasm(struct imsbr_packet *phdr, void *pktdata, int pktlen)
 	 * XXX - If a packet was fraged to 1#,2#,3# and 3# was lost,
 	 * we will *leak* imsbr_reasm_skb util the next frag packet
 	 * arrival, but it is not worth to *fix* this "bug", this will
-	 * just increase complexity. Also *leak* is very very hard to
+	 * just increase complexity. Also *leak* is very hard to
 	 * occur!
 	 */
 	mutex_unlock(&imsbr_reasm_lock);
 	return NULL;
 
 fail:
-	IMSBR_STAT_INC(reasm_fail);
+	IMSBR_STAT_INC(imsbr_stats->reasm_fail);
 	if (imsbr_reasm_skb) {
 		kfree_skb(imsbr_reasm_skb);
 		imsbr_reasm_skb = NULL;
@@ -515,7 +529,7 @@ void imsbr_process_packet(struct imsbr_sipc *sipc, struct sblock *blk,
 	int pktlen;
 	int media_type;
 
-	IMSBR_STAT_INC(pkts_fromcp);
+	IMSBR_STAT_INC(imsbr_stats->pkts_fromcp);
 
 	unalign_memcpy(&_pkthdr, blk->addr, sizeof(_pkthdr));
 
@@ -552,8 +566,10 @@ void imsbr_process_packet(struct imsbr_sipc *sipc, struct sblock *blk,
 
 	rcu_read_lock();
 	flow = imsbr_flow_match(&nft_tuple);
-	if (flow)
+	if (flow) {
 		socket_type = flow->socket_type;
+		media_type = flow->media_type;
+	}
 	rcu_read_unlock();
 
 end:

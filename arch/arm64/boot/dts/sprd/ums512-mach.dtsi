@@ -6,24 +6,14 @@
  * This file is licensed under a dual GPLv2 or X11 license.
  */
 
-#include <dt-bindings/gpio/gpio.h>
-#include "ums512.dtsi"
-#include "ums512-modem.dtsi"
 #include <dt-bindings/thermal/thermal.h>
+
 / {
 	aliases {
 		cooling-device0 = &cluster0_cooling;
 		cooling-device1 = &cluster1_cooling;
 		gpu-cooling0 = &gpu_cooling0;
-
-		serial0 = &uart0;
-		serial1 = &uart1;
-
-	};
-
-	memory: memory {
-		device_type = "memory";
-		reg = <0x0 0x80000000 0x0 0x80000000>;
+		thm-sensor0 = &virtual_sensor;
 	};
 
 	display-subsystem {
@@ -32,9 +22,107 @@
 		gsp = <&gsp>;
 	};
 
-	chosen: chosen {
-		stdout-path = &uart1;
-		bootargs = "earlycon=sprd_serial,0x70100000,115200n8 console=ttyS1,115200n8 loglevel=1 init=/init root=/dev/ram0 rw printk.devkmsg=on androidboot.boot_devices=soc/soc:ap-apb/71400000.sdio swiotlb=1 androidboot.init_fatal_panic=true";
+	ion: ion {
+		compatible = "sprd,ion";
+		#address-cells = <1>;
+		#size-cells = <0>;
+	};
+
+	sprd-map-user {
+		compatible = "unisoc,map-user";
+	};
+
+	reserved_memory: reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
+
+		ddrbist_reserved: ddrbist-mem@0x80000000 {
+			reg = <0x0 0x80000000 0x0 0x00001000>;
+		};
+
+		sysdump_reserved: sysdumpinfo-mem@80001000 {
+			reg = <0x0 0x80001000 0x0 0x00001000>;
+		};
+
+		audio_reserved: audio-mem@87400000 {
+			reg = <0x0 0x87400000 0x0 0x00400000>;
+		};
+
+		sp_ddr_reserved: sp_ddr-mem@88000000 {
+			reg = <0x0 0x88000000 0x0 0x00300000>;
+		};
+
+		audiodsp_reserved: audiodsp-mem@89000000 {
+			reg = <0x0 0x89000000 0x0 0x00600000>;
+		};
+
+		cp_reserved: cp-mem@89600000 {
+			reg = <0x0 0x89600000 0x0 0x04900000>;
+		};
+
+		smem_reserved: sipc-mem@8e000000 {
+			reg = <0x0 0x8e000000 0x0 0x00900000>;
+		};
+
+		/* Only used for iq, will be removed in normal mode by uboot */
+		iq_reserved: iq-mem@90000000{
+			compatible = "sprd,iq-mem";
+			reg = <0x0 0x90000000 0x0 0x4000000>;
+		};
+
+		sml_reserved: sml-mem@94000000 {
+			reg = <0x0 0x94000000 0x0 0x00040000>;
+		};
+
+		tos_reserved: tos-mem@94040000 {
+			reg = <0x0 0x94040000 0x0 0x05fc0000>;
+		};
+
+		tos_shm_reserved: sh-mem@9a000000{
+			reg = <0x0 0x9a000000 0x0 0x00100000>;
+		};
+
+		/* The uboot_log_reserved node is added in uboot. base:0x9de8 0000, size:0x80000 */
+		uboot_log_reserved: uboot_log-mem {
+			reg = <0x0 0x9de80000 0x0 0x00080000>;
+		};
+
+		/* Only for userdebug, will be removed in user mode by uboot */
+		uboot_reserved: sysdump-uboot@9f000000 {
+			reg = <0x0 0x9f000000 0x0 0x01000000>;
+		};
+
+		cma_reserved: cma_share@f00000000 {
+			compatible = "shared-dma-pool";
+			reg = <0x0 0xf0000000 0x0 0x03000000>;
+			reusable;
+			linux,cma-default;
+		};
+
+		rebootescrow@0xfff70000 {
+			no-map;
+			reg = <0x0 0xfff70000 0x0 0x00010000>; /* 64K */
+		};
+
+		pstore_reserved: ramoops@fff80000 {
+			compatible = "ramoops";
+			reg = <0x0 0xfff80000 0x0 0x00040000>;
+			record-size = <0x8000>;
+			console-size = <0x8000>;
+			pmsg-size = <0x8000>;
+		};
+	};
+
+	sprd-iq {
+		compatible = "sprd,iq";
+		sprd,region = <&iq_reserved>;
+		sprd,mapping-offs = <0x0>;
+	};
+
+	rebootescrow@0 {
+		compatible = "pmem-region";
+		reg = <0x0 0xfff70000 0x0 0x00010000>;
 	};
 
 	dpu_dvfs: dpu-dvfs {
@@ -53,11 +141,6 @@
 			307200    700000
 			384000    750000
 			>;
-	};
-
-	extcon_gpio: extcon-gpio {
-		compatible = "linux,extcon-usb-gpio";
-		vbus-gpio = <&pmic_eic 0 GPIO_ACTIVE_HIGH>;
 	};
 
 	vsp_dvfs: vsp-dvfs {
@@ -103,129 +186,28 @@
 	firmware {
 		android {
 			compatible = "android,firmware";
-
 			vbmeta {
 				compatible = "android,vbmeta";
-				parts = "vbmeta,socko,odmko,boot,dtbo,l_modem,pm_sys,l_ldsp,l_gdsp,l_agdsp,l_cdsp";
+				parts = "vbmeta,boot,vendor_boot,dtbo,l_modem,pm_sys,l_ldsp,l_gdsp,l_agdsp,l_cdsp";
 			};
-
 		};
 	};
 
-	ion: ion {
-		compatible = "sprd,ion";
-		#address-cells = <1>;
-		#size-cells = <0>;
-	};
-
 	ddr_dfs: scene-frequency {
-		compatible = "sprd,dfs";
+		compatible = "sprd,ddr-dvfs";
 		freq-num = <8>;
-		backdoor = <1866>;
 	};
 
 	sprd-sensorhub {
 		 compatible = "sprd,sharkl5Pro-sensorhub", "sprd,sensor-hub";
 	};
 
-	reserved_memory: reserved-memory {
-		#address-cells = <2>;
-		#size-cells = <2>;
-		ranges;
-
-		ddrbist_reserved: ddrbist-mem@80000000 {
-			reg = <0x0 0x80000000 0x0 0x00001000>;
-		};
-
-		rebootescrow@0x81ff0000 {
-			no-map;
-			reg = <0x0 0x81ff0000 0x0 0x00010000>; /* 64K */
-		};
-
-		audio_reserved: audio-mem@87500000 {
-			reg = <0x0 0x87500000 0x0 0x00300000>;
-		};
-
-		smem_reserved: sipc-mem@87800000 {
-			reg = <0x0 0x87800000 0x0 0x00800000>;
-		};
-
-		sp_ddr_reserved: sp-ddr-mem@88000000 {
-			reg = <0x0 0x88000000 0x0 0x00300000>;
-		};
-
-		audiodsp_reserved: audiodsp-mem@89000000 {
-			reg = <0x0 0x89000000 0x0 0x00600000>;
-		};
-
-		cp_reserved: cp-mem@89600000 {
-			reg = <0x0 0x89600000 0x0 0x04900000>;
-		};
-
-		/* Only used for iq mode, will be removed in normal mode by uboot */
-		iq_reserved: iq-mem@90000000 {
-			compatible = "sprd,iq-mem";
-			reg = <0x0 0x90000000 0x0 0x04000000>;
-		};
-
-		/* must be 64M aligned */
-		sml_reserved: sml-mem@94000000 {
-			reg = <0x0 0x94000000 0x0 0x00040000>;
-		};
-
-		tos_reserved: tos-mem@94040000 {
-			reg = <0x0 0x94040000 0x0 0x05fc0000>;
-		};
-
-		pstore_reserved: ramoops@fff80000 {
-			compatible = "ramoops";
-			reg = <0x0 0xfff80000 0x0 0x00040000>;
-			record-size = <0x8000>;
-			console-size = <0x8000>;
-			pmsg-size = <0x8000>;
-		};
-
-		debug_reserved: debug-mem@100000000 {
-			reg = <0x1 0x00000000 0x0 0x00001000>;
-		};
-	};
-
-	sprd-iq {
-		compatible = "sprd,iq";
-		sprd,region = <&iq_reserved>;
-		sprd,mapping-offs = <0x0>;
-	};
-
-	sprd-mtty {
-		compatible = "sprd,mtty";
-		sprd,name = "ttyBT";
-	};
-
-	sprd-fm {
-		compatible = "sprd,marlin3-fm";
-		sprd,name = "sprd-fm";
-	};
-
-	gnss_common_ctl {
-		compatible = "sprd,gnss_common_ctl";
-		sprd,name = "gnss_common_ctl";
-	};
-
-	rebootescrow@0 {
-		compatible = "pmem-region";
-		reg = <0x0 0x81ff0000 0x0 0x00010000>;
-	};
-
-	audio-mem-mgr {
-		memory-region = <&audio_reserved &audiodsp_reserved>;
-	};
-
 	thm_zone: thermal-zones {
 		soc_thmzone: soc-thmzone {
 			polling-delay-passive = <100>;
 			polling-delay = <1000>;
-			sustainable-power = <3000>;
-			thermal-sensors = <&soc_sensor  17>;
+			sustainable-power = <5800>;
+			thermal-sensors = <&virtual_sensor  0>;
 			trips {
 				soc_threshold: trip-point@0 {
 					temperature = <70000>;
@@ -248,17 +230,31 @@
 					trip = <&soc_target>;
 					contribution = <1024>;
 					cooling-device =
-					<&cluster0_cooling THERMAL_NO_LIMIT \
+					<&CPU0 THERMAL_NO_LIMIT \
 					THERMAL_NO_LIMIT>;
 				};
 				map1 {
 					trip = <&soc_target>;
-					contribution = <410>;
+					contribution = <682>;
+					cooling-device =
+					<&CPU6 THERMAL_NO_LIMIT \
+					THERMAL_NO_LIMIT>;
+				};
+				map2 {
+					trip = <&soc_target>;
+					contribution = <1024>;
+					cooling-device =
+					<&cluster0_cooling THERMAL_NO_LIMIT \
+					THERMAL_NO_LIMIT>;
+				};
+				map3 {
+					trip = <&soc_target>;
+					contribution = <1024>;
 					cooling-device =
 					<&cluster1_cooling THERMAL_NO_LIMIT \
 					THERMAL_NO_LIMIT>;
 				};
-				map2 {
+				map4 {
 					trip = <&soc_target>;
 					contribution = <1024>;
 					cooling-device =
@@ -266,7 +262,6 @@
 					THERMAL_NO_LIMIT>;
 				};
 			};
-
 		};
 
 		prometheus6_tzone0: prometheus6-tzone0 {
@@ -341,20 +336,6 @@
 			thermal-sensors = <&ap_thm2 0>;
 		};
 
-		cluster0_thmzone: cluster0-thmzone {
-			polling-delay-passive = <0>;
-			polling-delay = <0>;
-			sustainable-power = <2000>;
-			thermal-sensors = <&cluster0_sensor  15>;
-		};
-
-		cluster1_thmzone: cluster1-thmzone {
-			polling-delay-passive = <0>;
-			polling-delay = <0>;
-			sustainable-power = <2000>;
-			thermal-sensors = <&cluster1_sensor  16>;
-		};
-
 		osctsen_thmzone: osctsen-thmzone {
 			polling-delay-passive = <0>;
 			polling-delay = <0>;
@@ -366,6 +347,15 @@
 			polling-delay = <0>;
 			thermal-sensors = <&pmic_tsensor 1>;
 		};
+	};
+
+	virtual_sensor: virtual-sensor@0 {
+			compatible = "virtual-thermal";
+			#thermal-sensor-cells = <1>;
+			thmzone-cells = <&ank0_thmzone>, <&ank1_thmzone>, <&ank2_thmzone>,
+				<&ank3_thmzone>, <&ank4_thmzone>, <&ank5_thmzone>,
+				<&prometheus6_tzone0>, <&prometheus6_tzone1>,
+				<&prometheus7_thmzone>, <&gpu_thmzone>;
 	};
 
 	cooling-devices {
@@ -399,7 +389,8 @@
 			sprd,efuse-switch = <0>;
 			sprd,hotplug-period = <10>;
 			sprd,min-cpufreq = <614400>;
-			sprd,min-cpunum = <1>;
+			sprd,min-cpunum = <6>;
+			sprd,max-temp = <90000>;
 			sprd,core-base = <3950>;
 			sprd,cluster-base = <3896>;
 			sprd,dynamic-core =
@@ -408,14 +399,6 @@
 			sprd,dynamic-cluster =
 			/*Pdynperghz*10    Freq     Vbase  */
 			< 246           1000     1000>;
-			sprd,sensor-names = "ank0-thmzone",
-				"ank1-thmzone",
-				"ank2-thmzone",
-				"ank3-thmzone",
-				"ank4-thmzone",
-				"ank5-thmzone";
-			sprd,cii-per-core-tp = <105000 100000 95000 90000>;
-			sprd,cii-max-tp-core = <90000>;
 		};
 
 		cluster1_cooling: cluster1-cooling {
@@ -449,6 +432,7 @@
 			sprd,hotplug-period = <10>;
 			sprd,min-cpufreq = <1228800>;
 			sprd,min-cpunum = <0>;
+			sprd,max-temp = <85000>;
 			sprd,core-base = <11552>;
 			sprd,cluster-base = <3896>;
 			sprd,dynamic-core =
@@ -457,10 +441,6 @@
 			sprd,dynamic-cluster =
 			/* Pdynperghz*10    Freq     Vbase */
 			<  246            1000     1000>;
-			sprd,sensor-names = "prometheus6-tzone0",
-				"prometheus7-thmzone";
-			sprd,cii-per-core-tp = <85000 80000 75000 70000>;
-			sprd,cii-max-tp-core = <75000>;
 		};
 	};
 
@@ -500,7 +480,6 @@
 
 	isp_dvfs: isp-dvfs {
 		compatible = "sprd,hwdvfs-isp";
-		status = "disabled";
 		operating-points = <
 			/* kHz    uV */
 			256000    700000
@@ -513,7 +492,6 @@
 
 	cpp_dvfs: cpp-dvfs {
 		compatible = "sprd,hwdvfs-cpp";
-		status = "disabled";
 		operating-points = <
 			/* kHz    uV */
 			76800     700000
@@ -525,7 +503,6 @@
 
 	jpg_dvfs: jpg-dvfs {
 		compatible = "sprd,hwdvfs-jpg";
-		status = "disabled";
 		operating-points = <
 			/* kHz    uV */
 			76800     700000
@@ -537,7 +514,6 @@
 
 	fd_dvfs: fd-dvfs {
 		compatible = "sprd,hwdvfs-fd";
-		status = "disabled";
 		operating-points = <
 			/* kHz    uV */
 			76800     700000
@@ -549,7 +525,6 @@
 
 	mtx_dvfs: mtx-dvfs {
 		compatible = "sprd,hwdvfs-mtx";
-		status = "disabled";
 		operating-points = <
 			/* kHz    uV */
 			76800     700000
@@ -564,7 +539,6 @@
 
 	dcam_if_dvfs: dcam-if-dvfs {
 		compatible = "sprd,hwdvfs-dcam-if";
-		status = "disabled";
 		operating-points = <
 			/* kHz    uV */
 			192000    700000
@@ -577,7 +551,6 @@
 
 	dcam_axi_dvfs: dcam-axi-dvfs {
 		compatible = "sprd,hwdvfs-dcam-axi";
-		status = "disabled";
 		operating-points = <
 			/* kHz    uV */
 			256000    700000
@@ -589,103 +562,39 @@
 
 	mmsys_dvfs: mmsys-dvfs {
 		compatible = "sprd,hwdvfs-mmsys";
-		status = "disabled";
 		sprd,topdvfs_controller = <&topdvfs_controller>;
 	};
 
-	autotest:autotest{
-		compatible = "sprd,autotest";
-		sprd,pinctrl = <&pin_controller>;
-	};
-
-	ipi: interrupt-controller {
-		compatible = "android,CustomIPI";
-		#interrupt-cells = <1>;
-		interrupt-controller;
-	};
-
 	trusty {
-		compatible = "android,trusty-smc-v1";
+		compatible = "sprd,trusty-smc-v1";
+
 		irq {
-			compatible = "android,trusty-irq-v1";
-			interrupt-templates = <&ipi 0>,
-						<&gic 1 GIC_PPI 0>,
-						<&gic 1 GIC_SPI 0>;
-				interrupt-ranges = < 0  15 0>,
-						<16  31 1>,
-						<32 223 2>;
+			compatible = "sprd,trusty-irq-v1";
+			interrupt-templates = <&gic 0 0 IRQ_TYPE_NONE>,
+					      <&gic 1 GIC_PPI IRQ_TYPE_LEVEL_LOW>,
+					      <&gic 1 GIC_SPI IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-ranges = < 0  15 0>,
+					   <16  31 1>,
+					   <32 223 2>;
 		};
 
 		virtio {
-			compatible = "android,trusty-virtio-v1";
+			compatible = "sprd,trusty-virtio-v1";
 		};
 
 		log {
-			compatible = "android,trusty-log-v1";
+			compatible = "sprd,trusty-log-v1";
+		};
+
+		sprd-tshm {
+			compatible = "sprd,tshm";
+			memory-region = <&tos_shm_reserved>;
 		};
 	};
-};
-
-&sdio0 {
-	sprd,sdr104-dly = <0x7f 0x73 0x72 0x72>;
-	sprd,sdr50-dly = <0x6e 0x7f 0x01 0x01>;
-	sprd,sdhs-dly = <0x7f 0x1a 0x9a 0x9a>;
-	sprd,legacy-dly = <0x7f 0x1a 0x9a 0x9a>;
-	vmmc-supply = <&vddsdcore>;
-	vqmmc-supply = <&vddsdio>;
-	voltage-ranges = <3000 3000>;
-	bus-width = <4>;
-	sd-uhs-sdr104;
-	sd-uhs-sdr50;
-	sprd,name = "sdio_sd";
-	sprd,sdio-adma;
-	no-sdio;
-	no-mmc;
-	status = "okay";
-};
-
-&sdio1 {
-	sprd,sdr104-dly = <0x7f 0x76 0x69 0x69>;
-	sprd,sdr50-dly = <0x7f 0xf7 0xf5 0xf5>;
-	sd-uhs-sdr104;
-	sd-uhs-sdr50;
-	bus-width = <4>;
-	sprd,name = "sdio_wifi";
-	sprd,sdio-adma;
-	no-sd;
-	no-mmc;
-	status = "okay";
-};
-
-&sdio3 {
-	sprd,hs400es-dly = <0x40 0x7f 0x2d 0x2d>;
-	sprd,hs400-dly = <0x3f 0xdf 0x2f 0x2f>;
-	sprd,hs200-dly = <0x7f 0xde 0xd4 0xd4>;
-	sprd,ddr52-dly = <0x3e 0x37 0x24 0x24>;
-	sprd,mmchs-dly = <0x60 0x30 0x30 0x30>;
-	vmmc-supply = <&vddemmccore>;
-	voltage-ranges = <3000 3000>;
-	bus-width = <8>;
-	non-removable;
-	cap-mmc-hw-reset;
-	mmc-hs400-enhanced-strobe;
-	mmc-hs400-1_8v;
-	mmc-hs200-1_8v;
-	mmc-ddr-1_8v;
-	sprd,name = "sdio_emmc";
-	sprd,sdio-adma;
-	no-sdio;
-	no-sd;
-	status = "okay";
 };
 
 &sc2730_pmic {
 	interrupts = <GIC_SPI 173 IRQ_TYPE_LEVEL_HIGH>;
-};
-
-&hsphy {
-	vdd-supply = <&vddusb33>;
-	extcon = <&extcon_gpio>;
 };
 
 &modem_dbg_log{
@@ -698,253 +607,3 @@
 	mipi-switch-mode-gpios = <&ap_gpio 8 GPIO_ACTIVE_HIGH>;
 };
 
-&pmic_typec {
-	status = "okay";
-};
-
-&uart0 {
-	status = "okay";
-};
-
-&uart1 {
-	status = "okay";
-};
-
-&dpu {
-	status = "okay";
-};
-
-&iommu_dispc {
-	status = "okay";
-};
-
-&dsi {
-	status = "okay";
-	#address-cells = <1>;
-	#size-cells = <0>;
-
-	panel: panel {
-		compatible = "sprd,generic-mipi-panel";
-		#address-cells = <1>;
-		#size-cells = <0>;
-		reg = <0>;
-
-		port@1 {
-			reg = <1>;
-			panel_in: endpoint {
-				remote-endpoint = <&dphy_out>;
-			};
-		};
-	};
-};
-
-&dphy {
-	status = "okay";
-};
-
-&spi0 {
-	/*used for fingerprint sensor*/
-	status = "okay";
-};
-
-&pwms {
-	status = "okay";
-};
-
-&vsp {
-	status = "okay";
-};
-
-&iommu_vsp {
-	status = "okay";
-};
-
-&jpg {
-	status = "okay";
-};
-
-&iommu_jpg {
-	status = "okay";
-};
-
-&dcam {
-	status = "okay";
-};
-
-&iommu_dcam {
-	status = "okay";
-};
-
-&isp {
-	status = "okay";
-};
-
-&iommu_isp {
-	status = "okay";
-};
-
-&cpp {
-	status = "okay";
-};
-
-&iommu_cpp {
-	status = "okay";
-};
-
-&csi0 {
-	status = "okay";
-};
-
-&csi1 {
-	status = "okay";
-};
-
-&csi2 {
-	status = "okay";
-};
-
-&iommu_fd {
-	status = "okay";
-};
-
-&isp_dvfs {
-	status = "okay";
-};
-
-&cpp_dvfs {
-	status = "okay";
-};
-
-&jpg_dvfs {
-	status = "okay";
-};
-
-&fd_dvfs {
-	status = "okay";
-};
-
-&mtx_dvfs {
-	status = "okay";
-};
-
-&dcam_if_dvfs {
-	status = "okay";
-};
-
-&dcam_axi_dvfs {
-	status = "okay";
-};
-
-&mmsys_dvfs {
-	status = "okay";
-};
-
-&sound_sprd_ap_alliis {
-	status = "okay";
-};
-
-&i2s0 {
-	status = "okay";
-};
-
-&dmc_mpu {
-	status = "okay";
-	sprd,channel-names =
-		"CPU", "GPU", "DPU/DCAM","ISP",
-		"AP/VSP/AON", "WTLCP", "PUBCP/AUDCP",
-		"SHARED0", "SHARED1", "SHARED2",
-		"SHARED3", "SHARED4", "SHARED5",
-		"SHARED6", "SHARED7", "SHARED8";
-	sprd,ranges = <0 0 0 0>, <0 0 0 0>, <0 0 0 0>,
-		<0 0 0 0>, <0 0 0 0>, <0 0x87400000 0 0x94000000>,
-		<0 0x87400000 0 0x94000000>, <0 0 0 0>, <0 0 0 0>,
-		<0 0 0 0>, <0 0 0 0>, <0 0 0 0>,
-		<0 0 0 0>, <0 0 0 0>, <0 0 0 0>,
-		<0 0 0 0>;
-	sprd,chn-config =
-		<DISABLE MON_INSIDE MON_WRITE>,
-		<DISABLE MON_INSIDE MON_WRITE>,
-		<DISABLE MON_INSIDE MON_WRITE>,
-		<DISABLE MON_INSIDE MON_WRITE>,
-		<DISABLE MON_INSIDE MON_WRITE>,
-		<ENABLE MON_OUTSIDE MON_WRITE>,
-		<ENABLE MON_OUTSIDE MON_WRITE>,
-		<DISABLE MON_INSIDE MON_WRITE>,
-		<DISABLE MON_INSIDE MON_WRITE>,
-		<DISABLE MON_INSIDE MON_WRITE>,
-		<DISABLE MON_INSIDE MON_WRITE>,
-		<DISABLE MON_INSIDE MON_WRITE>,
-		<DISABLE MON_INSIDE MON_WRITE>,
-		<DISABLE MON_INSIDE MON_WRITE>,
-		<DISABLE MON_INSIDE MON_WRITE>,
-		<DISABLE MON_INSIDE MON_WRITE>;
-	sprd,panic;
-};
-
-&i2c4 {
-	status = "okay";
-	clock-frequency = <400000>;
-
-	ucp1301_spk: ucp1301@58 {
-		compatible = "sprd,ucp1301-spk";
-		reg = <0x58>;
-		reset-gpios = <&ap_gpio 134 GPIO_ACTIVE_HIGH>;
-		#sound-dai-cells = <1>;
-	};
-};
-
-&sprd_headset {
-	status = "okay";
-	extcon = <&pmic_typec>;
-	mic-gpios = <&ap_gpio 16 GPIO_ACTIVE_HIGH>;
-	lr-gpios = <&ap_gpio 15 GPIO_ACTIVE_HIGH>;
-	sprd,3pole-adc-threshold = <112>;
-};
-
-&sprd_audio_codec_ana {
-	status = "okay";
-	hp-use-inter-pa = <1>;
-	fixed-sample-rate = <48000 48000 48000>;
-	digital-codec = <&sprd_audio_codec_dig>;
-};
-
-&sound_vbc_v4_sprd_codec {
-	status = "okay";
-	sprd-audio-card,routing =
-		"HPMIC Pin", "HP Mic Jack",
-		"MIC Pin", "Mic Jack",
-		"MIC2 Pin", "Aux Mic Jack",
-		"HeadPhone Jack", "HP Pin",
-		"Ext Spk", "SPK Pin",
-		"UCP1301 SPK ON", "SPK Pin",
-		"Ext Spk", "UCP1301 SPK",
-		"DMIC Pin", "DMic Jack",
-		"DMIC1 Pin", "DMic1 Jack",
-		"Ext Ear", "EAR Pin";
-
-	/* 35: ucp1301 normal ap01 */
-	sprd-audio-card,dai-link@53 {
-		ignore-suspend = <1>;
-		link-name = "BE_NORMAL_AP01_UCPSPK";
-		stream-name = "BE_ST_NORMAL_AP01_UCPSPK";
-		no-pcm = <1>;
-		dpcm-playback = <1>;
-		be-id = <0>;
-		dai-format = "i2s";
-		plat {
-			sound-dai = <&sprd_route_pcm>;
-		};
-		cpu {
-			sound-dai = <&vbc_v4 3>;
-		};
-		codec {
-			sound-dai = <&ucp1301_spk 0>;
-		};
-	};
-
-	/*
-	 * node 54 and node 55 (index 36 and 37) are reserved for
-	 * "ucp1301-spk2" and "ucp1301-rcv"
-	 * nodes from 56 to 67 (index from 38 to 49) are used by HIFI
-	 */
-};

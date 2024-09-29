@@ -1,5 +1,5 @@
 /*
- ** Copyright (C) 2019 Spreadtrum Communications Inc.
+ ** Copyright (C) 2020 Unisoc Communications Inc.
  **
  ** This software is licensed under the terms of the GNU General Public
  ** License version 2, as published by the Free Software Foundation, and
@@ -30,38 +30,47 @@
 #define SPRD_GPIO_TEST_NUM(i)		((i) & SPRD_GPIO_TEST_NUM_MSK)
 #define SPRD_GPIO_TEST_DIR(i)		(!!((i) & SPRD_GPIO_TEST_DIR_MSK))
 #define SPRD_GPIO_TEST_VAL(i)		(!!((i) & SPRD_GPIO_TEST_VAL_MSK))
+#define SPRD_GPIO_TEST_NR	256
+
+static int gpio_match_name_gpio(struct gpio_chip *chip, void *data)
+{
+	if (chip->ngpio == SPRD_GPIO_TEST_NR)
+		return 1;
+	else
+		return 0;
+}
 
 static int gpio_test(struct autotest_handler *handler, void *arg)
 {
-	int gpio_data, num, dir, val, ret = 0;
+	int gpio_data, offset, num, dir, val, ret = 0;
 	struct gpio_desc *desc;
 	struct gpio_chip *chip;
-
 	if (get_user(gpio_data, (int __user *)arg))
 		return -EFAULT;
 
-	num = SPRD_GPIO_TEST_NUM(gpio_data);
+	offset = SPRD_GPIO_TEST_NUM(gpio_data);
 	dir = SPRD_GPIO_TEST_DIR(gpio_data);
 	val = SPRD_GPIO_TEST_VAL(gpio_data);
-	pr_info("num=%d, dir=%d, val=%d\n", num, dir, val);
+	pr_info("offset=%d, dir=%d, val=%d\n", offset, dir, val);
 
-	desc = gpio_to_desc(num);
-	chip = gpiod_to_chip(desc);
+	chip = gpiochip_find(NULL, gpio_match_name_gpio);
 	if (!chip) {
 		pr_err("get gpio chip failed.\n");
 		return -EINVAL;
 	}
 
-	ret = gpiod_request(desc, "autotest-gpio");
+	num = chip->base + offset;
+	desc = gpio_to_desc(num);
+
+	ret = gpio_request(num, "autotest-gpio");
 	if (ret < 0 && ret != -EBUSY) {
 		pr_err("gpio request failed.\n");
 		return ret;
 	}
 
 	if (dir) {
-		if (gpiochip_line_is_irq(chip, num - chip->base)) {
-			ret = chip->direction_output(chip,
-						     num - chip->base, val);
+		if (gpiochip_line_is_irq(chip, offset)) {
+			ret = chip->direction_output(chip, offset, val);
 		} else {
 			ret = gpiod_direction_output(desc, val);
 		}
@@ -76,6 +85,7 @@ static int gpio_test(struct autotest_handler *handler, void *arg)
 			pr_err("set direction failed, %d", ret);
 			return ret;
 		}
+
 		val = gpiod_get_value(desc) ? 1 : 0;
 		gpio_data &= ~SPRD_GPIO_TEST_VAL_MSK;
 		gpio_data |= (val << SPRD_GPIO_TEST_VAL_SHIFT) &
@@ -108,3 +118,6 @@ static void __exit gpio_test_exit(void)
 
 late_initcall(gpio_test_init);
 module_exit(gpio_test_exit);
+
+MODULE_DESCRIPTION("sprd autotest gpio driver");
+MODULE_LICENSE("GPL v2");

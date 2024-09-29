@@ -70,21 +70,8 @@ enum wcn_aon_chip_id {
 	WCN_PIKE2_CHIP_AA,
 	WCN_PIKE2_CHIP_AB,
 	WCN_SHARKL6_CHIP,
-};
-
-/* type for base REGs */
-enum {
-	REGMAP_AON_APB = 0x0,	/* AON APB */
-	REGMAP_PMU_APB,
-	/*
-	 * NOTES:SharkLE use it,but PIKE2 not.
-	 * We should config the DTS for PIKE2 also.
-	 */
-	REGMAP_PUB_APB, /* SharkLE only:for ddr offset */
-	REGMAP_ANLG_WRAP_WCN,
-	REGMAP_ANLG_PHY_G6, /* SharkLE only */
-	REGMAP_WCN_REG,	/* SharkL3 only:0x403A 0000 */
-	REGMAP_TYPE_NR,
+	WCN_SHARKL3_CHIP,
+	WCN_SHARKL3_CHIP_22NM,
 };
 
 #define FIRMWARE_FILEPATHNAME_LENGTH_MAX 256
@@ -102,6 +89,7 @@ enum {
 #define WCN_AON_PLATFORM_ID1 0x00EC
 #define WCN_AON_CHIP_ID 0x00FC
 #define WCN_AON_VERSION_ID 0x00F8
+#define WCN_AON_MANUFACTURE_ID 0x00F4
 
 #define PIKE2_CHIP_ID0 0x32000000	/* 2 */
 #define PIKE2_CHIP_ID1 0x50696B65	/* Pike */
@@ -110,6 +98,9 @@ enum {
 #define SHARKL3_CHIP_ID0 0x6B4C3300	/* kl3 */
 #define SHARKL3_CHIP_ID1 0x53686172	/* Shar */
 
+#define QOGIRL6_CHIP_ID0 0x724C3600	/* rL6 */
+#define QOGIRL6_CHIP_ID1 0x516F6769	/* Qogi */
+
 #define AON_CHIP_ID_AA 0x96360000
 #define AON_CHIP_ID_AC 0x96360002
 
@@ -117,6 +108,7 @@ enum {
 	WCN_PLATFORM_TYPE_SHARKLE,
 	WCN_PLATFORM_TYPE_PIKE2,
 	WCN_PLATFORM_TYPE_SHARKL3,
+	WCN_PLATFORM_TYPE_QOGIRL6,
 	WCN_PLATFORM_TYPE,
 };
 
@@ -132,10 +124,6 @@ enum {
 	WCN_POWER_STATUS_OFF = 0,
 	WCN_POWER_STATUS_ON,
 };
-
-typedef int (*marlin_reset_callback) (void *para);
-extern marlin_reset_callback marlin_reset_func;
-extern void *marlin_callback_para;
 
 typedef void (*gnss_dump_callback) (void);
 extern gnss_dump_callback gnss_dump_handle;
@@ -178,7 +166,8 @@ void *wcn_mem_ram_vmap_nocache(phys_addr_t start, size_t size,
 			       unsigned int *count);
 void wcn_mem_ram_unmap(const void *mem, unsigned int count);
 enum wcn_aon_chip_id wcn_get_aon_chip_id(void);
-const char *wcn_get_chip_name(void);
+bool wcn_get_aon_chip_type(void);
 void wcn_device_poweroff(void);
+char *gnss_firmware_path_get(void);
 
 #endif

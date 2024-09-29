@@ -23,9 +23,7 @@ struct apetb_device {
 	bool activated;
 };
 
-struct apetb_device *apetb_device_register(struct device *parent,
-					       struct apetb_ops *ops,
-					       const char *serdes_name);
+struct apetb_device *apetb_device_register(struct device *parent, struct apetb_ops *ops, const char *serdes_name);
 
 #define to_apetb_device(d) container_of(d, struct apetb_device, dev)
 

@@ -1,15 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
+
 #include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/mfd/syscon.h>
@@ -31,54 +24,43 @@ static struct glb_ctrl power_iso;
 static int dphy_glb_parse_dt(struct dphy_context *ctx,
 				struct device_node *np)
 {
-	int ret;
 	u32 args[2];
 
-	enable.regmap = syscon_regmap_lookup_by_name(np, "enable");
+	enable.regmap = syscon_regmap_lookup_by_phandle_args(np,
+			"enable-syscon", 2, args);
 	if (IS_ERR(enable.regmap))
-		pr_warn("failed to get syscon-name: enable\n");
-
-	ret = syscon_get_args_by_name(np, "enable", 2, args);
-	if (ret == 2) {
+		pr_warn("failed to get enable syscon\n");
+	else {
 		enable.reg = args[0];
 		enable.mask = args[1];
-	} else
-		pr_warn("failed to get args for syscon-name enable\n");
+	}
 
-	power_s.regmap = syscon_regmap_lookup_by_name(np, "power_small");
+	power_s.regmap = syscon_regmap_lookup_by_phandle_args(np,
+			"power-small-syscon", 2, args);
 	if (IS_ERR(power_s.regmap))
-		pr_warn("failed to get syscon-name: power_small\n");
-
-	ret = syscon_get_args_by_name(np, "power_small", 2, args);
-	if (ret == 2) {
+		pr_warn("failed to get power-small syscon\n");
+	else {
 		power_s.reg = args[0];
 		power_s.mask = args[1];
-	} else
-		pr_warn("failed to get args for syscon-name power_small\n");
+	}
 
-	power_l.regmap = syscon_regmap_lookup_by_name(np, "power_large");
+	power_l.regmap = syscon_regmap_lookup_by_phandle_args(np,
+			"power-large-syscon", 2, args);
 	if (IS_ERR(power_l.regmap))
-		pr_warn("failed to get syscon-name: power_large\n");
-
-	ret = syscon_get_args_by_name(np, "power_large", 2, args);
-	if (ret == 2) {
+		pr_warn("failed to get power-large syscon\n");
+	else {
 		power_l.reg = args[0];
 		power_l.mask = args[1];
-	} else
-		pr_warn("failed to get args for syscon-name power_large\n");
+	}
 
-	power_iso.regmap = syscon_regmap_lookup_by_name(np, "power_iso");
+	power_iso.regmap = syscon_regmap_lookup_by_phandle_args(np,
+			"power-iso-syscon", 2, args);
 	if (IS_ERR(power_iso.regmap))
-		pr_warn("failed to get syscon-name: power_iso\n");
-
-	ret = syscon_get_args_by_name(np, "power_iso", 2, args);
-	if (ret == 2) {
+		pr_warn("failed to get power-iso syscon\n");
+	else {
 		power_iso.reg = args[0];
 		power_iso.mask = args[1];
-	} else
-		pr_warn("failed to get args for syscon-name power_iso\n");
-
-	regmap_read(enable.regmap, 0x00F8, &ctx->chip_id);
+	}
 
 	return 0;
 }
@@ -116,25 +98,13 @@ static void dphy_power_domain(struct dphy_context *ctx, int enable)
 	}
 }
 
-static struct dphy_glb_ops dphy_glb_ops = {
+const struct dphy_glb_ops sharkl3_dphy_glb_ops = {
 	.parse_dt = dphy_glb_parse_dt,
 	.enable = dphy_glb_enable,
 	.disable = dphy_glb_disable,
 	.power = dphy_power_domain,
 };
 
-static struct ops_entry entry = {
-	.ver = "sharkl3",
-	.ops = &dphy_glb_ops,
-};
-
-static int __init dphy_glb_register(void)
-{
-	return dphy_glb_ops_register(&entry);
-}
-
-subsys_initcall(dphy_glb_register);
-
+MODULE_AUTHOR("Leon He <leon.he@unisoc.com>");
+MODULE_DESCRIPTION("Unisoc SharkL3 DPHY global AHB regs low-level config");
 MODULE_LICENSE("GPL v2");
-MODULE_AUTHOR("leon.he@spreadtrum.com");
-MODULE_DESCRIPTION("sprd sharkl3 dphy global AHB regs low-level config");

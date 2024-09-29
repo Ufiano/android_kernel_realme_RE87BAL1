@@ -1,11 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0-only
 #
 # Spreadtrum pin control drivers
 #
 
 config PINCTRL_SPRD
-	bool "Spreadtrum pinctrl driver"
-	depends on OF
-	depends on ARCH_SPRD || COMPILE_TEST
+	tristate
 	select PINMUX
 	select PINCONF
 	select GENERIC_PINCONF
@@ -14,61 +13,65 @@ config PINCTRL_SPRD
 	  Say Y here to enable Spreadtrum pinctrl driver
 
 config PINCTRL_SPRD_SC9860
-	bool "Spreadtrum SC9860 pinctrl driver"
-	depends on PINCTRL_SPRD
+	tristate "Spreadtrum SC9860 pinctrl driver"
+	depends on OF
+	depends on ARCH_SPRD || COMPILE_TEST
+	select PINCTRL_SPRD
 	help
 	  Say Y here to enable Spreadtrum SC9860 pinctrl driver
 
-config PINCTRL_SPRD_SHARKL5
-        bool "Spreadtrum Sharkl5 pinctrl driver"
-        depends on PINCTRL_SPRD
-        help
-          Say Y here to enable Spreadtrum Sharkl5 pinctrl driver
-
-config PINCTRL_SPRD_ROC1
-	bool "Spreadtrum Roc1 pinctrl driver"
-	depends on PINCTRL_SPRD
-	help
-	  Say Y here to enable Spreadtrum Roc1 pinctrl driver
-
 config PINCTRL_SPRD_SHARKL3
-	bool "Spreadtrum Sharkl3 pinctrl driver"
-	depends on PINCTRL_SPRD
+	tristate "Spreadtrum sharkl3 pinctrl driver"
+	depends on OF
+	depends on ARCH_SPRD || COMPILE_TEST
+	select PINCTRL_SPRD
 	help
-	  Say Y here to enable Spreadtrum Sharkl3 pinctrl driver
-
-config PINCTRL_SPRD_ORCA
-	bool "Spreadtrum Orca pinctrl driver"
-	depends on PINCTRL_SPRD
-	help
-	  Say Y here to enable Spreadtrum Orca pinctrl driver
+	  Say Y here to enable Spreadtrum sharkl3 pinctrl driver
 
 config PINCTRL_SPRD_SHARKL5PRO
-	bool "Spreadtrum Sharkl5Pro pinctrl driver"
-	depends on PINCTRL_SPRD
+	tristate "Spreadtrum sharkl5pro pinctrl driver"
+	depends on OF
+	depends on ARCH_SPRD || COMPILE_TEST
+	select PINCTRL_SPRD
 	help
-	  Say Y here to enable Spreadtrum Sharkl5Pro pinctrl driver
+	  Say Y here to enable Spreadtrum sharkl5pro pinctrl driver
 
 config PINCTRL_SPRD_PIKE2
-	bool "Spreadtrum Pike2 pinctrl driver"
-	depends on PINCTRL_SPRD
+	tristate "Spreadtrum pike2 pinctrl driver"
+	depends on OF
+	depends on ARCH_SPRD || COMPILE_TEST
+	select PINCTRL_SPRD
 	help
-	  Say Y here to enable Spreadtrum Pike2 pinctrl driver
+	  Say Y here to enable Spreadtrum pike2 pinctrl driver
 
 config PINCTRL_SPRD_SHARKLE
-	bool "Spreadtrum Sharkle pinctrl driver"
-	depends on PINCTRL_SPRD
+	tristate "Spreadtrum sharkle pinctrl driver"
+	depends on OF
+	depends on ARCH_SPRD || COMPILE_TEST
+	select PINCTRL_SPRD
 	help
-	  Say Y here to enable Spreadtrum Sharkle pinctrl driver
+	  Say Y here to enable Spreadtrum sharkle pinctrl driver
+
+config PINCTRL_SPRD_SHARKL5
+	tristate "Spreadtrum sharkl5 pinctrl driver"
+	depends on OF
+	depends on ARCH_SPRD || COMPILE_TEST
+	select PINCTRL_SPRD
+	help
+	  Say Y here to enable Spreadtrum sharkl5 pinctrl driver
 
 config PINCTRL_SPRD_QOGIRL6
-	bool "Spreadtrum Qogirl6 pinctrl driver"
-	depends on PINCTRL_SPRD
+	tristate "Spreadtrum qogirl6 pinctrl driver"
+	depends on OF
+	depends on ARCH_SPRD || COMPILE_TEST
+	select PINCTRL_SPRD
 	help
-	  Say Y here to enable Spreadtrum Qogirl6 pinctrl driver
+	  Say Y here to enable Spreadtrum qogirl6 pinctrl driver
 
-config PINCTRL_SPRD_QOGIRN6PRO
-	bool "Spreadtrum Qogirn6pro pinctrl driver"
-	depends on PINCTRL_SPRD
+config PINCTRL_SPRD_QOGIRL6PRO
+	tristate "Spreadtrum qogirl6pro pinctrl driver"
+	depends on OF
+	depends on ARCH_SPRD || COMPILE_TEST
+	select PINCTRL_SPRD
 	help
-	  Say Y here to enable Spreadtrum Qogirn6pro pinctrl driver
+	  Say Y here to enable Spreadtrum qogirl6pro pinctrl driver

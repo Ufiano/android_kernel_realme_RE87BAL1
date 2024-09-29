@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 #ifndef _IMSBR_TEST_H
 #define _IMSBR_TEST_H
 
@@ -17,5 +18,24 @@ void imsbr_test_exit(void);
 #define IMSBR_LTP_CASE_AP_TUPLE		(11)
 #define IMSBR_LTP_CASE_SIPC			(12)
 #define IMSBR_LTP_CASE_PRESSURE		(13)
+
+#define IMSBR_LTP_CASE_RECEIVE			(14)
+#define IMSBR_LTP_CASE_TUPLE_VALIDATE	(15)
+#define IMSBR_LTP_CASE_SIPC_CREATE		(16)
+#define IMSBR_LTP_CASE_TUPLE2NFTUPLE	(17)
+#define IMSBR_LTP_CASE_TUPLE_DUMP		(18)
+//#define IMSBR_LTP_CASE_CP_SYNC_ESP	(21)
+//#define IMSBR_LTP_CASE_HANDOVER_STATE	(22)
+#define IMSBR_LTP_CASE_CPTUPLE_RESET	(21)
+#define IMSBR_LTP_CASE_CP_RESET			(22)
+#define IMSBR_LTP_CASE_ECHO_PING		(23)
+#define IMSBR_LTP_CASE_ECHO_PONG		(24)
+
+#define IMSBR_LTP_CASE_PKT2SKB			(25)
+
+#define IMSBR_LTP_CASE_SBLOCK_SEND      (26)
+#define IMSBR_LTP_CASE_SBLOCK_RELEASE   (27)
+#define IMSBR_LTP_CASE_SBLOCK_PUT       (28)
+
 
 #endif

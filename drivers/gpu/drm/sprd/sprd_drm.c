@@ -1,53 +1,61 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- *Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- *This software is licensed under the terms of the GNU General Public
- *License version 2, as published by the Free Software Foundation, and
- *may be copied, distributed, and modified under those terms.
- *
- *This program is distributed in the hope that it will be useful,
- *but WITHOUT ANY WARRANTY; without even the implied warranty of
- *MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
-
-#include <drm/drm_atomic_helper.h>
-#include <drm/drm_crtc_helper.h>
-#include <drm/drm_gem_cma_helper.h>
-#include <drm/drm_gem_framebuffer_helper.h>
 #include <linux/component.h>
 #include <linux/delay.h>
+#include <linux/dma-mapping.h>
 #include <linux/kthread.h>
+#include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/of_graph.h>
 #include <linux/of_platform.h>
+#include <linux/of_reserved_mem.h>
+#include <uapi/drm/sprd_drm_gsp.h>
+#include <uapi/linux/sched/types.h>
+
+#include <drm/drm_atomic_helper.h>
+#include <drm/drm_crtc_helper.h>
+#include <drm/drm_drv.h>
+#include <drm/drm_gem_cma_helper.h>
+#include <drm/drm_gem_framebuffer_helper.h>
+#include <drm/drm_mipi_dsi.h>
+#include <drm/drm_of.h>
+#include <drm/drm_probe_helper.h>
+#include <drm/drm_vblank.h>
 
 #include "sprd_drm.h"
 #include "sprd_drm_gsp.h"
 #include "sprd_gem.h"
-#include <uapi/drm/sprd_drm_gsp.h>
-#include <uapi/linux/sched/types.h>
+#include "sprd_dpu.h"
+#include "sprd_dsi.h"
+#include "sysfs/sysfs_display.h"
 
 #define DRIVER_NAME	"sprd"
 #define DRIVER_DESC	"Spreadtrum SoCs' DRM Driver"
-#define DRIVER_DATE	"20180501"
+#define DRIVER_DATE	"20200201"
 #define DRIVER_MAJOR	1
 #define DRIVER_MINOR	0
 
 #define SPRD_FENCE_WAIT_TIMEOUT 3000 /* ms */
 
-static bool cali_mode;
-
-static int boot_mode_check(char *str)
+static bool boot_mode_check(const char *str)
 {
-	if (str != NULL && !strncmp(str, "cali", strlen("cali")))
-		cali_mode = true;
-	else
-		cali_mode = false;
-	return 0;
+	struct device_node *cmdline_node;
+	const char *cmd_line;
+	int rc;
+
+	cmdline_node = of_find_node_by_path("/chosen");
+	rc = of_property_read_string(cmdline_node, "bootargs", &cmd_line);
+	if (rc)
+		return false;
+
+	if (!strstr(cmd_line, str))
+		return false;
+
+	return true;
 }
-__setup("androidboot.mode=", boot_mode_check);
 
 /**
  * sprd_atomic_wait_for_fences - wait for fences stashed in plane state
@@ -111,18 +119,21 @@ int sprd_atomic_wait_for_fences(struct drm_device *dev,
 static void sprd_commit_tail(struct drm_atomic_state *old_state)
 {
 	struct drm_device *dev = old_state->dev;
-	const struct drm_mode_config_helper_funcs *funcs;
-
-	funcs = dev->mode_config.helper_private;
-
-	sprd_atomic_wait_for_fences(dev, old_state, false);
 
 	drm_atomic_helper_wait_for_dependencies(old_state);
 
-	if (funcs && funcs->atomic_commit_tail)
-		funcs->atomic_commit_tail(old_state);
-	else
-		drm_atomic_helper_commit_tail(old_state);
+	sprd_atomic_wait_for_fences(dev, old_state, false);
+
+	drm_atomic_helper_commit_modeset_disables(dev, old_state);
+
+	drm_atomic_helper_commit_modeset_enables(dev, old_state);
+
+	drm_atomic_helper_commit_planes(dev, old_state,
+					DRM_PLANE_COMMIT_ACTIVE_ONLY);
+
+	drm_atomic_helper_commit_hw_done(old_state);
+
+	drm_atomic_helper_cleanup_planes(dev, old_state);
 
 	drm_atomic_helper_commit_cleanup_done(old_state);
 
@@ -137,157 +148,24 @@ static void sprd_commit_work(struct kthread_work *work)
 	sprd_commit_tail(sprd->state);
 }
 
-static int sprd_stall_checks(struct drm_crtc *crtc, bool nonblock)
-{
-	struct drm_crtc_commit *commit, *stall_commit = NULL;
-	bool completed = true;
-	int i;
-	long ret = 0;
-
-	spin_lock(&crtc->commit_lock);
-	i = 0;
-	list_for_each_entry(commit, &crtc->commit_list, commit_entry) {
-		if (i == 0) {
-			completed = try_wait_for_completion(&commit->flip_done);
-			/* Userspace is not allowed to get ahead of the previous
-			 * commit with nonblocking ones.
-			 */
-			if (!completed && nonblock)
-				DRM_DEBUG("EBUSY\n");
-		} else if (i == 1) {
-			stall_commit = commit;
-			drm_crtc_commit_get(stall_commit);
-			break;
-		}
-
-		i++;
-	}
-	spin_unlock(&crtc->commit_lock);
-
-	if (!stall_commit)
-		return 0;
-
-	/* We don't want to let commits get ahead of cleanup work too much,
-	 * stalling on 2nd previous commit means triple-buffer won't ever stall.
-	 */
-	ret = wait_for_completion_interruptible_timeout(&stall_commit->cleanup_done,
-							10*HZ);
-	if (ret == 0)
-		DRM_ERROR("[CRTC:%d:%s] cleanup_done timed out\n",
-			  crtc->base.id, crtc->name);
-
-	drm_crtc_commit_put(stall_commit);
-
-	return ret < 0 ? ret : 0;
-}
-
-static void sprd_release_crtc_commit(struct completion *completion)
-{
-	struct drm_crtc_commit *commit = container_of(completion,
-						      typeof(*commit),
-						      flip_done);
-
-	drm_crtc_commit_put(commit);
-}
-
-
-static int sprd_atomic_setup_commit(struct drm_atomic_state *state,
-				   bool nonblock)
-{
-	struct drm_crtc *crtc;
-	struct drm_crtc_state *old_crtc_state, *new_crtc_state;
-	struct drm_crtc_commit *commit;
-	int i, ret;
-
-	for_each_oldnew_crtc_in_state(state, crtc, old_crtc_state, new_crtc_state, i) {
-		commit = kzalloc(sizeof(*commit), GFP_KERNEL);
-		if (!commit)
-			return -ENOMEM;
-
-		init_completion(&commit->flip_done);
-		init_completion(&commit->hw_done);
-		init_completion(&commit->cleanup_done);
-		INIT_LIST_HEAD(&commit->commit_entry);
-		kref_init(&commit->ref);
-		commit->crtc = crtc;
-
-		state->crtcs[i].commit = commit;
-
-		ret = sprd_stall_checks(crtc, nonblock);
-		if (ret)
-			return ret;
-
-		/* Drivers only send out events when at least either current or
-		 * new CRTC state is active. Complete right away if everything
-		 * stays off.
-		 */
-		if (!old_crtc_state->active && !new_crtc_state->active) {
-			complete_all(&commit->flip_done);
-			continue;
-		}
-
-		/* Legacy cursor updates are fully unsynced. */
-		if (state->legacy_cursor_update) {
-			complete_all(&commit->flip_done);
-			continue;
-		}
-
-		if (!new_crtc_state->event) {
-			commit->event = kzalloc(sizeof(*commit->event),
-						GFP_KERNEL);
-			if (!commit->event)
-				return -ENOMEM;
-
-			new_crtc_state->event = commit->event;
-		}
-
-		new_crtc_state->event->base.completion = &commit->flip_done;
-		new_crtc_state->event->base.completion_release =
-			sprd_release_crtc_commit;
-		drm_crtc_commit_get(commit);
-	}
-
-	return 0;
-}
-
-
-/**
- * sprd_atomic_commit - commit validated state object
- * @dev: DRM device
- * @state: the driver state object
- * @nonblock: whether nonblocking behavior is requested.
- *
- * This function commits a with drm_atomic_helper_check() pre-validated state
- * object. This can still fail when e.g. the framebuffer reservation fails. This
- * function implements nonblocking commits, using
- * drm_atomic_helper_setup_commit() and related functions.
- *
- * Committing the actual hardware state is done through the
- * &drm_mode_config_helper_funcs.atomic_commit_tail callback, or it's default
- * implementation drm_atomic_helper_commit_tail().
- *
- * RETURNS:
- * Zero for success or -errno.
- */
-int sprd_atomic_commit(struct drm_device *dev,
-			     struct drm_atomic_state *state,
-			     bool nonblock)
+int sprd_atomic_helper_commit(struct drm_device *dev,
+			struct drm_atomic_state *state, bool nonblock)
 {
 	int ret;
 	struct sprd_drm *sprd = dev->dev_private;
 
-	if (state->async_update) {
-		ret = drm_atomic_helper_prepare_planes(dev, state);
-		if (ret)
-			return ret;
-
-		drm_atomic_helper_async_commit(dev, state);
-		drm_atomic_helper_cleanup_planes(dev, state);
-
-		return 0;
-	}
-
-	ret = sprd_atomic_setup_commit(state, nonblock);
+	/*
+	 * FIXME:
+	 * In some extreme scenes, there will be FPS drops or screen freeze,
+	 * it's may be due to poor gpu capabilities or rendering heavy loads.
+	 * If nonblock flag is true, userspace is not allowed to get ahead of the
+	 * previous commit with nonblocking ones, it maybe cause drm atomic_commit
+	 * pipeline occur performance issues.
+	 *
+	 * -EBUSY when userspace schedules nonblocking commits too fast, that's
+	 * not the case for us, maybe caused by FPS drops or screen freezes.
+	 */
+	ret = drm_atomic_helper_setup_commit(state, false);
 	if (ret)
 		return ret;
 
@@ -295,41 +173,9 @@ int sprd_atomic_commit(struct drm_device *dev,
 	if (ret)
 		return ret;
 
-	if (!nonblock) {
-		ret = sprd_atomic_wait_for_fences(dev, state, true);
-		if (ret)
-			goto err;
-	}
-
-	/*
-	 * This is the point of no return - everything below never fails except
-	 * when the hw goes bonghits. Which means we can commit the new state on
-	 * the software side now.
-	 */
-
 	ret = drm_atomic_helper_swap_state(state, true);
 	if (ret)
 		goto err;
-
-	/*
-	 * Everything below can be run asynchronously without the need to grab
-	 * any modeset locks at all under one condition: It must be guaranteed
-	 * that the asynchronous work has either been cancelled (if the driver
-	 * supports it, which at least requires that the framebuffers get
-	 * cleaned up with drm_atomic_helper_cleanup_planes()) or completed
-	 * before the new state gets committed on the software side with
-	 * drm_atomic_helper_swap_state().
-	 *
-	 * This scheme allows new atomic state updates to be prepared and
-	 * checked in parallel to the asynchronous completion of the previous
-	 * update. Which is important since compositors need to figure out the
-	 * composition of the next frame right after having submitted the
-	 * current layout.
-	 *
-	 * NOTE: Commit work has multiple phases, first hardware commit, then
-	 * cleanup. We want them to overlap, hence need system_unbound_wq to
-	 * make sure work items don't artifically stall on each another.
-	 */
 
 	drm_atomic_state_get(state);
 	sprd->state = state;
@@ -345,30 +191,10 @@ err:
 	return ret;
 }
 
-static void sprd_atomic_commit_tail(struct drm_atomic_state *old_state)
-{
-	struct drm_device *dev = old_state->dev;
-
-	drm_atomic_helper_commit_modeset_disables(dev, old_state);
-
-	drm_atomic_helper_commit_modeset_enables(dev, old_state);
-
-	drm_atomic_helper_commit_planes(dev, old_state,
-					DRM_PLANE_COMMIT_ACTIVE_ONLY);
-
-	drm_atomic_helper_commit_hw_done(old_state);
-
-	drm_atomic_helper_cleanup_planes(dev, old_state);
-}
-
-static const struct drm_mode_config_helper_funcs sprd_drm_mode_config_helper = {
-	.atomic_commit_tail = sprd_atomic_commit_tail,
-};
-
 static const struct drm_mode_config_funcs sprd_drm_mode_config_funcs = {
 	.fb_create = drm_gem_fb_create,
 	.atomic_check = drm_atomic_helper_check,
-	.atomic_commit = sprd_atomic_commit,
+	.atomic_commit = sprd_atomic_helper_commit,
 };
 
 static void sprd_drm_mode_config_init(struct drm_device *drm)
@@ -382,13 +208,14 @@ static void sprd_drm_mode_config_init(struct drm_device *drm)
 	drm->mode_config.allow_fb_modifiers = true;
 
 	drm->mode_config.funcs = &sprd_drm_mode_config_funcs;
-	drm->mode_config.helper_private = &sprd_drm_mode_config_helper;
 }
 
 static const struct drm_ioctl_desc sprd_ioctls[] = {
 	DRM_IOCTL_DEF_DRV(SPRD_GSP_GET_CAPABILITY,
 			sprd_gsp_get_capability_ioctl, 0),
-	DRM_IOCTL_DEF_DRV(SPRD_GSP_TRIGGER, sprd_gsp_trigger_ioctl, 0),
+	DRM_IOCTL_DEF_DRV(SPRD_GSP_TRIGGER,
+			sprd_gsp_trigger_ioctl, 0),
+
 };
 
 static const struct file_operations sprd_drm_fops = {
@@ -402,21 +229,24 @@ static const struct file_operations sprd_drm_fops = {
 	.poll		= drm_poll,
 	.read		= drm_read,
 	.llseek		= no_llseek,
-	.mmap		= sprd_gem_cma_mmap,
+	.mmap		= sprd_gem_mmap,
 };
 
 static struct drm_driver sprd_drm_drv = {
-	.driver_features	= DRIVER_GEM | DRIVER_MODESET | DRIVER_PRIME |
-				  DRIVER_ATOMIC | DRIVER_HAVE_IRQ,
+	.driver_features	= DRIVER_GEM | DRIVER_MODESET | DRIVER_ATOMIC,
 	.fops			= &sprd_drm_fops,
-
 	.gem_vm_ops		= &drm_gem_cma_vm_ops,
 	.gem_free_object_unlocked	= sprd_gem_free_object,
-	.dumb_create		= sprd_gem_cma_dumb_create,
-
+	.dumb_create		= sprd_gem_dumb_create,
 	.prime_fd_to_handle	= drm_gem_prime_fd_to_handle,
+	.prime_handle_to_fd	= drm_gem_prime_handle_to_fd,
 	.gem_prime_import	= drm_gem_prime_import,
+	.gem_prime_export	= drm_gem_prime_export,
 	.gem_prime_import_sg_table = sprd_gem_prime_import_sg_table,
+	.gem_prime_get_sg_table = drm_gem_cma_prime_get_sg_table,
+	.gem_prime_vmap		= drm_gem_cma_prime_vmap,
+	.gem_prime_vunmap	= drm_gem_cma_prime_vunmap,
+	.gem_prime_mmap		= drm_gem_cma_prime_mmap,
 
 	.ioctls			= sprd_ioctls,
 	.num_ioctls		= ARRAY_SIZE(sprd_ioctls),
@@ -448,7 +278,16 @@ static int sprd_drm_bind(struct device *dev)
 		err = -ENOMEM;
 		goto err_free_drm;
 	}
+
 	drm->dev_private = sprd;
+
+	/* get the optional framebuffer memory resource */
+	err = of_reserved_mem_device_init_by_idx(drm->dev,
+				drm->dev->of_node, 0);
+	if (err && err != -ENODEV) {
+		DRM_ERROR("failed to obtain reserved memory\n");
+		goto err_free_drm;
+	}
 
 	sprd_drm_mode_config_init(drm);
 
@@ -503,8 +342,9 @@ err_unbind_all:
 	component_unbind_all(drm->dev, drm);
 err_dc_cleanup:
 	drm_mode_config_cleanup(drm);
+	of_reserved_mem_device_release(drm->dev);
 err_free_drm:
-	drm_dev_unref(drm);
+	drm_dev_put(drm);
 	return err;
 }
 
@@ -519,7 +359,18 @@ static void sprd_drm_unbind(struct device *dev)
 	}
 
 	DRM_INFO("%s()\n", __func__);
-	drm_put_dev(dev_get_drvdata(dev));
+
+	drm_dev_unregister(drm);
+
+	drm_kms_helper_poll_fini(drm);
+
+	drm_mode_config_cleanup(drm);
+
+	component_unbind_all(drm->dev, drm);
+
+	of_reserved_mem_device_release(drm->dev);
+
+	drm_dev_put(drm);
 }
 
 static const struct component_master_ops drm_component_ops = {
@@ -529,15 +380,11 @@ static const struct component_master_ops drm_component_ops = {
 
 static int compare_of(struct device *dev, void *data)
 {
-	struct device_node *np = data;
-
-	DRM_DEBUG("compare %s\n", np->full_name);
-
-	return dev->of_node == np;
+	return dev->of_node == data;
 }
 
 static int sprd_drm_component_probe(struct device *dev,
-			   const struct component_master_ops *m_ops)
+			const struct component_master_ops *m_ops)
 {
 	struct device_node *ep, *port, *remote;
 	struct component_match *match = NULL;
@@ -604,7 +451,6 @@ static int sprd_drm_component_probe(struct device *dev,
 		}
 		of_node_put(port);
 	}
-
 	if (IS_ENABLED(CONFIG_DRM_SPRD_GSP)) {
 		for (i = 0; ; i++) {
 			port = of_parse_phandle(dev->of_node, "gsp", i);
@@ -620,7 +466,6 @@ static int sprd_drm_component_probe(struct device *dev,
 			of_node_put(port);
 		}
 	}
-
 	return component_master_add_with_match(dev, m_ops, match);
 }
 
@@ -628,14 +473,17 @@ static int sprd_drm_probe(struct platform_device *pdev)
 {
 	int ret;
 
-	if (cali_mode) {
-		DRM_WARN("Calibration Mode! Don't register sprd drm driver");
-		//return 0;
+	ret = dma_set_mask_and_coherent(&pdev->dev, ~0);
+	if (ret) {
+		DRM_ERROR("dma_set_mask_and_coherent failed (%d)\n", ret);
+		return ret;
 	}
 
-	ret = dma_set_mask_and_coherent(&pdev->dev, ~0);
-	if (ret)
-		DRM_ERROR("dma_set_mask_and_coherent failed (%d)\n", ret);
+//	ret = drm_of_component_probe(&pdev->dev, compare_of, &drm_component_ops);
+//	if(ret) {
+//		DRM_ERROR("sprd_drm_probe error: %d\n", ret);
+//		return ret;
+//	}
 
 	return sprd_drm_component_probe(&pdev->dev, &drm_component_ops);
 }
@@ -648,7 +496,8 @@ static int sprd_drm_remove(struct platform_device *pdev)
 
 static void sprd_drm_shutdown(struct platform_device *pdev)
 {
-	struct drm_device *drm = platform_get_drvdata(pdev);
+	struct drm_device *drm = dev_get_drvdata(&pdev->dev);
+
 
 	if (!drm) {
 		DRM_WARN("drm device is not available, no shutdown\n");
@@ -663,6 +512,9 @@ static int sprd_drm_pm_suspend(struct device *dev)
 	struct drm_device *drm = dev_get_drvdata(dev);
 	struct drm_atomic_state *state;
 	struct sprd_drm *sprd;
+	struct drm_crtc *crtc;
+	struct drm_encoder *encoder;
+	static bool is_suspend;
 
 	if (!drm) {
 		DRM_WARN("drm device is not available, no suspend\n");
@@ -670,6 +522,27 @@ static int sprd_drm_pm_suspend(struct device *dev)
 	}
 
 	DRM_INFO("%s()\n", __func__);
+
+	if (boot_mode_check("androidboot.mode=autotest")) {
+		if (is_suspend)
+			return 0;
+
+		drm_for_each_crtc(crtc, drm) {
+			if (!crtc->state->active) {
+				/* crtc force power down! */
+				sprd_dpu_atomic_disable_force(crtc);
+
+				/* encoder force power down! */
+				drm_for_each_encoder(encoder, drm) {
+					sprd_dsi_encoder_disable_force(encoder);
+				}
+
+				is_suspend = true; /* For BBAT deep sleep */
+				return 0;
+			}
+		}
+		is_suspend = true; /* For BBAT display test */
+	}
 
 	drm_kms_helper_poll_disable(drm);
 
@@ -696,6 +569,11 @@ static int sprd_drm_pm_resume(struct device *dev)
 		return 0;
 	}
 
+	if (boot_mode_check("androidboot.mode=autotest")) {
+		DRM_WARN("BBAT mode not need resume\n");
+		return 0;
+	}
+
 	DRM_INFO("%s()\n", __func__);
 
 	sprd = drm->dev_private;
@@ -713,8 +591,8 @@ static const struct dev_pm_ops sprd_drm_pm_ops = {
 };
 
 static const struct of_device_id drm_match_table[] = {
-	{ .compatible = "sprd,display-subsystem",},
-	{},
+	{ .compatible = "sprd,display-subsystem", },
+	{ /* sentinel */ },
 };
 MODULE_DEVICE_TABLE(of, drm_match_table);
 
@@ -729,8 +607,71 @@ static struct platform_driver sprd_drm_driver = {
 	},
 };
 
-module_platform_driver(sprd_drm_driver);
+static struct platform_driver *sprd_drm_drivers[]  = {
+#ifdef CONFIG_DRM_SPRD_DUMMY
+	&sprd_dummy_crtc_driver,
+	&sprd_dummy_connector_driver,
+#endif
+#ifdef CONFIG_DRM_SPRD_DPU0
+	&sprd_dpu_driver,
+	&sprd_backlight_driver,
+#endif
+#ifdef CONFIG_DRM_SPRD_DSI
+	&sprd_dsi_driver,
+	&sprd_dphy_driver,
+#endif
+#ifdef CONFIG_DRM_SPRD_DPU1
+	&sprd_dpu1_driver,
+#endif
+#ifdef CONFIG_DRM_SPRD_DP
+	&sprd_dp_driver,
+#endif
+	&sprd_drm_driver,
+};
 
+static int __init sprd_drm_init(void)
+{
+	int ret;
+	bool cali_mode;
+
+	cali_mode = boot_mode_check("androidboot.mode=cali");
+	if (cali_mode) {
+		DRM_WARN("Calibration Mode! Don't register sprd drm driver");
+		return 0;
+	}
+
+	ret = sprd_display_class_init();
+	if (ret)
+		return ret;
+
+	ret = platform_register_drivers(sprd_drm_drivers,
+					ARRAY_SIZE(sprd_drm_drivers));
+	if (ret)
+		return ret;
+
+#ifdef CONFIG_DRM_SPRD_DSI
+	mipi_dsi_driver_register(&sprd_panel_driver);
+#endif
+
+	return 0;
+}
+
+static void __exit sprd_drm_exit(void)
+{
+#ifdef CONFIG_DRM_SPRD_DSI
+	mipi_dsi_driver_unregister(&sprd_panel_driver);
+#endif
+
+	platform_unregister_drivers(sprd_drm_drivers,
+				    ARRAY_SIZE(sprd_drm_drivers));
+
+}
+
+module_init(sprd_drm_init);
+module_exit(sprd_drm_exit);
+
+MODULE_SOFTDEP("pre: hardware_info");
 MODULE_AUTHOR("Leon He <leon.he@unisoc.com>");
-MODULE_DESCRIPTION("SPRD DRM KMS Master Driver");
+MODULE_AUTHOR("Kevin Tang <kevin.tang@unisoc.com>");
+MODULE_DESCRIPTION("Unisoc DRM KMS Master Driver");
 MODULE_LICENSE("GPL v2");

@@ -7,6 +7,7 @@
  * published by the Free Software Foundation.
  */
 
+#include <linux/module.h>
 #include <linux/errno.h>
 #include <linux/kernel.h>
 #include <linux/power/sprd_vote.h>
@@ -415,10 +416,10 @@ static ssize_t voted_value_show(struct device *dev,
 	return snprintf(buf, PAGE_SIZE, "%s\n", bufinfo);
 }
 
-static sprd_vote_register_sysfs(struct device *dev)
+static int sprd_vote_register_sysfs(struct device *dev)
 {
 	struct sprd_vote_sysfs *sysfs;
-	int ret;
+	int ret = 0;
 
 	sysfs = devm_kzalloc(dev, sizeof(*sysfs), GFP_KERNEL);
 	if (!sysfs)
@@ -521,3 +522,5 @@ struct sprd_vote *sprd_charge_vote_register(char *name,
 
 	return vote_gov;
 }
+EXPORT_SYMBOL(sprd_charge_vote_register);
+MODULE_LICENSE("GPL");

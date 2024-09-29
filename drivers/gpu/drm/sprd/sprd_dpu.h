@@ -1,78 +1,35 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- *Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- *This software is licensed under the terms of the GNU General Public
- *License version 2, as published by the Free Software Foundation, and
- *may be copied, distributed, and modified under those terms.
- *
- *This program is distributed in the hope that it will be useful,
- *but WITHOUT ANY WARRANTY; without even the implied warranty of
- *MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
-#ifndef __SPRD_DPU_H__
-#define __SPRD_DPU_H__
+#ifndef _SPRD_DPU_H_
+#define _SPRD_DPU_H_
 
+#include <linux/bug.h>
 #include <linux/delay.h>
-#include <linux/string.h>
-#include <linux/platform_device.h>
 #include <linux/device.h>
 #include <linux/kernel.h>
-#include <linux/bug.h>
+#include <linux/platform_device.h>
+#include <linux/string.h>
 #include <video/videomode.h>
 
-#include <drm/drmP.h>
-#include <drm/drm_crtc.h>
-#include <drm/drm_fourcc.h>
-#include <drm/drm_vblank.h>
 #include <uapi/drm/drm_mode.h>
+
+#include "sprd_crtc.h"
+#include "sprd_plane.h"
 #include "disp_lib.h"
+#include "disp_trusty.h"
 #include "sprd_dsi.h"
-#include "sprd_panel.h"
+#include "sprd_dsi_panel.h"
 #include "dsi/sprd_dsi_api.h"
 #include "dsi/sprd_dsi_hal.h"
 
-#define DRM_MODE_BLEND_PREMULTI		2
-#define DRM_MODE_BLEND_COVERAGE		1
-#define DRM_MODE_BLEND_PIXEL_NONE	0
-
-#define DISPC_INT_DONE_MASK		BIT(0)
-#define DISPC_INT_TE_MASK		BIT(1)
-#define DISPC_INT_ERR_MASK		BIT(2)
-#define DISPC_INT_EDPI_TE_MASK		BIT(3)
-#define DISPC_INT_UPDATE_DONE_MASK	BIT(4)
-#define DISPC_INT_DPI_VSYNC_MASK	BIT(5)
-#define DISPC_INT_WB_DONE_MASK		BIT(6)
-#define DISPC_INT_WB_FAIL_MASK		BIT(7)
-#define cabc_cfg0			268439552
-#define cabc_cfg1			268439552
-#define cabc_cfg2			16777215
-#define cabc_cfg3			0
-#define cabc_cfg4			0
-/* NOTE: this mask is not a realy dpu interrupt mask */
-#define DISPC_INT_FENCE_SIGNAL_REQUEST	BIT(31)
-
 enum {
-	SPRD_DISPC_IF_DBI = 0,
-	SPRD_DISPC_IF_DPI,
-	SPRD_DISPC_IF_EDPI,
-	SPRD_DISPC_IF_LIMIT
-};
-
-enum {
-	SPRD_IMG_DATA_ENDIAN_B0B1B2B3 = 0,
-	SPRD_IMG_DATA_ENDIAN_B3B2B1B0,
-	SPRD_IMG_DATA_ENDIAN_B2B3B0B1,
-	SPRD_IMG_DATA_ENDIAN_B1B0B3B2,
-	SPRD_IMG_DATA_ENDIAN_LIMIT
-};
-
-enum {
-	DISPC_CLK_ID_CORE = 0,
-	DISPC_CLK_ID_DBI,
-	DISPC_CLK_ID_DPI,
-	DISPC_CLK_ID_MAX
+	SPRD_DPU_IF_DBI = 0,
+	SPRD_DPU_IF_DPI,
+	SPRD_DPU_IF_EDPI,
+	SPRD_DPU_IF_LIMIT
 };
 
 enum {
@@ -86,12 +43,8 @@ enum {
 	ENHANCE_CFG_ID_GAMMA,
 	ENHANCE_CFG_ID_LTM,
 	ENHANCE_CFG_ID_CABC,
-	ENHANCE_CFG_ID_SLP_LUT,
-	ENHANCE_CFG_ID_LUT3D,
-	ENHANCE_CFG_ID_SR_EPF,
 	ENHANCE_CFG_ID_CABC_MODE,
 	ENHANCE_CFG_ID_CABC_HIST,
-	ENHANCE_CFG_ID_CABC_HIST_V2,
 	ENHANCE_CFG_ID_VSYNC_COUNT,
 	ENHANCE_CFG_ID_FRAME_NO,
 	ENHANCE_CFG_ID_CABC_NO,
@@ -99,43 +52,10 @@ enum {
 	ENHANCE_CFG_ID_CABC_PARAM,
 	ENHANCE_CFG_ID_CABC_RUN,
 	ENHANCE_CFG_ID_CABC_STATE,
-	ENHANCE_CFG_ID_UD,
-	ENHANCE_CFG_ID_UPDATE_LUTS,
+	ENHANCE_CFG_ID_SLP_LUT,
+	ENHANCE_CFG_ID_LUT3D,
+	ENHANCE_CFG_ID_SR_EPF,
 	ENHANCE_CFG_ID_MAX
-};
-
-struct sprd_dpu_layer {
-	u8 index;
-	u8 planes;
-	u32 addr[4];
-	u32 pitch[4];
-	s16 src_x;
-	s16 src_y;
-	s16 src_w;
-	s16 src_h;
-	s16 dst_x;
-	s16 dst_y;
-	u16 dst_w;
-	u16 dst_h;
-	u32 format;
-	u32 alpha;
-	u32 blending;
-	u32 rotation;
-	u32 xfbc;
-	u32 height;
-	u32 header_size_r;
-	u32 header_size_y;
-	u32 header_size_uv;
-	u32 y2r_coef;
-	u8 pallete_en;
-	u32 pallete_color;
-	u32 secure_en;
-};
-
-struct dpu_capability {
-	u32 max_layers;
-	const u32 *fmts_ptr;
-	u32 fmts_cnt;
 };
 
 struct dpu_context;
@@ -143,27 +63,26 @@ struct dpu_context;
 struct dpu_core_ops {
 	int (*parse_dt)(struct dpu_context *ctx,
 			struct device_node *np);
-	u32 (*version)(struct dpu_context *ctx);
+	void (*version)(struct dpu_context *ctx);
 	int (*init)(struct dpu_context *ctx);
-	void (*uninit)(struct dpu_context *ctx);
+	void (*fini)(struct dpu_context *ctx);
 	void (*run)(struct dpu_context *ctx);
 	void (*stop)(struct dpu_context *ctx);
 	void (*disable_vsync)(struct dpu_context *ctx);
 	void (*enable_vsync)(struct dpu_context *ctx);
 	u32 (*isr)(struct dpu_context *ctx);
-	void (*ifconfig)(struct dpu_context *ctx);
 	void (*write_back)(struct dpu_context *ctx, u8 count, bool debug);
+	void (*ifconfig)(struct dpu_context *ctx);
 	void (*flip)(struct dpu_context *ctx,
-		     struct sprd_dpu_layer layers[], u8 count);
-	int (*capability)(struct dpu_context *ctx,
-			struct dpu_capability *cap);
+		     struct sprd_plane planes[], u8 count);
+	void (*capability)(struct dpu_context *ctx,
+			 struct sprd_crtc_capability *cap);
 	void (*bg_color)(struct dpu_context *ctx, u32 color);
+	int (*context_init)(struct dpu_context *ctx);
 	void (*enhance_set)(struct dpu_context *ctx, u32 id, void *param);
 	void (*enhance_get)(struct dpu_context *ctx, u32 id, void *param);
-	int (*modeset)(struct dpu_context *ctx,
-			struct drm_mode_modeinfo *mode);
 	bool (*check_raw_int)(struct dpu_context *ctx, u32 mask);
-	void (*dma_request)(struct dpu_context *ctx);
+	int (*modeset)(struct dpu_context *ctx, struct drm_display_mode *mode);
 };
 
 struct dpu_clk_ops {
@@ -186,82 +105,128 @@ struct dpu_glb_ops {
 };
 
 struct dpu_context {
-	unsigned long base;
+	/* dpu common parameters */
+	void __iomem *base;
 	u32 base_offset[2];
 	const char *version;
-	u32 corner_size;
 	int irq;
 	u8 if_type;
-	u8 id;
-	bool is_inited;
-	bool is_stopped;
-	bool is_single_run;
-	bool disable_flip;
 	struct videomode vm;
-	struct mutex vrr_lock;
-	struct semaphore refresh_lock;
-	struct semaphore cabc_lock;
-	struct work_struct wb_work;
-	struct tasklet_struct dvfs_task;
-	u32 wb_addr_p;
+	struct semaphore lock;
+	bool enabled;
+	bool stopped;
+	bool flip_pending;
+	wait_queue_head_t wait_queue;
+	bool evt_update;
+	bool evt_all_update;
+	bool evt_stop;
 	irqreturn_t (*dpu_isr)(int irq, void *data);
+	struct tasklet_struct dvfs_task;
+
+	/* pq enhance parameters */
+	void *enhance;
+	int corner_radius;
+	struct semaphore cabc_lock;
+	struct work_struct cabc_work;
+	struct work_struct cabc_bl_update;
+
+	/* write back parameters */
+	int wb_en;
+	int wb_xfbc_en;
+	int max_vsync_count;
+	int vsync_count;
+	struct sprd_layer_state wb_layer;
+	struct work_struct wb_work;
+	dma_addr_t wb_addr_p;
+	void *wb_addr_v;
+	size_t wb_buf_size;
+	bool wb_configed;
+
+	/* te check parameters */
 	wait_queue_head_t te_wq;
 	bool te_check_en;
 	bool evt_te;
+
+	/* corner config parameters */
+	u32 corner_size;
+	int sprd_corner_radius;
+	bool sprd_corner_support;
+
+	unsigned int *layer_top;
+	unsigned int *layer_bottom;
+
+	/* widevine config parameters */
+	int secure_debug;
+	int time;
+	struct disp_message *tos_msg;
+
+	/* VRR mode parameters */
+	int  vrr_vfp;
+	int  vrefresh;
+	struct mutex vrr_lock;
+
+	/* other specific parameters */
+	bool panel_ready;
 	unsigned long logo_addr;
 	unsigned long logo_size;
-	struct work_struct cabc_work;
-	struct work_struct cabc_bl_update;
-	bool dual_dsi_en;
-	bool dsc_en;
-	int  dsc_mode;
-	int  vrefresh;
+	u32 prev_y2r_coef;
+	u64 frame_count;
+};
+
+struct sprd_dpu_ops {
+	const struct dpu_core_ops *core;
+	const struct dpu_clk_ops *clk;
+	const struct dpu_glb_ops *glb;
 };
 
 struct sprd_dpu {
 	struct device dev;
-	struct drm_crtc crtc;
+	struct sprd_crtc *crtc;
 	struct dpu_context ctx;
-	struct dpu_core_ops *core;
-	struct dpu_clk_ops *clk;
-	struct dpu_glb_ops *glb;
+	const struct dpu_core_ops *core;
+	const struct dpu_clk_ops *clk;
+	const struct dpu_glb_ops *glb;
 	struct drm_display_mode *mode;
-	struct sprd_dpu_layer *layers;
 	struct sprd_dsi *dsi;
 	struct drm_device *drm;
-	u8 pending_planes;
 };
 
-extern struct list_head dpu_core_head;
-extern struct list_head dpu_clk_head;
-extern struct list_head dpu_glb_head;
-extern bool calibration_mode;
 extern bool vrr_mode;
 
-static inline struct sprd_dpu *crtc_to_dpu(struct drm_crtc *crtc)
-{
-	return crtc ? container_of(crtc, struct sprd_dpu, crtc) : NULL;
-}
+void sprd_dpu_run(struct sprd_dpu *dpu);
+void sprd_dpu_stop(struct sprd_dpu *dpu);
+void sprd_dpu_atomic_disable_force(struct drm_crtc *crtc);
 
-#define dpu_core_ops_register(entry) \
-	disp_ops_register(entry, &dpu_core_head)
-#define dpu_clk_ops_register(entry) \
-	disp_ops_register(entry, &dpu_clk_head)
-#define dpu_glb_ops_register(entry) \
-	disp_ops_register(entry, &dpu_glb_head)
+extern const struct dpu_clk_ops sharkle_dpu_clk_ops;
+extern const struct dpu_glb_ops sharkle_dpu_glb_ops;
 
-#define dpu_core_ops_attach(str) \
-	disp_ops_attach(str, &dpu_core_head)
-#define dpu_clk_ops_attach(str) \
-	disp_ops_attach(str, &dpu_clk_head)
-#define dpu_glb_ops_attach(str) \
-	disp_ops_attach(str, &dpu_glb_head)
+extern const struct dpu_core_ops dpu_lite_r1p0_core_ops;
+extern const struct dpu_clk_ops pike2_dpu_clk_ops;
+extern const struct dpu_glb_ops pike2_dpu_glb_ops;
 
-int sprd_dpu_run(struct sprd_dpu *dpu);
-int sprd_dpu_stop(struct sprd_dpu *dpu);
-void sprd_dpu_resume(struct sprd_dpu *dpu);
+extern const struct dpu_core_ops dpu_lite_r2p0_core_ops;
+extern const struct dpu_clk_ops sharkl5_dpu_clk_ops;
+extern const struct dpu_glb_ops sharkl5_dpu_glb_ops;
+
+extern const struct dpu_core_ops dpu_r2p0_core_ops;
+extern const struct dpu_clk_ops sharkl3_dpu_clk_ops;
+extern const struct dpu_glb_ops sharkl3_dpu_glb_ops;
+
+extern const struct dpu_core_ops dpu_r4p0_core_ops;
+extern const struct dpu_clk_ops sharkl5pro_dpu_clk_ops;
+extern const struct dpu_glb_ops sharkl5pro_dpu_glb_ops;
+
+extern const struct dpu_core_ops dpu_r5p0_core_ops;
+extern const struct dpu_clk_ops qogirl6_dpu_clk_ops;
+extern const struct dpu_glb_ops qogirl6_dpu_glb_ops;
+
+extern const struct dpu_core_ops dpu_r6p0_core_ops;
+extern const struct dpu_clk_ops qogirn6pro_dpu_clk_ops;
+extern const struct dpu_glb_ops qogirn6pro_dpu_glb_ops;
+extern bool vrr_mode;
 
 int cali_sprd_dpu_stop(struct sprd_dpu *dpu);
 int cali_dpu_clk_disable(struct dpu_context *ctx);
 void cali_dpu_glb_disable(struct dpu_context *ctx);
-#endif
+
+#endif /* _SPRD_DPU_H_ */

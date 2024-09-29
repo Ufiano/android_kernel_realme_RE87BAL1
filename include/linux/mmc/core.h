@@ -1,9 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  *  linux/include/linux/mmc/core.h
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  */
 #ifndef LINUX_MMC_CORE_H
 #define LINUX_MMC_CORE_H
@@ -163,35 +160,17 @@ struct mmc_request {
 	 */
 	void			(*recovery_notifier)(struct mmc_request *);
 	struct mmc_host		*host;
-#ifdef CONFIG_EMMC_SOFTWARE_CQ_SUPPORT
-	struct mmc_async_req	*areq;
-	int			flags;
-	struct list_head	link;
-	struct list_head	hlist;
-#endif
 
 	/* Allow other commands during this ongoing data transfer or busy wait */
 	bool			cap_cmd_during_tfr;
 
 	int			tag;
-#ifdef CONFIG_MMC_CRYPTO
-	int crypto_key_slot;
-	u64 data_unit_num;
-	const struct blk_crypto_key *crypto_key;
-#endif
-};
 
 #ifdef CONFIG_MMC_CRYPTO
-static inline bool mmc_request_crypto_enabled(const struct mmc_request *mrq)
-{
-	return mrq->crypto_key != NULL;
-}
-#else
-static inline bool mmc_request_crypto_enabled(const struct mmc_request *mrq)
-{
-	return false;
-}
+	const struct bio_crypt_ctx *crypto_ctx;
+	int			crypto_key_slot;
 #endif
+};
 
 struct mmc_card;
 
@@ -200,6 +179,7 @@ int mmc_wait_for_cmd(struct mmc_host *host, struct mmc_command *cmd,
 		int retries);
 
 int mmc_hw_reset(struct mmc_host *host);
+int mmc_sw_reset(struct mmc_host *host);
 void mmc_set_data_timeout(struct mmc_data *data, const struct mmc_card *card);
 
 #endif /* LINUX_MMC_CORE_H */

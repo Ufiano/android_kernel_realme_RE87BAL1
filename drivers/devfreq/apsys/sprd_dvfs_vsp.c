@@ -1,16 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
-
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 #include "sprd_dvfs_vsp.h"
 
 LIST_HEAD(vsp_dvfs_head);
@@ -18,21 +10,25 @@ LIST_HEAD(vsp_dvfs_head);
 struct sprd_vsp_dvfs_data {
 	const char *ver;
 	u32 max_freq_level;
+	const struct ip_dvfs_ops *dvfs_ops;
 };
 
 static const struct sprd_vsp_dvfs_data sharkl5_vsp_data = {
 	.ver = "sharkl5",
 	.max_freq_level = 3,
+	.dvfs_ops = &sharkl5_vsp_dvfs_ops,
 };
 
 static const struct sprd_vsp_dvfs_data roc1_vsp_data = {
 	.ver = "roc1",
 	.max_freq_level = 4,
+	.dvfs_ops = &roc1_vsp_dvfs_ops,
 };
 
 static const struct sprd_vsp_dvfs_data sharkl5pro_vsp_data = {
 	.ver = "sharkl5pro",
 	.max_freq_level = 3,
+	.dvfs_ops = &sharkl5pro_vsp_dvfs_ops,
 };
 
 static const struct of_device_id vsp_dvfs_of_match[] = {
@@ -80,7 +76,7 @@ static ssize_t set_dvfs_enable_store(struct device *dev,
 		return -EINVAL;
 
 	if (vsp->dvfs_ops && vsp->dvfs_ops->hw_dvfs_en) {
-		vsp->dvfs_ops->hw_dvfs_en(user_en);
+		vsp->dvfs_ops->hw_dvfs_en(vsp, user_en);
 		vsp->ip_coeff.hw_dfs_en = user_en;
 	}
 	else
@@ -99,7 +95,7 @@ static ssize_t get_work_freq_show(struct device *dev,
 	int ret = 0;
 
 	if (vsp->dvfs_ops && vsp->dvfs_ops->get_work_freq) {
-		work_freq = vsp->dvfs_ops->get_work_freq();
+		work_freq = vsp->dvfs_ops->get_work_freq(vsp);
 		ret = sprintf(buf, "%u\n", work_freq);
 	}
 	else
@@ -144,7 +140,7 @@ static ssize_t get_idle_freq_show(struct device *dev,
 	u32 idle_freq;
 
 	if (vsp->dvfs_ops && vsp->dvfs_ops->get_idle_freq) {
-		idle_freq = vsp->dvfs_ops->get_idle_freq();
+		idle_freq = vsp->dvfs_ops->get_idle_freq(vsp);
 		ret = sprintf(buf, "%d\n", idle_freq);
 	}
 	else
@@ -187,7 +183,7 @@ static ssize_t get_work_index_show(struct device *dev,
 	int ret = 0, work_index;
 
 	if (vsp->dvfs_ops && vsp->dvfs_ops->get_work_index) {
-		work_index = vsp->dvfs_ops->get_work_index();
+		work_index = vsp->dvfs_ops->get_work_index(vsp);
 		ret = sprintf(buf, "%d\n", work_index);
 	}
 	else
@@ -209,7 +205,7 @@ static ssize_t set_work_index_store(struct device *dev,
 		return -EINVAL;
 
 	if (vsp->dvfs_ops && vsp->dvfs_ops->set_work_index)
-		vsp->dvfs_ops->set_work_index(work_index);
+		vsp->dvfs_ops->set_work_index(vsp, work_index);
 	else
 		pr_info("%s: ip ops null\n", __func__);
 
@@ -224,7 +220,7 @@ static ssize_t get_idle_index_show(struct device *dev,
 	int ret = 0, idle_index;
 
 	if (vsp->dvfs_ops && vsp->dvfs_ops->get_idle_index) {
-		idle_index = vsp->dvfs_ops->get_idle_index();
+		idle_index = vsp->dvfs_ops->get_idle_index(vsp);
 		ret = sprintf(buf, "%d\n", idle_index);
 	}
 	else
@@ -246,7 +242,7 @@ static ssize_t set_idle_index_store(struct device *dev,
 		return -EINVAL;
 
 	if (vsp->dvfs_ops && vsp->dvfs_ops->set_idle_index)
-		vsp->dvfs_ops->set_idle_index(idle_index);
+		vsp->dvfs_ops->set_idle_index(vsp, idle_index);
 	else
 		pr_info("%s: ip ops null\n", __func__);
 
@@ -258,11 +254,11 @@ static ssize_t get_dvfs_status_show(struct device *dev,
 {
 	struct devfreq *devfreq = to_devfreq(dev);
 	struct vsp_dvfs *vsp = dev_get_drvdata(devfreq->dev.parent);
-	struct ip_dvfs_status ip_status;
+	struct ip_dvfs_status ip_status = {0};
 	ssize_t len = 0;
 
 	if (vsp->dvfs_ops && vsp->dvfs_ops->get_dvfs_status)
-		vsp->dvfs_ops->get_dvfs_status(&ip_status);
+		vsp->dvfs_ops->get_dvfs_status(vsp, &ip_status);
 	else {
 		len = sprintf(buf, "undefined\n");
 		return len;
@@ -409,7 +405,7 @@ static int vsp_dvfs_gov_event_handler(struct devfreq *devfreq,
 	return ret;
 }
 
-struct devfreq_governor vsp_dvfs_gov = {
+struct devfreq_governor vsp_devfreq_gov = {
 	.name = "vsp_dvfs",
 	.get_target_freq = vsp_dvfs_gov_get_target,
 	.event_handler = vsp_dvfs_gov_event_handler,
@@ -466,7 +462,7 @@ static int vsp_dvfs_target(struct device *dev, unsigned long *freq,
 		vsp->work_freq = target_freq;
 	else
 		vsp->idle_freq = target_freq;
-	vsp->dvfs_ops->updata_target_freq(target_freq, vsp->freq_type);
+	vsp->dvfs_ops->updata_target_freq(vsp, target_freq, vsp->freq_type);
 
 	if (ret) {
 		dev_err(dev, "Cannot to set freq:%lu to vsp, ret: %d\n",
@@ -479,6 +475,7 @@ static int vsp_dvfs_target(struct device *dev, unsigned long *freq,
 int vsp_dvfs_get_dev_status(struct device *dev,
 		struct devfreq_dev_status *stat)
 {
+	/*
 	struct vsp_dvfs *vsp = dev_get_drvdata(dev);
 	struct devfreq_event_data edata;
 	int ret = 0;
@@ -494,6 +491,8 @@ int vsp_dvfs_get_dev_status(struct device *dev,
 	stat->total_time = edata.total_count;
 
 	return ret;
+	*/
+	return 0;
 }
 
 static int vsp_dvfs_get_cur_freq(struct device *dev, unsigned long *freq)
@@ -518,18 +517,29 @@ static int vsp_dvfs_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct device_node *np = pdev->dev.of_node;
+	struct apsys_dev *apsys;
 	struct vsp_dvfs *vsp;
 	int ret;
-	struct sprd_vsp_dvfs_data *data = NULL;
+	const struct sprd_vsp_dvfs_data *data = NULL;
 
 	vsp = devm_kzalloc(dev, sizeof(*vsp), GFP_KERNEL);
 	if (!vsp)
 		return -ENOMEM;
 
+	apsys = find_apsys_device_by_name("apsys-dvfs");
+	if (!apsys)
+		return -ENOMEM;
+
+	vsp->apsys = apsys;
+
 	data = (struct sprd_vsp_dvfs_data *)of_device_get_match_data(dev);
-	vsp->max_freq_level = data->max_freq_level;
-	vsp->dvfs_ops = vsp_dvfs_ops_attach(data->ver);
-	pr_info("attach dvfs ops %s\n", data->ver);
+	if (data) {
+		vsp->dvfs_ops = data->dvfs_ops;
+		vsp->max_freq_level = data->max_freq_level;
+	} else {
+		pr_err("No matching driver data found\n");
+		return -EINVAL;
+	}
 
 	if (!vsp->dvfs_ops) {
 		pr_err("attach dvfs ops %s failed\n", data->ver);
@@ -615,7 +625,7 @@ static __maybe_unused int vsp_dvfs_resume(struct device *dev)
 static SIMPLE_DEV_PM_OPS(vsp_dvfs_pm, vsp_dvfs_suspend,
 			 vsp_dvfs_resume);
 
-static struct platform_driver vsp_dvfs_driver = {
+struct platform_driver vsp_dvfs_driver = {
 	.probe    = vsp_dvfs_probe,
 	.remove     = vsp_dvfs_remove,
 	.driver = {
@@ -624,46 +634,6 @@ static struct platform_driver vsp_dvfs_driver = {
 		.of_match_table = vsp_dvfs_of_match,
 	},
 };
-
-int __init vsp_dvfs_init(void)
-{
-	int ret = 0;
-
-	if (ret) {
-		pr_err("%s: failed to add ops: %d\n", __func__, ret);
-		return ret;
-	}
-
-	ret = devfreq_add_governor(&vsp_dvfs_gov);
-	if (ret) {
-		pr_err("%s: failed to add governor: %d\n", __func__, ret);
-		return ret;
-	}
-
-	ret = platform_driver_register(&vsp_dvfs_driver);
-
-	if (ret)
-		devfreq_remove_governor(&vsp_dvfs_gov);
-
-	return ret;
-}
-
-void __exit vsp_dvfs_exit(void)
-{
-	int ret = 0;
-
-	platform_driver_unregister(&vsp_dvfs_driver);
-
-	ret = devfreq_remove_governor(&vsp_dvfs_gov);
-	if (ret)
-		pr_err("%s: failed to remove governor: %d\n", __func__, ret);
-
-	if (ret)
-		pr_err("%s: failed to remove ops: %d\n", __func__, ret);
-}
-
-module_init(vsp_dvfs_init);
-module_exit(vsp_dvfs_exit);
 
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("Sprd vsp devfreq driver");

@@ -25,40 +25,17 @@ Required properties:
 		number of cpu power domain.
 		- sprd,multi-supply: A boolean property to illustrate whether there are
 			multi-version of the dcdc-supply.
-		- dcdc-dvfs-enable: A property describing some necessary
-			information to control the dcdc's hardware dvfs function,
-			including the register offset, the control bit and the
-			flag indicating whether the current cpu power domain's
-			hw dvfs function is enabled or not. for example,
-			<0x68 20 1> means the register offset is 0x68, the
-			control bit is 20, and the current cpu power domain's
-			hw dvfs function should be enabled.
-		- dcdc-judge-vol-sw: A property describing some necessary
-			information for the judge voltage which must matched
-			witch the real voltage value before enable the hardware
-			dvfs function.
-		- dcdc-subsys-tune-enable: A property describing how to control
-			the dvfs functon of a system supplied by dcdc_cpuX.
-                        for example, <0x150 6 1> means that the register offset
-			is 0x150, the control bit is 6, and the hw dvfs
-			function is should be enabled.
-		- dcdc-supply-mode-cfg: A phandle to the configurations related
+		- dcdc-cpu-dvfs-cfg: A phandle to the configurations related
 		  	to power supply mode of dcdc_cpuX
-			- voltage-grade-num: A property describing the total number of
-				voltage grade for the dcdc_cpuX.
-			- voltage-grade: The list of voltage grade for dcdc_cpuX, every
-				entry of this list describes how to set a voltage grade.
-				for example, <2 0x100 0xF4 18 0x1FF> means that the
-				voltage grade is 2, the voltage value of this grade is
-				0x100(0.8V), the register offset in topdvfs_controller
-				is 0xF4, the left shift base bit is 0, the mask is 0x1FF
-			- chnl-in-i2c: A property to determine if this power domain uses
+			- chnl-i2c-used: A property to determine if this power domain uses
 				an i2c channel to adjust voltage.
+			- third-pmic-used: A property to determine if this power domain
+				may use the third pmic.
 			- tuning-latency-us: The delay time(in microsecond)
 				needed to wait after configuring a work index to
 				hardware dvfs module
-		- dcdc-supply-mode-cfg-v1: DCDC_CPUX single-soft-multi-hard configuration,
-			distinguish from "dcdc-supply-mode-cfg" by cmdline.
+		- dcdc-cpu-dvfs-cfg-v1: DCDC_CPUX single-soft-multi-hard configuration,
+			distinguish from "dcdc-cpu-dvfs-cfg" by cmdline.
 
 - device-dcdc-cells: A phandle to the power domains supplying for devices
 			excluding DSU and cores, every power domain which supports
@@ -277,18 +254,13 @@ topdvfs_controller: topdvfsctrl@322A0000 {
 	cpu-dcdc-cells = <&dcdc_cpu0>, <&dcdc_cpu1>;
 	device-dcdc-cells = <&dcdc_mm>;
 	dcdc_cpu0: dcdc-cpu0 {
-		dcdc-dvfs-enable = <0x68 20 1>;
-		dcdc-judge-vol-sw = <0x68 1 0x7 7>;
-		dcdc-subsys-tune-enable = <0x150 6 1>;
-		dcdc-supply-mode-cfg = <&dvfs_dcdc_cpu0_supply>;
-		syscons = <&pmu_apb_regs REG_PMU_APB_DVFS_BLOCK_SHUTDOWN_CFG MASK_PMU_APB_DCDC_CPU0_DVFS_BLOCK_SHUTDOWN_EN>;
-		syscon-names = "dvfs-blk-dcdc-sd";
-		dcdc-idle-voltage = <0x16c 3 0x7 6>
+		dcdc-cpu-dvfs-cfg = <&dvfs_dcdc_cpu1_cfg>;
+		dvfs-blk-sd-syscon = <&pmu_apb_regs REG_PMU_APB_DVFS_BLOCK_SHUTDOWN_CFG MASK_PMU_APB_DCDC_CPU0_DVFS_BLOCK_SHUTDOWN_EN>;
 	};
 	dcdc_cpu1: dcdc-cpu1 {
 		sprd,multi-supply;
-		dcdc-supply-mode-cfg = <&dvfs_dcdc_cpu1_supply>;
-		dcdc-supply-mode-cfg-v1 = <&dvfs_dcdc_cpu1_supply1>;
+		dcdc-cpu-dvfs-cfg = <&dvfs_dcdc_cpu1_cfg>;
+		dcdc-cpu-dvfs-cfg-v1 = <&dvfs_dcdc_cpu1_cfg1>;
 
 		<...>
 	};
@@ -309,94 +281,25 @@ topdvfs_controller: topdvfsctrl@322A0000 {
 	<...>
 };
 
-dvfs_dcdc_cpu0_supply: dvfs-dcdc-cpu0-supply {
+dvfs_dcdc_cpu0_cfg: dvfs-dcdc-cpu0-cfg {
 	pmic-type-num = <0>;
-	top-dvfs-adi-state = <0x70 0 0xF>;
-	voltage-grade-num = <7>;
-	voltage-grade = <0 0xE0 0xF4 0 0x1FF>,
-			<1 0xF0 0xF4 9 0x1FF>,
-			<2 0x100 0xF4 18 0x1FF>,
-			<3 0x110 0xF8 0 0x1FF>,
-			<4 0x120 0xF8 9 0x1FF>,
-			<5 0x130 0xF8 18 0x1FF>,
-			<6 0x140 0xFC 0 0x1FF>;
-	voltage-up-delay = <50 0x58 0 0xffff 0x600>,
-			<100 0x58 16 0xffff 0xa00>,
-			<150 0x54 0 0xffff 0xf00>,
-			<200 0x54 16 0xffff 0x1400>,
-			<250 0x50 0 0xffff 0x1900>,
-			<300 0x50 16 0xffff 0x1e00>,
-			<350 0x110 0 0xffff 0x2300>;
-	voltage-down-delay = <50 0x64 0 0xffff 0x600>,
-			<100 0x64 16 0xffff 0xa00>,
-			<150 0x60 0 0xffff 0xf00>,
-			<200 0x60 16 0xffff 0x1400>,
-			<250 0x5c 0 0xffff 0x1900>,
-			<300 0x5c 16 0xffff 0x1e00>,
-			<350 0x114 0 0xffff 0x2300>;
-	chnl-in-i2c = <0>;
-	tuning-latency-us = <200>;
 	slew-rate = <9375>;
-};
-
-dvfs_dcdc_cpu1_supply: dvfs-dcdc-cpu1-supply {
-	supply-type-sel = <0x120 0 1>;
-	top-dvfs-i2c-state = <0x9c 4 0xF>;
-	voltage-grade-num = <6>;
-	voltage-grade = <0 0x2d 0x12c 0 0x7f>,
-			<1 0x32 0x12c 7 0x7f>,
-			<2 0x37 0x12c 14 0x7f>,
-			<3 0x3c 0x12c 21 0x7f>,
-			<4 0x41 0x130 0 0x7f>,
-			<5 0x46 0x130 7 0x7f>;
-	voltage-up-delay = <50 0x84 0 0xffff 0x1600>,
-			<100 0x84 16 0xffff 0x1a00>,
-			<150 0x80 0 0xffff 0x1f00>,
-			<200 0x80 16 0xffff 0x2400>,
-			<250 0x7c 0 0xffff 0x2900>,
-			<300 0x7c 16 0xffff 0x2e00>,
-			<350 0x118 0 0xffff 0x3300>;
-	voltage-down-delay = <50 0x90 0 0xffff 0x600>,
-			<100 0x90 16 0xffff 0xa00>,
-			<150 0x8c 0 0xffff 0xf00>,
-			<200 0x8c 16 0xffff 0x1400>,
-			<250 0x88 0 0xffff 0x1900>,
-			<300 0x88 16 0xffff 0x1e00>,
-			<350 0x114 0 0xffff 0x2300>;
-	chnl-in-i2c = <1>;
-	tuning-latency-us = <200>;
-};
-
-dvfs_dcdc_cpu1_supply1: dvfs-dcdc-cpu1-supply1 {
-	pmic-type-num = <0>;
-	slew-rate = <9375>; /* 9375uV/us */
-	supply-type-sel = <0x120 0 0>;
-	top-dvfs-adi-state = <0x9c 0 0xf>;
-	voltage-grade-num = <8>;
-	voltage-grade = <0 0xf0 0x100 0 0x1ff>,
-			<1 0x100 0x100 9 0x1ff>,
-			<2 0x110 0x100 18 0x1ff>,
-			<3 0x120 0x104 0 0x1ff>,
-			<4 0x130 0x104 9 0x1ff>,
-			<5 0x140 0x104 18 0x1ff>,
-			<6 0x140 0x108 0 0x1ff>,
-			<7 0x140 0x108 9 0x1ff>;
-	voltage-up-delay = <50 0x84 0 0xffff 0x600>,
-			<100 0x84 16 0xffff 0xa00>,
-			<150 0x80 0 0xffff 0xf00>,
-			<200 0x80 16 0xffff 0x1400>,
-			<250 0x7c 0 0xffff 0x1900>,
-			<300 0x7c 16 0xffff 0x1e00>,
-			<350 0x118 0 0xffff 0x2300>;
-	voltage-down-delay = <50 0x90 0 0xffff 0x600>,
-			<100 0x90 16 0xffff 0xa00>,
-			<150 0x8c 0 0xffff 0xf00>,
-			<200 0x8c 16 0xffff 0x1400>,
-			<250 0x88 0 0xffff 0x1900>,
-			<300 0x88 16 0xffff 0x1e00>,
-			<350 0x11c 0 0xffff 0x2300>;
 	tuning-latency-us = <0>;
-	chnl-in-i2c = <0>;
+};
+
+dvfs_dcdc_cpu1_cfg: dvfs-dcdc-cpu1-cfg {
+	chnl-i2c-used;
+	third-pmic-used;
+	pmic-type-num = <2>;
+	slew-rate = <4000>;
+	tuning-latency-us = <0>;
+};
+
+dvfs_dcdc_cpu1_cfg1: dvfs-dcdc-cpu1-cfg1 {
+	third-pmic-used;
+	pmic-type-num = <0>;
+	slew-rate = <9375>;
+	tuning-latency-us = <0>;
 };
 
 &topdvfs_controller {

@@ -25,14 +25,18 @@
 #include <linux/compat.h>
 #include <linux/uio.h>
 #include <linux/version.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
 #include <linux/sched/signal.h>
-#endif
 #include <linux/virtio.h>
 #include <linux/virtio_ids.h>
 #include <linux/virtio_config.h>
-
 #include <linux/trusty/trusty_ipc.h>
+
+#ifdef pr_fmt
+#undef pr_fmt
+#endif
+#define pr_fmt(fmt) "sprd-trusty-ipc: " fmt
+
+#define TRUSTY_IPC_NAME                 "sprd-trusty-ipc"
 
 #define MAX_DEVICES			4
 
@@ -162,7 +166,7 @@ struct tipc_chan {
 static struct class *tipc_class;
 static unsigned int tipc_major;
 
-struct virtio_device *default_vdev;
+static struct virtio_device *default_vdev;
 
 static DEFINE_IDR(tipc_devices);
 static DEFINE_MUTEX(tipc_devices_lock);
@@ -357,7 +361,7 @@ static struct tipc_msg_buf *vds_get_txbuf(struct tipc_virtio_dev *vds,
 	if (IS_ERR(mb))
 		return mb;
 
-	BUG_ON(!mb);
+	WARN_ON(!mb);
 
 	/* reset and reserve space for message header */
 	mb_reset(mb);
@@ -624,7 +628,8 @@ int tipc_chan_queue_msg(struct tipc_chan *chan, struct tipc_msg_buf *mb)
 EXPORT_SYMBOL(tipc_chan_queue_msg);
 
 
-int tipc_chan_queue_msg_list(struct tipc_chan *chan, struct list_head *msg_buf_list)
+int tipc_chan_queue_msg_list(struct tipc_chan *chan,
+			     struct list_head *msg_buf_list)
 {
 	int err;
 	struct tipc_msg_buf *mb;
@@ -852,7 +857,7 @@ static int dn_wait_for_reply(struct tipc_dn_chan *dn, int timeout)
 }
 
 
-struct tipc_msg_buf *dn_handle_msg(void *data,
+static struct tipc_msg_buf *dn_handle_msg(void *data,
 		struct tipc_msg_buf *rxbuf, u16 flag)
 {
 	struct tipc_dn_chan *dn = data;
@@ -1267,7 +1272,7 @@ err_out:
 	return ret;
 }
 
-static unsigned int tipc_poll(struct file *filp, poll_table *wait)
+static __poll_t tipc_poll(struct file *filp, poll_table *wait)
 {
 	unsigned int mask = 0;
 	struct tipc_dn_chan *dn = filp->private_data;
@@ -1493,8 +1498,7 @@ static void _handle_conn_rsp(struct tipc_virtio_dev *vds,
 	}
 
 	dev_dbg(&vds->vdev->dev,
-		"%s: connection response: for addr 0x%x: "
-		"status %d remote addr 0x%x\n",
+		"%s: connection response: for addr 0x%x: status %d remote addr 0x%x\n",
 		__func__, rsp->target, rsp->status, rsp->remote);
 
 	/* Lookup channel */
@@ -1636,7 +1640,7 @@ static struct tipc_msg_buf *_handle_rxbuf(struct tipc_virtio_dev *vds,
 			newbuf = chan->ops->handle_msg(chan->ops_arg,
 					rxbuf, msg->flags);
 
-			BUG_ON(!newbuf);
+			WARN_ON(!newbuf);
 			kref_put(&chan->refcount, _free_chan);
 		}
 	}
@@ -1677,11 +1681,10 @@ static void _rxvq_cb(struct virtqueue *rxvq)
 
 			if (len > 0) {
 				list_del(&mb->node);
-				if (len > mb->buf_sz) {
+				if (len > mb->buf_sz)
 					one_time_processed_len = mb->buf_sz;
-				} else {
+				else
 					one_time_processed_len = len;
-				}
 
 				mutex_unlock(&vds->lock);
 
@@ -1765,7 +1768,7 @@ static int tipc_virtio_probe(struct virtio_device *vdev)
 	struct scatterlist *sg;
 	int rxvq_num;
 	vq_callback_t *vq_cbs[] = {_rxvq_cb, _txvq_cb};
-	const char *vq_names[] = { "rx", "tx" };
+	static const char * const vq_names[] = { "rx", "tx" };
 
 	dev_dbg(&vdev->dev, "%s:\n", __func__);
 
@@ -1794,11 +1797,8 @@ static int tipc_virtio_probe(struct virtio_device *vdev)
 	vds->cdev_name[sizeof(vds->cdev_name)-1] = '\0';
 
 	/* find tx virtqueues (rx and tx and in this order) */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 14, 0)
-	err = vdev->config->find_vqs(vdev, 2, vqs, vq_cbs, vq_names, NULL, NULL);
-#else
-	err = vdev->config->find_vqs(vdev, 2, vqs, vq_cbs, vq_names);
-#endif
+	err = vdev->config->find_vqs(vdev,
+				     2, vqs, vq_cbs, vq_names, NULL, NULL);
 
 	if (err)
 		goto err_find_vqs;
@@ -1877,11 +1877,6 @@ static void tipc_virtio_remove(struct virtio_device *vdev)
 
 	_go_offline(vds);
 
-	mutex_lock(&vds->lock);
-	vds->state = VDS_DEAD;
-	vds->vdev = NULL;
-	mutex_unlock(&vds->lock);
-
 	vdev->config->reset(vdev);
 
 	idr_destroy(&vds->addr_idr);
@@ -1893,6 +1888,9 @@ static void tipc_virtio_remove(struct virtio_device *vdev)
 	vdev->config->del_vqs(vds->vdev);
 
 	kref_put(&vds->refcount, _free_vds);
+
+	vds->state = VDS_DEAD;
+	vds->vdev = NULL;
 }
 
 static struct virtio_device_id tipc_virtio_id_table[] = {
@@ -1907,7 +1905,7 @@ static unsigned int features[] = {
 static struct virtio_driver virtio_tipc_driver = {
 	.feature_table	= features,
 	.feature_table_size = ARRAY_SIZE(features),
-	.driver.name	= KBUILD_MODNAME,
+	.driver.name	= TRUSTY_IPC_NAME,
 	.driver.owner	= THIS_MODULE,
 	.id_table	= tipc_virtio_id_table,
 	.probe		= tipc_virtio_probe,
@@ -1919,14 +1917,14 @@ static int __init tipc_init(void)
 	int ret;
 	dev_t dev;
 
-	ret = alloc_chrdev_region(&dev, 0, MAX_DEVICES, KBUILD_MODNAME);
+	ret = alloc_chrdev_region(&dev, 0, MAX_DEVICES, TRUSTY_IPC_NAME);
 	if (ret) {
 		pr_err("%s: alloc_chrdev_region failed: %d\n", __func__, ret);
 		return ret;
 	}
 
 	tipc_major = MAJOR(dev);
-	tipc_class = class_create(THIS_MODULE, KBUILD_MODNAME);
+	tipc_class = class_create(THIS_MODULE, TRUSTY_IPC_NAME);
 	if (IS_ERR(tipc_class)) {
 		ret = PTR_ERR(tipc_class);
 		pr_err("%s: class_create failed: %d\n", __func__, ret);

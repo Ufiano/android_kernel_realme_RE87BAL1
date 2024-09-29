@@ -1,7 +1,7 @@
 /*
  * Spreadtrum sharkle platform DTS file
  *
- * Copyright (C) 2019, Spreadtrum Communications Inc.
+ * Copyright (C) 2021, Spreadtrum Communications Inc.
  *
  * This file is licensed under a dual GPLv2 or X11 license.
  */
@@ -159,72 +159,63 @@
 				compatible = "sprd,sc9836-uart";
 				reg = <0x70100000 0x100>;
 				interrupts = <GIC_SPI 3 IRQ_TYPE_LEVEL_HIGH>;
+				source-base = <0x21500030>;
+				clock-frequency = <0>;
+				uart-eb-syscon = <&ap_apb_regs
+						REG_AP_APB_APB_EB
+						MASK_AP_APB_UART1_EB>;
+				clocks = <&ext_26m>;
 				status = "disabled";
 			};
 
 			i2c0: i2c@70500000 {
-				compatible = "sprd,sharkle-i2c";
+				compatible = "sprd,sharkle-i2c", "sprd,sc9860-i2c";
 				reg = <0x70500000 0x100>;
 				interrupts = <GIC_SPI 11 IRQ_TYPE_LEVEL_HIGH>;
 				clock-frequency = <100000>;
 				#address-cells = <1>;
 				#size-cells = <0>;
 				status = "disabled";
-				syscon-names = "i2c_rst";
-				syscons =
-					<&ap_apb_regs REG_AP_APB_APB_RST MASK_AP_APB_I2C0_SOFT_RST>;
 			};
 
 			i2c1: i2c@70600000 {
-				compatible = "sprd,sharkle-i2c";
+				compatible = "sprd,sharkle-i2c", "sprd,sc9860-i2c";
 				reg = <0x70600000 0x100>;
 				interrupts = <GIC_SPI 12 IRQ_TYPE_LEVEL_HIGH>;
 				clock-frequency = <100000>;
 				#address-cells = <1>;
 				#size-cells = <0>;
 				status = "disabled";
-				syscon-names = "i2c_rst";
-				syscons =
-					<&ap_apb_regs REG_AP_APB_APB_RST MASK_AP_APB_I2C1_SOFT_RST>;
 			};
 
 			i2c2: i2c@70700000 {
-				compatible = "sprd,sharkle-i2c";
+				compatible = "sprd,sharkle-i2c", "sprd,sc9860-i2c";
 				reg = <0x70700000 0x100>;
 				interrupts = <GIC_SPI 13 IRQ_TYPE_LEVEL_HIGH>;
 				clock-frequency = <100000>;
 				#address-cells = <1>;
 				#size-cells = <0>;
 				status = "disabled";
-				syscon-names = "i2c_rst";
-				syscons =
-					<&ap_apb_regs REG_AP_APB_APB_RST MASK_AP_APB_I2C2_SOFT_RST>;
 			};
 
 			i2c3: i2c@70800000 {
-				compatible = "sprd,sharkle-i2c";
+				compatible = "sprd,sharkle-i2c", "sprd,sc9860-i2c";
 				reg = <0x70800000 0x100>;
 				interrupts = <GIC_SPI 14 IRQ_TYPE_LEVEL_HIGH>;
 				clock-frequency = <400000>;
 				#address-cells = <1>;
 				#size-cells = <0>;
 				status = "disabled";
-				syscon-names = "i2c_rst";
-				syscons =
-					<&ap_apb_regs REG_AP_APB_APB_RST MASK_AP_APB_I2C3_SOFT_RST>;
 			};
 
 			i2c4: i2c@70900000 {
-				compatible = "sprd,sharkle-i2c";
+				compatible = "sprd,sharkle-i2c", "sprd,sc9860-i2c";
 				reg = <0x70900000 0x100>;
 				interrupts = <GIC_SPI 15 IRQ_TYPE_LEVEL_HIGH>;
 				clock-frequency = <100000>;
 				#address-cells = <1>;
 				#size-cells = <0>;
 				status = "disabled";
-				syscon-names = "i2c_rst";
-				syscons =
-					<&ap_apb_regs REG_AP_APB_APB_RST MASK_AP_APB_I2C4_SOFT_RST>;
 			};
 
 			spi0: spi@70a00000 {
@@ -264,7 +255,7 @@
 			};
 
 			i2s0: i2s@70d00000 {
-				compatible = "sprd,i2s";
+				compatible = "unisoc,i2s";
 				reg = <0x70d00000 0x100000>;
 				sprd,dai_name = "i2s_bt_sco0";
 				sprd,hw_port = <0>;
@@ -285,32 +276,25 @@
 			ranges;
 
 			ap_dma: dma-controller@20100000 {
-				compatible = "sprd,sharkle-dma";
+				compatible = "sprd,sharkle-dma", "sprd,sc9860-dma";
 				reg = <0x20100000 0x4000>;
 				interrupts = <GIC_SPI 50 IRQ_TYPE_LEVEL_HIGH>;
 				#dma-cells = <1>;
 				#dma-channels = <28>;
 				clock-names = "enable";
-				clocks = <&apahb_gate DMA_PUB_EB>;
+				clocks = <&apahb_gate CLK_DMA_PUB_EB>;
 
 			};
 
 
 			dpu: dpu@20800000 {
-				compatible = "sprd,display-processor";
+				compatible = "sprd,sharkle-dpu";
 				reg = <0x20800000 0x1000>;
-				syscons = <&ap_ahb_regs REG_AP_AHB_AHB_RST
+				reset-syscon = <&ap_ahb_regs REG_AP_AHB_AHB_RST
 					MASK_AP_AHB_DISPC_SOFT_RST>;
-				syscon-names = "reset";
 				interrupts = <GIC_SPI 46 IRQ_TYPE_LEVEL_HIGH>;
 				status = "disabled";
 				iommus = <&iommu_dispc>;
-
-				dma-coherent;
-
-				sprd,ip = "dpu-lite-r1p0";
-				sprd,soc = "sharkle";
-				sprd,logo-memory = <&logo_reserved>;
 
 				dpu_port: port {
 					dpu_out: endpoint {
@@ -319,12 +303,13 @@
 				};
 			};
 
-			iommu_dispc: iommu@20800800 {
-				compatible = "sprd,iommuex-dispc";
-				reg = <0x20800800 0x80>;
-				sprd,iova-base = <0x70000000>;
-				sprd,iova-size = <0x08000000>;
-				reg_name = "mmu_reg";
+			iommu_dispc: iommu@20800000 {
+				compatible = "unisoc,iommuexle-dispc";
+				reg = <0x20800000 0x800>,
+				      <0x20800800 0x80>;
+				iova-base = <0x70000000>;
+				iova-size = <0x08000000>;
+				reg_name = "mmu_interrupt_reg","mmu_reg";
 				status = "disabled";
 				#iommu-cells = <0>;
 			};
@@ -341,31 +326,28 @@
 					"clk_gsp_eb";
 				clocks = <&ap_clk CLK_GSP>,
 					<&pll CLK_TWPLL_384M>,
-					<&apahb_gate GSP_EB>;
+					<&apahb_gate CLK_GSP_EB>;
 			};
 
-			iommu_gsp: iommu@20a00804 {
-				compatible = "sprd,iommuex-gsp";
-				reg = <0x20a00804 0x80>;
-				sprd,iova-base = <0x20000000>;
-				sprd,iova-size = <0x10000000>;
-				reg_name = "mmu_reg";
-				status = "ok";
+			iommu_gsp: iommu@20a00000 {
+				compatible = "unisoc,iommuexle-gsp";
+				reg = <0x20a00000 0x804>,
+					<0x20a00804 0x80>;
+				iova-base = <0x20000000>;
+				iova-size = <0x10000000>;
+				reg_name = "mmu_interrupt_reg","mmu_reg";
+				status = "okay";
 				#iommu-cells = <0>;
 			};
 
 			dsi: dsi@21800000 {
-				compatible = "sprd,dsi-host";
+				compatible = "sprd,sharkle-dsi-host";
 				reg = <0x21800000 0x1000>;
-				syscons = <&ap_ahb_regs REG_AP_AHB_AHB_RST
+				reset-syscon = <&ap_ahb_regs REG_AP_AHB_AHB_RST
 					MASK_AP_AHB_DSI_SOFT_RST>;
-				syscon-names = "reset";
 				interrupts = <GIC_SPI 48 IRQ_TYPE_LEVEL_HIGH>,
 					<GIC_SPI 49 IRQ_TYPE_LEVEL_HIGH>;
 				status = "disabled";
-
-				sprd,ip = "sprd,dsi-ctrl", "r1p0";
-				sprd,soc = "sharkle";
 
 				ports {
 					#address-cells = <1>;
@@ -388,36 +370,35 @@
 			};
 
 			dphy: dphy {
-				compatible = "sprd,dsi-phy";
+				compatible = "sprd,sharkle-dsi-phy";
 				#address-cells = <1>;
 				#size-cells = <0>;
 				reg = <0x21800000 0x1000>;
-				syscons = <&ap_ahb_regs
+				enable-syscon = <&ap_ahb_regs
 					REG_AP_AHB_MISC_CKG_EN
 					(MASK_AP_AHB_DPHY_REF_CKG_EN |
-					MASK_AP_AHB_DPHY_CFG_CKG_EN)>,
-					<&pmu_apb_regs
+					MASK_AP_AHB_DPHY_CFG_CKG_EN)>;
+				power-syscon = <&pmu_apb_regs
 					REG_PMU_APB_ANALOG_PHY_PD_CFG
 					MASK_PMU_APB_DSI_PD_REG>;
-				syscon-names = "enable", "power";
 				status = "disabled";
 
-				sprd,ip = "sprd,megacores-sharkle";
-				sprd,soc = "sharkle";
+				ports {
+					#address-cells = <1>;
+					#size-cells = <0>;
+					port@0 {
 
-				/* output port */
-				port@0 {
-					reg = <0>;
-					dphy_out: endpoint {
-						remote-endpoint = <&panel_in>;
+						reg = <0>;
+						dphy_out: endpoint {
+							remote-endpoint = <&panel_in>;
+						};
 					};
-				};
 
-				/* input port*/
-				port@1 {
-					reg = <1>;
-					dphy_in: endpoint {
-						remote-endpoint = <&dsi_out>;
+					port@1 {
+						reg = <1>;
+						dphy_in: endpoint {
+							remote-endpoint = <&dsi_out>;
+						};
 					};
 				};
 			};
@@ -427,66 +408,55 @@
 				reg = <0x21900000 0xc000>;
 				interrupts = <GIC_SPI 43 IRQ_TYPE_LEVEL_HIGH>;
 
-				syscons = <&ap_ahb_regs REG_AP_AHB_AHB_RST
-					MASK_AP_AHB_VSP_SOFT_RST>,
-					<&pmu_apb_regs
-					REG_PMU_APB_PD_MM_TOP_CFG
-					MASK_PMU_APB_PD_MM_TOP_FORCE_SHUTDOWN>,
-					<&pmu_apb_regs
-					REG_PMU_APB_PD_MM_TOP_CFG
-					MASK_PMU_APB_PD_MM_TOP_AUTO_SHUTDOWN_EN>,
-					<&aon_apb_regs
+				reset-syscon = <&ap_ahb_regs REG_AP_AHB_AHB_RST
+					MASK_AP_AHB_VSP_SOFT_RST>;
+				vsp-domain-eb-syscon = <&aon_apb_regs
 					REG_AON_APB_APB_EB1
 					MASK_AON_APB_MM_VSP_EB>;
-				syscon-names = "reset",
-					"pmu_vsp_force_shutdown",
-					"pmu_vsp_auto_shutdown",
-					"vsp_domain_eb";
 
 				iommus = <&iommu_vsp>;
 				status = "disabled";
 			};
 
 			iommu_vsp: iommu@21901140 {
-				compatible = "sprd,iommuex-vsp";
-				reg = <0x21901140 0x60>;
-				sprd,iova-base = <0x10000000>;
-				sprd,iova-size = <0x10000000>;
-				reg_name = "mmu_reg";
+				compatible = "unisoc,iommuexle-vsp";
+				reg = <0x21900000 0x1140>,
+				      <0x21901140 0x60>;
+				iova-base = <0x10000000>;
+				iova-size = <0x10000000>;
+				reg_name = "mmu_interrupt_reg","mmu_reg";
 				status = "disabled";
 				#iommu-cells = <0>;
 			};
 
 			sdio3: sdio@20600000 {
-				compatible  = "sprd,sdhc-r10";
+				compatible  = "sprd,sdhci-r11";
 				reg = <0x20600000 0x1000>;
 				interrupts = <GIC_SPI 60 IRQ_TYPE_LEVEL_HIGH>;
-				clock-names = "sdio_clk","sdio_clk_source",
-					"sdio_ahb_enable";
+				clock-names = "sdio", "enable";
 				clocks = <&ap_clk CLK_EMMC_2X >,
-					 <&rpll CLK_RPLL_390M>,
-					 <&apahb_gate EMMC_EB>;
-				status = "disabled";
+					   <&apahb_gate CLK_EMMC_EB>;
+				assigned-clocks = <&ap_clk CLK_EMMC_2X>;
+				assigned-clocks-parents = <&rpll CLK_RPLL_390M>;
 			};
 
 			sdio0: sdio@20300000 {
-				compatible  = "sprd,sdhc-r10";
+				compatible  = "sprd,sdhci-r11";
 				reg = <0x20300000 0x1000>;
 				interrupts = <GIC_SPI 57 IRQ_TYPE_LEVEL_HIGH>;
-				clock-names = "sdio_clk","sdio_clk_source",
-					      "sdio_ahb_enable";
+				clock-names = "sdio", "enable";
 				clocks = <&ap_clk CLK_SDIO0_2X>,
-					 <&rpll CLK_RPLL_390M>,
-					 <&apahb_gate SDIO0_EB>;
-				status = "disabled";
+					 <&apahb_gate CLK_SDIO0_EB>;
+				assigned-clocks = <&ap_clk CLK_SDIO0_2X>;
+				assigned-clock-parents = <&rpll CLK_RPLL_390M>;
 			};
 
 			usb: usb@20200000 {
-				compatible  = "sprd,sharkle-musb";
+				compatible  = "sprd,sharkle-musb","sprd,sharkl3-musb";
 				reg = <0x20200000 0x2000>;
 				interrupts = <GIC_SPI 55 IRQ_TYPE_LEVEL_HIGH>;
 				interrupt-names = "mc";
-				clocks = <&apahb_gate OTG_EB>;
+				clocks = <&apahb_gate CLK_OTG_EB>;
 				clock-names = "core_clk";
 				usb-phy = <&hsphy>;
 				phy-names = "usb";
@@ -498,9 +468,7 @@
 				reg-names = "phy_glb_regs";
 				sprd,syscon-enable = <&aon_apb_regs>;
 				sprd,tune-value = <0x0005af33>;
-				sprd,vdd-voltage = <3050000>;
-				io-channels = <&pmic_adc 30>, <&pmic_adc 31>;
-				io-channel-names = "dp", "dm";
+				sprd,vdd-voltage = <3300000>;
 				#phy-cells = <0>;
 			};
 		};
@@ -512,7 +480,7 @@
 			ranges;
 
 			sprd_audio_codec_dig: audio-codec@40000000 {
-				compatible = "sprd,sharkl3-audio-codec","sprd,sharkle-audio-codec";
+				compatible = "unisoc,sharkl3-audio-codec","unisoc,sharkle-audio-codec";
 				reg = <0x40000000 0x2000>;
 
 				interrupts = <GIC_SPI 20  IRQ_TYPE_NONE>;
@@ -521,7 +489,7 @@
 			};
 
 			vbc: vbc@40020000 {
-				compatible = "sprd,vbc-r1p0v3";
+				compatible = "unisoc,vbc-r1p0v3";
 				#sound-dai-cells = <1>;
 				reg = <0x40020000 0x10000>;
 				sprd,clk-stable = <0x402d0060 0x4>;
@@ -565,16 +533,16 @@
 				clocks = <&aonapb_gate CLK_SPLK_EB>;
 			};
 
-			aon_mailbox: mailbox@400a0000 {
-				compatible = "sprd,mailbox";
+			mailbox: mailbox@400a0000 {
+				compatible = "unisoc,mailbox";
 				reg = <0x400a0000 0x8000>,
 				      <0x400a8000 0x8000>;
-				syscons = <&aon_apb_regs 0x4 0x200000>;
-				syscon-names = "clk";
+				reg-names = "inbox", "outbox";
+				sprd,mailbox_clk = <&aon_apb_regs 0x4 0x200000>;
 				interrupts = <GIC_SPI 68 IRQ_TYPE_LEVEL_HIGH>,
 					     <GIC_SPI 69 IRQ_TYPE_LEVEL_HIGH>;
-				sprd,core-cnt = <7>;
-				sprd,version = <0x102>;
+				interrupt-names = "inbox", "outbox";
+				#mbox-cells = <2>;
 			};
 
 			uart0: serial@508d0000 {
@@ -586,7 +554,7 @@
 			};
 
 			aon_dma: dma-controller@40100000 {
-				compatible = "sprd,sharkle-dma";
+				compatible = "sprd,sharkle-dma", "sprd,sc9860-dma";
 				reg = <0x40100000 0x4000>;
 				#dma-cells = <1>;
 				#dma-channels = <8>;
@@ -595,7 +563,7 @@
 			};
 
 			eic_debounce: gpio@40210000 {
-				compatible = "sprd,sharkle-eic-debounce";
+				compatible = "sprd,sharkle-eic-debounce", "sprd,sc9860-eic-debounce";
 				reg = <0x40210000 0x80>,
 				      <0x40370000 0x80>,
 				      <0x402c0000 0x80>;
@@ -607,7 +575,7 @@
 			};
 
 			eic_latch: gpio@40210080 {
-				compatible = "sprd,sharkle-eic-latch";
+				compatible = "sprd,sharkle-eic-latch", "sprd,sc9860-eic-latch";
 				reg = <0x40210080 0x20>,
 				      <0x40370080 0x20>,
 				      <0x402c0080 0x20>;
@@ -619,7 +587,7 @@
 			};
 
 			eic_async: gpio@402100a0 {
-				compatible = "sprd,sharkle-eic-async";
+				compatible = "sprd,sharkle-eic-async", "sprd,sc9860-eic-async";
 				reg = <0x402100a0 0x20>,
 				      <0x403700a0 0x20>,
 				      <0x402c00a0 0x20>;
@@ -631,7 +599,7 @@
 			};
 
 			eic_sync: gpio@402100c0 {
-				compatible = "sprd,sharkle-eic-sync";
+				compatible = "sprd,sharkle-eic-sync", "sprd,sc9860-eic-sync";
 				reg = <0x402100c0 0x20>,
 				      <0x403700c0 0x20>,
 				      <0x402c00c0 0x20>;
@@ -658,6 +626,8 @@
 
 			ap_efuse: efuse@40240000 {
 				compatible = "sprd,sharkl3-efuse", "sprd,sharkle-efuse";
+				#address-cells = <1>;
+				#size-cells = <1>;
 				reg = <0x40240000 0x10000>;
 				clock-names = "enable";
 				hwlocks = <&hwlock 8>;
@@ -725,25 +695,26 @@
 			};
 
 			pwms: pwm@40260000 {
-				compatible = "sprd,sharkle-pwm", "sprd,sharkl5-pwm";
+				compatible = "sprd,sharkle-pwm", "sprd,sharkl5pro-pwm";
 				reg = <0x40260000 0x10000>;
-				clock-names = "clk_parent",
-					"clk_pwm0", "clk_pwm0_eb",
-					"clk_pwm1", "clk_pwm1_eb",
-					"clk_pwm2", "clk_pwm2_eb";
-				clocks = <&ext_26m>,
-					<&aon_prediv CLK_PWM0>,
-					<&aonapb_gate CLK_PWM0_EB>,
-					<&aon_prediv CLK_PWM1>,
-					<&aonapb_gate CLK_PWM1_EB>,
-					<&aon_prediv CLK_PWM2>,
-					<&aonapb_gate CLK_PWM2_EB>;
+				clock-names = "pwm0", "enable0",
+					      "pwm1", "enable1",
+					      "pwm2", "enable2";
+				clocks = <&aon_prediv CLK_PWM0>, <&aonapb_gate CLK_PWM0_EB>,
+					 <&aon_prediv CLK_PWM1>, <&aonapb_gate CLK_PWM1_EB>,
+					 <&aon_prediv CLK_PWM2>, <&aonapb_gate CLK_PWM2_EB>;
+				assigned-clocks = <&aon_prediv CLK_PWM0>,
+						  <&aon_prediv CLK_PWM1>,
+						  <&aon_prediv CLK_PWM2>;
+				assigned-clock-parents = <&ext_26m>,
+							 <&ext_26m>,
+							 <&ext_26m>;
 				#pwm-cells = <2>;
 				status = "disabled";
 			};
 
 			ap_gpio: gpio@40280000 {
-				compatible = "sprd,sharkle-gpio";
+				compatible = "sprd,sharkle-gpio", "sprd,sc9860-gpio";
 				reg = <0x40280000 0x1000>;
 				gpio-controller;
 				#gpio-cells = <2>;
@@ -900,19 +871,16 @@
 			ranges;
 
 			cam_domain: cam-domain {
-				compatible = "sprd,cam-domain";
-				syscons = <&pmu_apb_regs REG_PMU_APB_PD_MM_TOP_CFG MASK_PMU_APB_PD_MM_TOP_AUTO_SHUTDOWN_EN>,
-					<&pmu_apb_regs REG_PMU_APB_PD_MM_TOP_CFG MASK_PMU_APB_PD_MM_TOP_FORCE_SHUTDOWN>,
-					<&pmu_apb_regs REG_PMU_APB_PWR_STATUS3_DBG MASK_PMU_APB_PD_MM_TOP_STATE>,
-					<&aon_apb_regs REG_AON_APB_APB_EB2 MASK_AON_APB_ANLG_APB_EB>,
-					<&mm_ahb_regs REG_MM_AHB_QOS_THREHOLD_MM
+				compatible = "sprd,sharkle-camsys-domain";
+				shutdown_en = <&pmu_apb_regs REG_PMU_APB_PD_MM_TOP_CFG MASK_PMU_APB_PD_MM_TOP_AUTO_SHUTDOWN_EN>;
+				force_shutdown = <&pmu_apb_regs REG_PMU_APB_PD_MM_TOP_CFG MASK_PMU_APB_PD_MM_TOP_FORCE_SHUTDOWN>;
+				pd_mm_state = <&pmu_apb_regs REG_PMU_APB_PWR_STATUS3_DBG MASK_PMU_APB_PD_MM_TOP_STATE>;
+				anlg_apb_eb = <&aon_apb_regs REG_AON_APB_APB_EB2 MASK_AON_APB_ANLG_APB_EB>;
+				qos_threshold_mm = <&mm_ahb_regs REG_MM_AHB_QOS_THREHOLD_MM
 					(MASK_MM_AHB_AR_QOS_THREHOLD_MM |
 					MASK_MM_AHB_AW_QOS_THREHOLD_MM)>;
-				syscon-names = "shutdown_en",
-					"force_shutdown",
-					"pd_mm_state",
-					"anlg_apb_eb",
-					"qos_threshold_mm";
+				#power-domain-cells = <0>;
+				status = "disabled";
 			};
 
 			dcam: dcam@60800000 {
@@ -929,16 +897,17 @@
 				sprd,isp = <&isp>;
 				sprd,dcam-count = <2>;
 				iommus = <&iommu_dcam>;
+				power-domains = <&cam_domain>;
 				status = "disabled";
 			};
 
 			iommu_dcam: iommu@60802100 {
-				compatible = "sprd,iommuex-dcam";
-				reg = <0x60802100 0x60>;
-				sprd,frc-reg = <0x60802010>;
-				sprd,iova-base = <0x40000000>;
-				sprd,iova-size = <0x10000000>;
-				reg_name = "mmu_reg";
+				compatible = "unisoc,iommuexle-dcam";
+				reg = <0x60800000 0x2100>,
+				      <0x60802100 0x60>;
+				iova-base = <0x40000000>;
+				iova-size = <0x10000000>;
+				reg_name = "mmu_interrupt_reg","mmu_reg";
 				status = "disabled";
 				#iommu-cells = <0>;
 			};
@@ -948,25 +917,24 @@
 				reg = <0x60a00000 0x100000>;
 				interrupts = <GIC_SPI 44 IRQ_TYPE_LEVEL_HIGH>,
 					<GIC_SPI 125 IRQ_TYPE_LEVEL_HIGH>;
-				syscons = <&mm_ahb_regs REG_MM_AHB_AHB_RST MASK_MM_AHB_ISP_FMCU_SOFT_RST>,
-					<&mm_ahb_regs REG_MM_AHB_AHB_RST
+				fmcu_rst = <&mm_ahb_regs REG_MM_AHB_AHB_RST MASK_MM_AHB_ISP_FMCU_SOFT_RST>;
+				hw_rst = <&mm_ahb_regs REG_MM_AHB_AHB_RST
 					(MASK_MM_AHB_ISP_LOG_SOFT_RST |
 					MASK_MM_AHB_ISP_CFG_SOFT_RST |
 					MASK_MM_AHB_ISP_FMCU_SOFT_RST)>;
-				syscon-names = "fmcu_rst",
-					"hw_rst";
 				sprd,isp-count = <1>;
 				iommus = <&iommu_isp>;
 				status = "disabled";
 			};
 
 			iommu_isp: iommu@60a00800 {
-				compatible = "sprd,iommuex-isp";
+				compatible = "unisoc,iommuexle-isp";
 				/* sharkle isp need pagetable size */
-				reg = <0x60a00800 0x400>;
-				sprd,iova-base = <0x50000000>;
-				sprd,iova-size = <0x10000000>;
-				reg_name = "mmu_reg";
+				reg = <0x60a00000 0x800>,
+				      <0x60a00800 0x400>;
+				iova-base = <0x50000000>;
+				iova-size = <0x10000000>;
+				reg_name = "mmu_interrupt_reg","mmu_reg";
 				status = "disabled";
 				#iommu-cells = <0>;
 			};
@@ -975,18 +943,18 @@
 				compatible = "sprd,cpp";
 				reg = <0x61000000 0x1000>;
 				interrupts = <GIC_SPI 27 IRQ_TYPE_LEVEL_HIGH>;
-				syscons = <&mm_ahb_regs REG_MM_AHB_AHB_RST MASK_MM_AHB_CPP_SOFT_RST_MASK>;
-				syscon-names = "cpp_rst";
+				cpp_rst = <&mm_ahb_regs REG_MM_AHB_AHB_RST MASK_MM_AHB_CPP_SOFT_RST_MASK>;
 				iommus = <&iommu_cpp>;
 				status = "disabled";
 			};
 
 			iommu_cpp: iommu@61000200 {
-				compatible = "sprd,iommuex-cpp";
-				reg = <0x61000200 0x60>;
-				sprd,iova-base = <0x60000000>;
-				sprd,iova-size = <0x8000000>;
-				reg_name = "mmu_reg";
+				compatible = "unisoc,iommuexle-cpp";
+				reg = <0x61000000 0x200>,
+				      <0x61000200 0x60>;
+				iova-base = <0x60000000>;
+				iova-size = <0x8000000>;
+				reg_name = "mmu_interrupt_reg","mmu_reg";
 				status = "disabled";
 				#iommu-cells = <0>;
 			};
@@ -1051,10 +1019,9 @@
 				compatible = "sprd,mali-midgard";
 				reg = <0x60000000 0x4000>;
 				gpu-supply = <&vddcore>;
-				syscons = <&pmu_apb_regs
+				top_force_shutdown = <&pmu_apb_regs
 					REG_PMU_APB_PD_GPU_TOP_CFG
 					MASK_PMU_APB_PD_GPU_TOP_FORCE_SHUTDOWN>;
-				syscon-names = "top_force_shutdown";
 
 				interrupts = <GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>,
 					<GIC_SPI 39 IRQ_TYPE_LEVEL_HIGH>,
@@ -1092,24 +1059,24 @@
 				compatible = "sprd,sharkle-jpg";
 				reg = <0x60b00000 0x8000>;
 				interrupts = <GIC_SPI 42 IRQ_TYPE_LEVEL_HIGH>;
-				syscons = <&mm_ahb_regs  REG_MM_AHB_AHB_RST
-					MASK_MM_AHB_JPG_SOFT_RST>,
-					<&aon_apb_regs
+				reset-syscon = <&mm_ahb_regs  REG_MM_AHB_AHB_RST
+					MASK_MM_AHB_JPG_SOFT_RST>;
+				aon-apb-eb-syscon = <&aon_apb_regs
 					REG_AON_APB_APB_EB0
 					MASK_AON_APB_MM_EB>;
-				syscon-names = "reset",
-					"aon_apb_eb";
 
 				iommus = <&iommu_jpg>;
+				power-domains = <&cam_domain>;
 				status = "disable";
 			};
 
 			iommu_jpg: iommu@60b00100 {
-				compatible = "sprd,iommuex-jpg";
-				reg = <0x60b00100 0x400>;
-				sprd,iova-base = <0x70000000>;
-				sprd,iova-size = <0x10000000>;
-				reg_name = "mmu_reg";
+				compatible = "unisoc,iommuexle-jpg";
+				reg = <0x60b00000 0x100>,
+				      <0x60b00100 0x400>;
+				iova-base = <0x70000000>;
+				iova-size = <0x10000000>;
+				reg_name = "mmu_interrupt_reg","mmu_reg";
 				status = "disabled";
 				#iommu-cells = <0>;
 			};
@@ -1121,9 +1088,9 @@
 			#size-cells = <1>;
 			ranges;
 
-			dmc_controller: dmc-controller@30000000 {
-				compatible = "sprd,sharkle-dmc";
-				reg = <0x30000000 0x1000>;
+			dmc_controller: dmc-controller@300001b4 {
+				compatible = "sprd,pub-dmc-original";
+				reg = <0x300001b4 0x100>;
 			};
 		};
 	};
@@ -1142,26 +1109,26 @@
 		clock-output-names = "ext-32k";
 	};
 
-	ext_26m_aud: ext-26m-aud {
-		compatible = "fixed-clock";
-		#clock-cells = <0>;
-		clock-frequency = <26000000>;
-		clock-output-names = "ext-26m-aud";
+
+	sipc: sipc-virt {
+		compatible = "unisoc,sipc-virt-bus";
+		#address-cells = <1>;
+		#size-cells = <0>;
 	};
 
 	sprd_pcm: sprd-pcm-audio {
-		compatible = "sprd,sharkl3-pcm-platform","sprd,sharkle-pcm-platform";
+		compatible = "unisoc,sharkl3-pcm-platform","unisoc,sharkle-pcm-platform";
 		#sound-dai-cells = <0>;
 		/* non-i2s playbacks use aon dma */
 		/* reference dma node dma-channels proporty
 		 * do not conflict with others
 		 * ap_dma (29-32 for security)
 		 */
-		dmas = <&aon_dma 1 &aon_dma 2
-			&aon_dma 3 &aon_dma 4
-			&aon_dma 5 &aon_dma 6
-			&aon_dma 7 &aon_dma 8
-			&ap_dma 1 &ap_dma 2>;
+		dmas = <&aon_dma 7 &aon_dma 8
+			&aon_dma 9 &aon_dma 10
+			&aon_dma 0 &aon_dma 0
+			&aon_dma 0 &aon_dma 0
+			&ap_dma 31 &ap_dma 32>;
 		dma-names = "da01-l", "da01-r", "da23-l", "da23-r",
 			"normal-2stage-p", "normal-2stage-c",
 			"deep-2stage-p", "ad23-2stage-c",
@@ -1181,17 +1148,18 @@
 		 */
 		sprd,dma-2stage-level-1-int-source = <1>;
 	};
+
 	vaudio: vaudio {
-		compatible = "sprd,vaudio";
+		compatible = "unisoc,vaudio";
 		#sound-dai-cells = <1>;
 		clock-names = "tuned_26m";
 		clocks = <&rpll CLK_AUDIO_GATE>;
 	};
 
 	sprd_pcm_iis: sprd-pcm-iis {
-		compatible = "sprd,sharkl3-pcm-platform","sprd,sharkle-pcm-platform";
+		compatible = "unisoc,sharkl3-pcm-platform","unisoc,sharkle-pcm-platform";
 		#sound-dai-cells = <0>;
-		dmas = <&ap_dma 5 &ap_dma 6>;
+		dmas = <&ap_dma 4 &ap_dma 3>;
 		dma-names = "iis0_tx", "iis0_rx";
 		sprd,dma-2stage-usecase = <2>;
 		sprd,node-count-2stage-level-1 = <1>;
@@ -1200,7 +1168,7 @@
 	};
 
 	saudio_lte{
-		compatible = "sprd,saudio";
+		compatible = "unisoc,saudio";
 		sprd,saudio-dst-id = <5>;               /* SIPC_ID_LTE */
 		sprd,ctrl_channel = <10>;               /* SMSG_CH_VBC */
 		sprd,playback_channel = <11 131 132>; /* SMSG_CH_PLAYBACK */
@@ -1211,7 +1179,7 @@
 	};
 
 	saudio_voip{
-		compatible = "sprd,saudio";
+		compatible = "unisoc,saudio";
 		sprd,saudio-dst-id = <5>;               /* SIPC_ID_LTE */
 		sprd,ctrl_channel = <14>;               /* SMSG_CH_CTRL_VOIP */
 		sprd,playback_channel = <15 151>;/* SMSG_CH_PLAYBACK_VOIP */
@@ -1222,7 +1190,7 @@
 	};
 
 	audio-mem-mgr {
-		compatible = "sprd,sharkl3-audio-mem","sprd,sharkle-audio-mem";
+		compatible = "unisoc,sharkl3-audio-mem","unisoc,sharkle-audio-mem";
 		sprd,iram_phy_addr = <0x00003400 0xb000>;
 		/* note:mmap address must paga_size align */
 		sprd,iram_normal = <0x00003400 0x0>;
@@ -1231,14 +1199,14 @@
 	};
 
 	apipe-pcm {
-		compatible = "sprd,apipe";
+		compatible = "unisoc,apipe";
 	};
 
 	apipe-cmd-in {
-		compatible = "sprd,apipe";
+		compatible = "unisoc,apipe";
 	};
 
 	apipe-cmd-out {
-		compatible = "sprd,apipe";
+		compatible = "unisoc,apipe";
 	};
 };

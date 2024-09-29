@@ -13,6 +13,11 @@
 #ifndef _SPRD_SENSOR_K_H_
 #define _SPRD_SENSOR_K_H_
 
+#ifdef __KERNEL__
+#include <linux/types.h>
+#else
+#include <stdint.h>
+#endif
 
 struct sensor_i2c_tag {
 	uint8_t  *i2c_data;

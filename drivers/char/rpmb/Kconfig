@@ -1,15 +1,10 @@
-config RPMB
-	tristate "RPMB partition interface"
-	help
-	  Unified RPMB partition interface for eMMC and UFS.
-	  Provides interface for in kernel security controllers to
-	  access RPMB partition.
-
-	  If unsure, select N.
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# RPMB character device configuration
+#
 
 config RPMB_INTF_DEV
-	bool "RPMB character device interface /dev/rpmbN"
-	depends on RPMB
+	tristate "RPMB character device interface /dev/rpmbN"
 	help
 	  Say yes here if you want to access RPMB from user space
 	  via character device interface /dev/rpmb%d

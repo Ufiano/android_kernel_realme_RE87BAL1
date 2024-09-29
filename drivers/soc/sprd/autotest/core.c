@@ -1,5 +1,5 @@
 /*
- ** Copyright (C) 2018 Spreadtrum Communications Inc.
+ ** Copyright (C) 2020 Unisoc Communications Inc.
  **
  ** This software is licensed under the terms of the GNU General Public
  ** License version 2, as published by the Free Software Foundation, and
@@ -75,7 +75,7 @@ static int sprd_autotest_release(struct inode *inode, struct file *filp)
 	return 0;
 }
 
-static struct file_operations sprd_autotest_fops = {
+static const struct file_operations sprd_autotest_fops = {
 	.owner = THIS_MODULE,
 	.unlocked_ioctl = sprd_autotest_ioctl,
 	.open = sprd_autotest_open,
@@ -107,6 +107,7 @@ int sprd_autotest_register_handler(struct autotest_handler *handler)
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(sprd_autotest_register_handler);
 
 void sprd_autotest_unregister_handler(struct autotest_handler *handler)
 {
@@ -120,6 +121,7 @@ void sprd_autotest_unregister_handler(struct autotest_handler *handler)
 	list_del(&handler->node);
 	mutex_unlock(&autotest->lock);
 }
+EXPORT_SYMBOL_GPL(sprd_autotest_unregister_handler);
 
 static int __init sprd_autotest_init(void)
 {
@@ -136,7 +138,8 @@ static int __init sprd_autotest_init(void)
 		goto class_err;
 	}
 
-	ret = alloc_chrdev_region(&autotest_devt, 0, AUTOTEST_DEV_MAX, "autotest");
+	ret = alloc_chrdev_region(&autotest_devt, 0,
+				  AUTOTEST_DEV_MAX, "autotest");
 	if (ret < 0) {
 		pr_err("failed to allocate chardev region.\n");
 		goto alloc_chrdev_err;
@@ -181,3 +184,6 @@ static void __exit sprd_autotest_exit(void)
 
 subsys_initcall(sprd_autotest_init);
 module_exit(sprd_autotest_exit);
+
+MODULE_DESCRIPTION("sprd autotest core driver");
+MODULE_LICENSE("GPL v2");

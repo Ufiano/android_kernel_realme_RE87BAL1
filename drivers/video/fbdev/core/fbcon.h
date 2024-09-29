@@ -25,7 +25,7 @@
     *    low-level frame buffer device
     */
 
-struct display {
+struct fbcon_display {
     /* Filled in by the low-level console driver */
     const u_char *fontdata;
     int userfont;                   /* != 0 if fontdata kmalloc()ed */
@@ -68,7 +68,8 @@ struct fbcon_ops {
 	struct fb_var_screeninfo var;  /* copy of the current fb_var_screeninfo */
 	struct timer_list cursor_timer; /* Cursor timer */
 	struct fb_cursor cursor_state;
-	struct display *p;
+	struct fbcon_display *p;
+	struct fb_info *info;
         int    currcon;	                /* Current VC. */
 	int    cur_blink_jiffies;
 	int    cursor_flash;
@@ -151,13 +152,6 @@ static inline int attr_col_ec(int shift, struct vc_data *vc,
 #define attr_bgcol_ec(bgshift, vc, info) attr_col_ec(bgshift, vc, info, 0)
 #define attr_fgcol_ec(fgshift, vc, info) attr_col_ec(fgshift, vc, info, 1)
 
-/* Font */
-#define REFCOUNT(fd)	(((int *)(fd))[-1])
-#define FNTSIZE(fd)	(((int *)(fd))[-2])
-#define FNTCHARCNT(fd)	(((int *)(fd))[-3])
-#define FNTSUM(fd)	(((int *)(fd))[-4])
-#define FONT_EXTRA_WORDS 4
-
     /*
      *  Scroll Method
      */
@@ -224,7 +218,7 @@ extern int  soft_cursor(struct fb_info *info, struct fb_cursor *cursor);
 #define FBCON_ATTRIBUTE_REVERSE   2
 #define FBCON_ATTRIBUTE_BOLD      4
 
-static inline int real_y(struct display *p, int ypos)
+static inline int real_y(struct fbcon_display *p, int ypos)
 {
 	int rows = p->vrows;
 
@@ -260,11 +254,5 @@ extern void fbcon_set_rotate(struct fbcon_ops *ops);
 #else
 #define fbcon_set_rotate(x) do {} while(0)
 #endif /* CONFIG_FRAMEBUFFER_CONSOLE_ROTATION */
-
-#ifdef CONFIG_DMI
-int fbcon_platform_get_rotate(struct fb_info *info);
-#else
-#define fbcon_platform_get_rotate(i) FB_ROTATE_UR
-#endif /* CONFIG_DMI */
 
 #endif /* _VIDEO_FBCON_H */

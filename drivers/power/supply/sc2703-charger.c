@@ -1,9 +1,6 @@
-/* SPDX-License-Identifier: GPL-2.0
- *
- * Charger device driver for SC2703
- *
- * Copyright (c) 2018 Dialog Semiconductor.
- */
+// SPDX-License-Identifier: GPL-2.0:
+// Copyright (c) 2018 Dialog Semiconductor.
+
 #include <linux/delay.h>
 #include <linux/interrupt.h>
 #include <linux/kernel.h>
@@ -47,10 +44,10 @@
 #define SC2703_CHARGER_VOLTAGE_MAX	6500000
 #define SC2703_FAST_CHARGER_VOLTAGE_MAX	11000000
 
+#define SC2703_INPUT_CUR_MASK			GENMASK(7, 0)
+#define SC2703_WAKE_UP_MS				2000
+
 #define SC2703_INPUT_CUR_MASK		GENMASK(7, 0)
-
-#define SC2703_WAKE_UP_MS               2000
-
 struct sc2703_charger_info {
 	struct device *dev;
 	struct regmap *regmap;
@@ -900,11 +897,6 @@ static int sc2703_charger_usb_get_property(struct power_supply *psy,
 	u32 cur, online, health, enabled = 0;
 	enum usb_charger_type type;
 
-	if (!info) {
-		pr_err("%s:line%d: NULL pointer!!!\n", __func__, __LINE__);
-		return -EINVAL;
-	}
-
 	mutex_lock(&info->lock);
 
 	switch (psp) {
@@ -983,7 +975,7 @@ static int sc2703_charger_usb_get_property(struct power_supply *psy,
 
 		break;
 
-	case POWER_SUPPLY_PROP_CHARGE_ENABLED:
+	case POWER_SUPPLY_PROP_CALIBRATE:
 		ret = regmap_read(info->regmap, SC2703_DCDC_CTRL_A, &enabled);
 		if (ret) {
 			dev_err(info->dev, "Get sc2703 charge state fail, ret = %d\n", ret);
@@ -1017,15 +1009,8 @@ sc2703_charger_usb_set_property(struct power_supply *psy,
 				const union power_supply_propval *val)
 {
 	struct sc2703_charger_info *info = power_supply_get_drvdata(psy);
-	bool present = false;
+	bool present = sc2703_charger_is_bat_present(info);
 	int ret = 0;
-
-	if (!info) {
-		pr_err("%s:line%d: NULL pointer!!!\n", __func__, __LINE__);
-		return -EINVAL;
-	}
-
-	present = sc2703_charger_is_bat_present(info);
 
 	mutex_lock(&info->lock);
 
@@ -1064,7 +1049,7 @@ sc2703_charger_usb_set_property(struct power_supply *psy,
 		if (ret < 0)
 			dev_err(info->dev, "failed to set terminate voltage\n");
 		break;
-	case POWER_SUPPLY_PROP_CHARGE_ENABLED:
+	case POWER_SUPPLY_PROP_CALIBRATE:
 		if (val->intval == true) {
 			ret = sc2703_charger_start_charge(info);
 			if (ret)
@@ -1092,7 +1077,7 @@ static int sc2703_charger_property_is_writeable(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
 	case POWER_SUPPLY_PROP_FEED_WATCHDOG:
 	case POWER_SUPPLY_PROP_STATUS:
-	case POWER_SUPPLY_PROP_CHARGE_ENABLED:
+	case POWER_SUPPLY_PROP_CALIBRATE:
 		ret = 1;
 		break;
 
@@ -1123,7 +1108,7 @@ static enum power_supply_property sc2703_usb_props[] = {
 	POWER_SUPPLY_PROP_FEED_WATCHDOG,
 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE_MAX,
 	POWER_SUPPLY_PROP_USB_TYPE,
-	POWER_SUPPLY_PROP_CHARGE_ENABLED,
+	POWER_SUPPLY_PROP_CALIBRATE,
 };
 
 static const struct power_supply_desc sc2703_charger_desc = {
@@ -1160,11 +1145,6 @@ static void sc2703_charger_detect_status(struct sc2703_charger_info *info)
 static int sc2703_charger_vbus_is_enabled(struct regulator_dev *dev)
 {
 	struct sc2703_charger_info *info = rdev_get_drvdata(dev);
-
-	if (!info) {
-		pr_err("%s:line%d: NULL pointer!!!\n", __func__, __LINE__);
-		return -EINVAL;
-	}
 
 	return info->otg_enable;
 }
@@ -1271,11 +1251,6 @@ static int sc2703_charger_disable_otg(struct regulator_dev *dev)
 {
 	struct sc2703_charger_info *info = rdev_get_drvdata(dev);
 	int ret;
-
-	if (!info) {
-		pr_err("%s:line%d: NULL pointer!!!\n", __func__, __LINE__);
-		return -EINVAL;
-	}
 
 	info->otg_enable = false;
 	cancel_delayed_work_sync(&info->otg_work);

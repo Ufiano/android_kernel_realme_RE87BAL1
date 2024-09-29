@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
+ * Copyright (C) 2019 Spreadtrum Communications Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -16,72 +16,27 @@
 #include <linux/ktime.h>
 #include <linux/device.h>
 #include <linux/interrupt.h>
+#include <linux/mailbox_client.h>
+#include <linux/mailbox_controller.h>
+#include <linux/soc/sprd/sprd_mpm.h>
 
-#ifdef CONFIG_SPRD_MAILBOX
-#include <linux/sprd_mailbox.h>
-#endif
+enum {
+	SIPC_BASE_MBOX = 0,
+	SIPC_BASE_PCIE,
+	SIPC_BASE_IPI,
+	SIPC_BASE_NR
+};
 
-struct sipc_child_node_info {
-	u8 dst;
-	u8 is_new;
-	u8 mode;
-
-#ifdef CONFIG_SPRD_MAILBOX
-	u8 core_id;
-	u8 core_sensor_id;
-#else
-	u32 ap2cp_int_ctrl;
-	u32 cp2ap_int_ctrl;
-	u32 ap2cp_bit_trig;
-	u32 ap2cp_bit_clr;
-
-	u32 irq;
-#endif
-
-	char *name;
-
-	u32 ring_base;
-	u32 ring_size;
-
-	u32 smem_base;
-	u32 smem_size;
-	void *smem_vbase;
+enum smem_type {
+	SMEM_LOCAL = 0,
+	SMEM_PCIE
 };
 
 struct smem_item {
-	u32	base;
-	u32	size;
-	u32	mapped_base;
+	u32	smem_base;
+	u32	smem_size;
+	u32	dst_smem_base;
 };
-
-struct sipc_init_data {
-	int is_alloc;
-	u32 chd_nr;
-	u32 newchd_nr;
-
-	u32 smem_cnt;
-	struct smem_item *smem_ptr;
-
-	u32 smem_base;
-	u32 smem_size;
-	u32 mapped_smem_base;
-	struct sipc_child_node_info info_table[0];
-};
-
-struct sipc_device {
-	int status;
-	u32 inst_nr;
-	struct sipc_init_data *pdata;
-	struct smsg_ipc *smsg_inst;
-};
-
-struct sipc_core {
-	u32 sipc_tag_ids;
-	struct sipc_child_node_info *sipc_tags[SIPC_ID_NR];
-	struct sipc_device *sipc_dev[SIPC_ID_NR];
-};
-
-extern struct sipc_core sipc_ap;
 extern struct smsg_ipc *smsg_ipcs[];
 
 #define SMSG_CACHE_NR		256
@@ -90,8 +45,10 @@ struct smsg_channel {
 	/* wait queue for recv-buffer */
 	wait_queue_head_t	rxwait;
 	struct mutex		rxlock;
-	struct wakeup_source	sipc_wake_lock;
-	char				wake_lock_name[16];
+	struct sprd_pms	*tx_pms;
+	struct sprd_pms	*rx_pms;
+	char		tx_name[16];
+	char		rx_name[16];
 
 	/* cached msgs for recv */
 	uintptr_t		wrptr[1];
@@ -101,90 +58,126 @@ struct smsg_channel {
 
 /* smsg ring-buffer between AP/CP ipc */
 struct smsg_ipc {
-	char			*name;
-	u8			dst;
-	u8			id; /* add id */
+	const char	*name;
+	struct sprd_pms	*sipc_pms;
+	u8	dst;
+	u8	client;	/* sipc is  client mode */
 
-#ifdef	CONFIG_SPRD_MAILBOX
 	/* target core_id over mailbox */
-	u8			core_id;
-	u8		   core_sensor_id;
-#endif
+	struct mbox_client cl;
+	struct mbox_client sensor_cl;
+	struct mbox_chan *chan;
+	struct mbox_chan *sensor_chan;
+	u32 sensor_core;
+
+	u32	type; /* sipc type, mbox, ipi, pcie */
+	u32	smem_inited;
+	u32	suspend;
+	wait_queue_head_t	suspend_wait;
+	/* lock for suspend-list */
+	spinlock_t		suspend_pinlock;
+	u32	latency;
 
 	/* send-buffer info */
-	uintptr_t		txbuf_addr;
+	uintptr_t	txbuf_addr;
 	u32		txbuf_size;	/* must be 2^n */
-	uintptr_t		txbuf_rdptr;
-	uintptr_t		txbuf_wrptr;
+	uintptr_t	txbuf_rdptr;
+	uintptr_t	txbuf_wrptr;
 
 	/* recv-buffer info */
-	uintptr_t		rxbuf_addr;
+	uintptr_t	rxbuf_addr;
 	u32		rxbuf_size;	/* must be 2^n */
-	uintptr_t		rxbuf_rdptr;
-	uintptr_t		rxbuf_wrptr;
+	uintptr_t	rxbuf_rdptr;
+	uintptr_t	rxbuf_wrptr;
 
 	/* sipc irq related */
-	int			irq;
-#ifdef CONFIG_SPRD_MAILBOX
-	MBOX_FUNCALL		irq_handler;
-#else
-	irq_handler_t		irq_handler;
-#endif
-	irq_handler_t		irq_threadfn;
+	int	irq;
+	u32	(*rxirq_status)(u8 id);
+	void	(*rxirq_clear)(u8 id);
+	void	(*txirq_trigger)(u8 id, u64 msg);
 
-	u32		(*rxirq_status)(u8 id);
-	void			(*rxirq_clear)(u8 id);
+	u32	ring_base;
+	u32	ring_size;
+	void	*smem_vbase;
+	u32	smem_base;
+	u32	smem_size;
+	u32	smem_type;
+	u32	dst_smem_base;
+	u32	high_offset;
+	u32	dst_high_offset;
 
-#ifdef CONFIG_SPRD_MAILBOX
-	int			(*txirq_trigger)(u8 id, u64 msg);
-#else
-	void			(*txirq_trigger)(u8 id);
-#endif
+	u32	smem_cnt;
+	struct	smem_item	*smem_ptr;
 
-	/* sipc ctrl thread */
 	struct task_struct	*thread;
-
 	/* lock for send-buffer */
 	spinlock_t		txpinlock;
-
 	/* all fixed channels receivers */
 	struct smsg_channel	*channels[SMSG_VALID_CH_NR];
-
 	/* record the runtime status of smsg channel */
 	atomic_t		busy[SMSG_VALID_CH_NR];
-
 	/* all channel states: 0 unused, 1 be opened by other core, 2 opend */
 	u8			states[SMSG_VALID_CH_NR];
 };
 
-#define CHAN_STATE_UNUSED	0
-#define CHAN_STATE_WAITING	1
-#define CHAN_STATE_OPENED	2
-#define CHAN_STATE_FREE		3
+#define CHAN_STATE_UNUSED		0
+#define CHAN_STATE_CLIENT_OPENED	1
+#define CHAN_STATE_HOST_OPENED		2
+#define CHAN_STATE_OPENED		3
+#define CHAN_STATE_FREE			4
 
-/* create/destroy smsg ipc between AP/CP */
-int smsg_ipc_create(u8 dst, struct smsg_ipc *ipc);
-int smsg_ipc_destroy(u8 dst);
-int  smsg_suspend_init(void);
+extern void smsg_init_channel2index(void);
+extern void smsg_ipc_create(struct smsg_ipc *ipc);
+extern void smsg_ipc_destroy(struct smsg_ipc *ipc);
 
 /*smem alloc size align*/
-#define SMEM_ALIGN_POOLSZ 0x40000		/*256KB*/
+#define SMEM_ALIGN_POOLSZ 0x40000	/*256KB*/
 
 #ifdef CONFIG_64BIT
-#define SMEM_ALIGN_BYTES 8
-#define SMEM_MIN_ORDER 3
+#define SMEM_ALIGN_BYTES	8
+#define SMEM_MIN_ORDER		3
 #else
-#define SMEM_ALIGN_BYTES 4
-#define SMEM_MIN_ORDER 2
+#define SMEM_ALIGN_BYTES	4
+#define SMEM_MIN_ORDER		2
 #endif
 
 /* initialize smem pool for AP/CP */
-int smem_set_default_pool(u32 addr);
-int smem_init(u32 addr, u32 size, u32 dst);
-void sbuf_get_status(u8 dst, char *status_info, int size);
+extern int smem_init(u32 addr, u32 size, u32 dst, u32 smem, u32 mem_type);
+extern void sbuf_get_status(u8 dst, char *status_info, int size);
+extern void smsg_msg_process(struct smsg_ipc *ipc, struct smsg *msg, bool wake_lock);
+
+
+#if defined(CONFIG_DEBUG_FS)
+void sipc_debug_putline(struct seq_file *m, char c, int n);
+int smem_init_debugfs(void *root);
+int smsg_init_debugfs(void *root);
+int sbuf_init_debugfs(void *root);
+int sblock_init_debugfs(void *root);
+#endif
 
 #ifdef CONFIG_SPRD_MAILBOX
-#define RECV_MBOX_SENSOR_ID  8
+#define MBOX_INVALID_CORE  0xff
 #endif
+
+/* sipc_smem_request_resource
+ * local smem no need request resource, just return 0.
+ */
+static inline int sipc_smem_request_resource(struct sprd_pms *pms,
+						u8 dst, int timeout)
+{
+	if (smsg_ipcs[dst]->smem_type == SMEM_LOCAL)
+		return 0;
+
+	return sprd_pms_request_resource(pms, timeout);
+}
+
+/* sipc_smem_release_resource
+ * local smem no need release resource, do nothing.
+ */
+static inline void sipc_smem_release_resource(struct sprd_pms *pms, u8 dst)
+{
+	if (smsg_ipcs[dst]->smem_type != SMEM_LOCAL)
+		sprd_pms_release_resource(pms);
+}
 
 #endif

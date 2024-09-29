@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * Contiguous Memory Allocator
  *
@@ -9,11 +10,6 @@
  *	Michal Nazarewicz <mina86@mina86.com>
  *	Aneesh Kumar K.V <aneesh.kumar@linux.vnet.ibm.com>
  *	Joonsoo Kim <iamjoonsoo.kim@lge.com>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License as
- * published by the Free Software Foundation; either version 2 of the
- * License or (at your optional) any later version of the license.
  */
 
 #define pr_fmt(fmt) "cma: " fmt
@@ -28,6 +24,7 @@
 #include <linux/memblock.h>
 #include <linux/err.h>
 #include <linux/mm.h>
+#include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/sizes.h>
 #include <linux/slab.h>
@@ -35,13 +32,19 @@
 #include <linux/cma.h>
 #include <linux/highmem.h>
 #include <linux/io.h>
+#include <linux/kmemleak.h>
+#include <linux/sched.h>
+#include <linux/jiffies.h>
 #include <trace/events/cma.h>
 
 #include "cma.h"
 
 struct cma cma_areas[MAX_CMA_AREAS];
 unsigned cma_area_count;
-static DEFINE_MUTEX(cma_mutex);
+#ifdef CONFIG_SPRD_CMA_DEBUG
+struct sprd_cma_debug sprd_cma;
+int sysctl_sprd_cma_debug;
+#endif
 
 phys_addr_t cma_get_base(const struct cma *cma)
 {
@@ -57,6 +60,7 @@ const char *cma_get_name(const struct cma *cma)
 {
 	return cma->name ? cma->name : "(undefined)";
 }
+EXPORT_SYMBOL_GPL(cma_get_name);
 
 static unsigned long cma_bitmap_aligned_mask(const struct cma *cma,
 					     unsigned int align_order)
@@ -96,19 +100,15 @@ static void cma_clear_bitmap(struct cma *cma, unsigned long pfn,
 	mutex_unlock(&cma->lock);
 }
 
-static int __init cma_activate_area(struct cma *cma)
+static void __init cma_activate_area(struct cma *cma)
 {
-	int bitmap_size = BITS_TO_LONGS(cma_bitmap_maxno(cma)) * sizeof(long);
 	unsigned long base_pfn = cma->base_pfn, pfn = base_pfn;
 	unsigned i = cma->count >> pageblock_order;
 	struct zone *zone;
 
-	cma->bitmap = kzalloc(bitmap_size, GFP_KERNEL);
-
-	if (!cma->bitmap) {
-		cma->count = 0;
-		return -ENOMEM;
-	}
+	cma->bitmap = bitmap_zalloc(cma_bitmap_maxno(cma), GFP_KERNEL);
+	if (!cma->bitmap)
+		goto out_error;
 
 	WARN_ON_ONCE(!pfn_valid(pfn));
 	zone = page_zone(pfn_to_page(pfn));
@@ -132,31 +132,31 @@ static int __init cma_activate_area(struct cma *cma)
 	} while (--i);
 
 	mutex_init(&cma->lock);
+#ifdef CONFIG_SPRD_CMA_DEBUG
+	mutex_init(&sprd_cma.lock);
+#endif
 
 #ifdef CONFIG_CMA_DEBUGFS
 	INIT_HLIST_HEAD(&cma->mem_head);
 	spin_lock_init(&cma->mem_head_lock);
 #endif
 
-	return 0;
+	return;
 
 not_in_zone:
-	pr_err("CMA area %s could not be activated\n", cma->name);
-	kfree(cma->bitmap);
+	bitmap_free(cma->bitmap);
+out_error:
 	cma->count = 0;
-	return -EINVAL;
+	pr_err("CMA area %s could not be activated\n", cma->name);
+	return;
 }
 
 static int __init cma_init_reserved_areas(void)
 {
 	int i;
 
-	for (i = 0; i < cma_area_count; i++) {
-		int ret = cma_activate_area(&cma_areas[i]);
-
-		if (ret)
-			return ret;
-	}
+	for (i = 0; i < cma_area_count; i++)
+		cma_activate_area(&cma_areas[i]);
 
 	return 0;
 }
@@ -167,6 +167,9 @@ core_initcall(cma_init_reserved_areas);
  * @base: Base address of the reserved area
  * @size: Size of the reserved area (in bytes),
  * @order_per_bit: Order of pages represented by one bit on bitmap.
+ * @name: The name of the area. If this parameter is NULL, the name of
+ *        the area will be set to "cmaN", where N is a running counter of
+ *        used areas.
  * @res_cma: Pointer to store the created cma region.
  *
  * This function creates custom contiguous area from already reserved memory.
@@ -213,6 +216,9 @@ int __init cma_init_reserved_mem(phys_addr_t base, phys_addr_t size,
 	}
 	cma->base_pfn = PFN_DOWN(base);
 	cma->count = size >> PAGE_SHIFT;
+#ifdef CONFIG_SPRD_CMA_DEBUG
+	cma->free_count = size >> PAGE_SHIFT;
+#endif
 	cma->order_per_bit = order_per_bit;
 	*res_cma = cma;
 	cma_area_count++;
@@ -229,6 +235,7 @@ int __init cma_init_reserved_mem(phys_addr_t base, phys_addr_t size,
  * @alignment: Alignment for the CMA area, should be power of 2 or zero
  * @order_per_bit: Order of pages represented by one bit on bitmap.
  * @fixed: hint about where to place the reserved area
+ * @name: The name of the area. See function cma_init_reserved_mem()
  * @res_cma: Pointer to store the created cma region.
  *
  * This function reserves memory from early allocator. It should be
@@ -337,16 +344,14 @@ int __init cma_declare_contiguous(phys_addr_t base,
 		 * memory in case of failure.
 		 */
 		if (base < highmem_start && limit > highmem_start) {
-			addr = memblock_alloc_range(size, alignment,
-						    highmem_start, limit,
-						    MEMBLOCK_NONE);
+			addr = memblock_phys_alloc_range(size, alignment,
+							 highmem_start, limit);
 			limit = highmem_start;
 		}
 
 		if (!addr) {
-			addr = memblock_alloc_range(size, alignment, base,
-						    limit,
-						    MEMBLOCK_NONE);
+			addr = memblock_phys_alloc_range(size, alignment, base,
+							 limit);
 			if (!addr) {
 				ret = -ENOMEM;
 				goto err;
@@ -405,17 +410,113 @@ static void cma_debug_show_areas(struct cma *cma)
 static inline void cma_debug_show_areas(struct cma *cma) { }
 #endif
 
+#ifdef CONFIG_SPRD_CMA_DEBUG
+void save_sprd_debug_info(unsigned long addr, int cnt, unsigned long us)
+{
+	unsigned long index;
+	int i;
+
+	index = (addr >> 8) & (MAX_SPRD_CMA_DEBUG_NUM - 1);
+
+	mutex_lock(&sprd_cma.lock);
+	for (i = index; i < MAX_SPRD_CMA_DEBUG_NUM; i++) {
+		if (!sprd_cma.sprd_cma_info[i].caller_addr) {
+			sprd_cma.sprd_cma_info[i].caller_addr = addr;
+			sprd_cma.sprd_cma_info[i].alloc_pages = cnt;
+			sprd_cma.sprd_cma_info[i].alloc_cnt++;
+			sprd_cma.sprd_cma_info[i].cost_us = us;
+			sprd_cma.sum_cnt++;
+			mutex_unlock(&sprd_cma.lock);
+			return;
+		} else if (addr == sprd_cma.sprd_cma_info[i].caller_addr) {
+			sprd_cma.sprd_cma_info[i].alloc_pages += cnt;
+			sprd_cma.sprd_cma_info[i].alloc_cnt++;
+			sprd_cma.sprd_cma_info[i].cost_us += us;
+			mutex_unlock(&sprd_cma.lock);
+			return;
+		}
+	}
+
+	for (i = 0; i < index; i++) {
+		if (!sprd_cma.sprd_cma_info[i].caller_addr) {
+			sprd_cma.sprd_cma_info[i].caller_addr = addr;
+			sprd_cma.sprd_cma_info[i].alloc_pages = cnt;
+			sprd_cma.sprd_cma_info[i].alloc_cnt++;
+			sprd_cma.sprd_cma_info[i].cost_us = us;
+			sprd_cma.sum_cnt++;
+			mutex_unlock(&sprd_cma.lock);
+			return;
+		} else if (addr == sprd_cma.sprd_cma_info[i].caller_addr) {
+			sprd_cma.sprd_cma_info[i].alloc_pages += cnt;
+			sprd_cma.sprd_cma_info[i].alloc_cnt++;
+			sprd_cma.sprd_cma_info[i].cost_us += us;
+			mutex_unlock(&sprd_cma.lock);
+			return;
+		}
+	}
+	mutex_unlock(&sprd_cma.lock);
+}
+
+void show_sprd_cma_status(void)
+{
+	int i;
+
+	pr_info("sprd cma status:\n");
+	for (i = 0; i < MAX_CMA_AREAS; i++) {
+		if (cma_areas[i].count)
+			pr_info("cma name: %s, count: %ld, free count: %ld\n",
+						cma_areas[i].name, cma_areas[i].count,
+						cma_areas[i].free_count);
+	}
+
+	pr_info("sprd cma debug info:\n");
+	mutex_lock(&sprd_cma.lock);
+	pr_info("save sprd cma debug info cnt: %d\n", sprd_cma.sum_cnt);
+	for (i = 0; i < MAX_SPRD_CMA_DEBUG_NUM; i++) {
+		if (sprd_cma.sprd_cma_info[i].caller_addr) {
+			if (sprd_cma.sprd_cma_info[i].cost_us)
+				pr_info("caller: %ps, alloc pages: %d, alloc cnt: %d, alloc cost time: %ldus\n",
+						(void *)sprd_cma.sprd_cma_info[i].caller_addr,
+						sprd_cma.sprd_cma_info[i].alloc_pages,
+						sprd_cma.sprd_cma_info[i].alloc_cnt,
+						sprd_cma.sprd_cma_info[i].cost_us);
+			else
+				pr_info("caller: %ps, free pages: %d, free cnt: %d, free cost time: %ldus\n",
+						(void *)sprd_cma.sprd_cma_info[i].caller_addr,
+						sprd_cma.sprd_cma_info[i].alloc_pages,
+						sprd_cma.sprd_cma_info[i].alloc_cnt,
+						sprd_cma.sprd_cma_info[i].cost_us);
+		}
+	}
+	mutex_unlock(&sprd_cma.lock);
+}
+
+int sysctl_sprd_cma_debug_handler(struct ctl_table *table, int write,
+			void __user *buffer, size_t *length, loff_t *ppos)
+{
+	int ret;
+
+	ret = proc_dointvec_minmax(table, write, buffer, length, ppos);
+	if (ret || !write)
+		return -1;
+
+	show_sprd_cma_status();
+	return 0;
+}
+#endif
+
 /**
  * cma_alloc() - allocate pages from contiguous area
  * @cma:   Contiguous memory region for which the allocation is performed.
  * @count: Requested number of pages.
  * @align: Requested alignment of pages (in PAGE_SIZE order).
+ * @no_warn: Avoid printing message about failed allocation
  *
  * This function allocates part of contiguous memory on specific
  * contiguous memory area.
  */
 struct page *cma_alloc(struct cma *cma, size_t count, unsigned int align,
-		       gfp_t gfp_mask)
+		       bool no_warn)
 {
 	unsigned long mask, offset;
 	unsigned long pfn = -1;
@@ -424,6 +525,12 @@ struct page *cma_alloc(struct cma *cma, size_t count, unsigned int align,
 	size_t i;
 	struct page *page = NULL;
 	int ret = -ENOMEM;
+#ifdef CONFIG_SPRD_CMA_DEBUG
+	struct timespec64 cma_alloc_start, cma_alloc_end, cma_alloc_cost;
+	unsigned long cma_alloc_time;
+#endif
+	int num_attempts = 0;
+	int max_retries = 5;
 
 	if (!cma || !cma->count)
 		return NULL;
@@ -433,6 +540,9 @@ struct page *cma_alloc(struct cma *cma, size_t count, unsigned int align,
 
 	if (!count)
 		return NULL;
+#ifdef CONFIG_SPRD_CMA_DEBUG
+	ktime_get_real_ts64(&cma_alloc_start);
+#endif
 
 	mask = cma_bitmap_aligned_mask(cma, align);
 	offset = cma_bitmap_aligned_offset(cma, align);
@@ -448,8 +558,28 @@ struct page *cma_alloc(struct cma *cma, size_t count, unsigned int align,
 				bitmap_maxno, start, bitmap_count, mask,
 				offset);
 		if (bitmap_no >= bitmap_maxno) {
-			mutex_unlock(&cma->lock);
-			break;
+			if ((num_attempts < max_retries) && (ret == -EBUSY)) {
+				mutex_unlock(&cma->lock);
+
+				if (fatal_signal_pending(current))
+					break;
+
+				/*
+				 * Page may be momentarily pinned by some other
+				 * process which has been scheduled out, e.g.
+				 * in exit path, during unmap call, or process
+				 * fork and so cannot be freed there. Sleep
+				 * for 100ms and retry the allocation.
+				 */
+				start = 0;
+				ret = -ENOMEM;
+				schedule_timeout_killable(msecs_to_jiffies(100));
+				num_attempts++;
+				continue;
+			} else {
+				mutex_unlock(&cma->lock);
+				break;
+			}
 		}
 		bitmap_set(cma->bitmap, bitmap_no, bitmap_count);
 		/*
@@ -460,12 +590,16 @@ struct page *cma_alloc(struct cma *cma, size_t count, unsigned int align,
 		mutex_unlock(&cma->lock);
 
 		pfn = cma->base_pfn + (bitmap_no << cma->order_per_bit);
-		mutex_lock(&cma_mutex);
 		ret = alloc_contig_range(pfn, pfn + count, MIGRATE_CMA,
-					 gfp_mask);
-		mutex_unlock(&cma_mutex);
+				     GFP_KERNEL | (no_warn ? __GFP_NOWARN : 0));
+
 		if (ret == 0) {
 			page = pfn_to_page(pfn);
+#ifdef CONFIG_SPRD_CMA_DEBUG
+			mutex_lock(&cma->lock);
+			cma->free_count -= count;
+			mutex_unlock(&cma->lock);
+#endif
 			break;
 		}
 
@@ -491,15 +625,33 @@ struct page *cma_alloc(struct cma *cma, size_t count, unsigned int align,
 			page_kasan_tag_reset(page + i);
 	}
 
-	if (ret && !(gfp_mask & __GFP_NOWARN)) {
-		pr_info("%s: alloc failed, req-size: %zu pages, ret: %d\n",
+	if (ret && !no_warn) {
+		pr_err("%s: alloc failed, req-size: %zu pages, ret: %d\n",
 			__func__, count, ret);
 		cma_debug_show_areas(cma);
 	}
+#ifdef CONFIG_SPRD_CMA_DEBUG
+	else if (ret) {
+		pr_err("%pS: alloc failed, cma: %s, free cnt: %ld, alloc cnt: %ld, ret: %d\n",
+					(void *)_RET_IP_, cma->name, cma->free_count, count, ret);
+	}
+
+	ktime_get_real_ts64(&cma_alloc_end);
+	cma_alloc_cost = timespec64_sub(cma_alloc_end, cma_alloc_start);
+	cma_alloc_time = timespec64_to_ns(&cma_alloc_cost);
+	save_sprd_debug_info(_RET_IP_, count, cma_alloc_time >> 10);
+	if (cma_alloc_time > 500000000L) {
+		pr_err("cma alloc time exceeds 500ms ,time = %ldus\n",
+						cma_alloc_time >> 10);
+		dump_stack();
+		show_sprd_cma_status();
+	}
+#endif
 
 	pr_debug("%s(): returned %p\n", __func__, page);
 	return page;
 }
+EXPORT_SYMBOL_GPL(cma_alloc);
 
 /**
  * cma_release() - release allocated pages
@@ -507,7 +659,7 @@ struct page *cma_alloc(struct cma *cma, size_t count, unsigned int align,
  * @pages: Allocated pages.
  * @count: Number of allocated pages.
  *
- * This function releases memory allocated by alloc_cma().
+ * This function releases memory allocated by cma_alloc().
  * It returns false when provided pages do not belong to contiguous area and
  * true otherwise.
  */
@@ -529,10 +681,17 @@ bool cma_release(struct cma *cma, const struct page *pages, unsigned int count)
 
 	free_contig_range(pfn, count);
 	cma_clear_bitmap(cma, pfn, count);
+#ifdef CONFIG_SPRD_CMA_DEBUG
+	mutex_lock(&cma->lock);
+	cma->free_count += count;
+	mutex_unlock(&cma->lock);
+	save_sprd_debug_info(_RET_IP_, count, 0);
+#endif
 	trace_cma_release(pfn, pages, count);
 
 	return true;
 }
+EXPORT_SYMBOL_GPL(cma_release);
 
 int cma_for_each_area(int (*it)(struct cma *cma, void *data), void *data)
 {
@@ -547,3 +706,4 @@ int cma_for_each_area(int (*it)(struct cma *cma, void *data), void *data)
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(cma_for_each_area);

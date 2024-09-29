@@ -1,267 +1,266 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
+ * Copyright (C) 2019 Spreadtrum Communications Inc.
  */
-#include <linux/module.h>
-#include <linux/platform_device.h>
+
 #include <linux/clk.h>
-#include <linux/of.h>
-#include <linux/of_device.h>
-#include <linux/pwm.h>
-#include <linux/mutex.h>
+#include <linux/err.h>
 #include <linux/io.h>
 #include <linux/math64.h>
-#include <linux/err.h>
+#include <linux/module.h>
+#include <linux/of_device.h>
+#include <linux/platform_device.h>
+#include <linux/pwm.h>
 
-#define NUM_PWM		4
-#define PWM_MOD_MAX	GENMASK(11, 0)
-#define PWM_REG_MSK	GENMASK(15, 0)
+#define SPRD_PWM_PRESCALE	0x0
+#define SPRD_PWM_MOD		0x4
+#define SPRD_PWM_DUTY		0x8
+#define SPRD_PWM_ENABLE		0x18
 
-#define PWM_PRESCALE	0x0
-#define PWM_MOD		0x4
-#define PWM_DUTY	0x8
-#define PWM_DIV		0xc
-#define PWM_PAT_LOW	0x10
-#define PWM_PAT_HIGH	0x14
-#define PWM_ENABLE	0x18
-#define PWM_VERSION	0x1c
+#define SPRD_PWM_MOD_MAX	GENMASK(9, 0)
+#define SPRD_PWM_DUTY_MSK	GENMASK(15, 0)
+#define SPRD_PWM_PRESCALE_MSK	GENMASK(7, 0)
+#define SPRD_PWM_ENABLE_BIT	BIT(0)
 
-#define BIT_ENABLE	BIT(0)
-#define PWM_CLK_PARENT	"clk_parent"
-#define PWM_CLK		"clk_pwm"
+#define SPRD_PWM_CHN_NUM	4
+#define SPRD_PWM_CHN_CLKS_NUM	2
+#define SPRD_PWM_CHN_OUTPUT_CLK	1
+
+struct sprd_pwm_chn {
+	struct clk_bulk_data clks[SPRD_PWM_CHN_CLKS_NUM];
+	u32 clk_rate;
+};
 
 struct sprd_pwd_data {
 	int reg_shift;
 };
 
 struct sprd_pwm_chip {
-	void __iomem *mmio_base;
+	void __iomem *base;
+	struct device *dev;
+	struct pwm_chip chip;
 	int num_pwms;
 	const struct sprd_pwd_data *pdata;
-	struct clk *clk_pwm[NUM_PWM];
-	struct clk *clk_eb[NUM_PWM];
-	bool eb_enabled[NUM_PWM];
-	struct pwm_chip chip;
+	struct sprd_pwm_chn chn[SPRD_PWM_CHN_NUM];
 };
 
 static const struct sprd_pwd_data sharkl5_data = {
-	.reg_shift = 5,
+		.reg_shift = 5,
 };
 
 static const struct sprd_pwd_data qogirn6pro_data = {
-	.reg_shift = 14,
+		.reg_shift = 14,
 };
 
-static inline u32 sprd_pwm_readl(struct sprd_pwm_chip *chip,
-				 u32 num, u32 offset)
+/*
+ * The list of clocks required by PWM channels, and each channel has 2 clocks:
+ * enable clock and pwm clock.
+ */
+static const char * const sprd_pwm_clks[] = {
+	"enable0", "pwm0",
+	"enable1", "pwm1",
+	"enable2", "pwm2",
+	"enable3", "pwm3",
+};
+
+static u32 sprd_pwm_read(struct sprd_pwm_chip *spc, u32 hwid, u32 reg)
 {
-	return readl_relaxed((void __iomem *)(chip->mmio_base +
-					      (num << chip->pdata->reg_shift) +
-					      offset));
+	u32 offset = reg + (hwid << spc->pdata->reg_shift);
+
+	return readl_relaxed(spc->base + offset);
 }
 
-static inline void sprd_pwm_writel(struct sprd_pwm_chip *chip, u32 num,
-				   u32 offset, u32 val)
+static void sprd_pwm_write(struct sprd_pwm_chip *spc, u32 hwid,
+			   u32 reg, u32 val)
 {
-	writel_relaxed(val, (void __iomem *)(chip->mmio_base +
-					     (num << chip->pdata->reg_shift) +
-					     offset));
-}
+	u32 offset = reg + (hwid << spc->pdata->reg_shift);
 
-static int sprd_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
-			   int duty_ns, int period_ns)
-{
-	struct sprd_pwm_chip *spc = container_of(chip,
-						 struct sprd_pwm_chip, chip);
-	u64 clk_rate, div, val, tmp;
-	int rc, prescale, level;
-
-	if (!duty_ns)
-		return 0;
-
-	if (!spc->eb_enabled[pwm->hwpwm]) {
-		rc = clk_prepare_enable(spc->clk_eb[pwm->hwpwm]);
-		if (rc) {
-			dev_err(chip->dev, "enable pwm%u failed\n", pwm->hwpwm);
-			return rc;
-		}
-		spc->eb_enabled[pwm->hwpwm] = true;
-	}
-
-	tmp = (u64)duty_ns * PWM_MOD_MAX;
-	level = DIV_ROUND_CLOSEST_ULL(tmp, period_ns);
-	dev_dbg(chip->dev, "duty_ns = %d, period_ns = %d, level = %d\n",
-		duty_ns, period_ns, level);
-
-	clk_rate = clk_get_rate(spc->clk_pwm[pwm->hwpwm]);
-	/*
-	 * Find pv, dc and prescale to suit duty_ns and period_ns.
-	 * This is done according to formulas described below:
-	 *
-	 * period_ns = 10^9 * (PRESCALE + 1) * PV / PWM_CLK_RATE
-	 * duty_ns = 10^9 * (PRESCALE + 1) * DC / PWM_CLK_RATE
-	 *
-	 * PV = (PWM_CLK_RATE * period_ns) / (10^9 * (PRESCALE + 1))
-	 * DC = (PWM_CLK_RATE * duty_ns) / (10^9 * (PRESCALE + 1))
-	 */
-	div = 1000000000;
-	div = div * PWM_MOD_MAX;
-	val = clk_rate * period_ns;
-	prescale = div64_u64(val, div) - 1;
-	if (prescale < 0)
-		prescale = 0;
-	sprd_pwm_writel(spc, pwm->hwpwm, PWM_MOD, PWM_MOD_MAX);
-	sprd_pwm_writel(spc, pwm->hwpwm, PWM_DUTY, level);
-	sprd_pwm_writel(spc, pwm->hwpwm, PWM_PAT_LOW, PWM_REG_MSK);
-	sprd_pwm_writel(spc, pwm->hwpwm, PWM_PAT_HIGH, PWM_REG_MSK);
-	sprd_pwm_writel(spc, pwm->hwpwm, PWM_PRESCALE, prescale);
-
-	return 0;
-}
-
-static int sprd_pwm_enable(struct pwm_chip *chip, struct pwm_device *pwm)
-{
-	struct sprd_pwm_chip *spc = container_of(chip,
-		struct sprd_pwm_chip, chip);
-	int rc;
-
-	if (!spc->eb_enabled[pwm->hwpwm]) {
-		rc = clk_prepare_enable(spc->clk_eb[pwm->hwpwm]);
-		if (rc) {
-			dev_err(chip->dev, "enable pwm%u failed\n", pwm->hwpwm);
-			return rc;
-		}
-		spc->eb_enabled[pwm->hwpwm] = true;
-	}
-
-	rc = clk_prepare_enable(spc->clk_pwm[pwm->hwpwm]);
-	if (rc) {
-		dev_err(chip->dev, "enable pwm%u clock failed\n", pwm->hwpwm);
-		clk_disable_unprepare(spc->clk_eb[pwm->hwpwm]);
-		spc->eb_enabled[pwm->hwpwm] = false;
-		return rc;
-	}
-
-	sprd_pwm_writel(spc, pwm->hwpwm, PWM_ENABLE, 1);
-
-	return rc;
-}
-
-static void sprd_pwm_disable(struct pwm_chip *chip, struct pwm_device *pwm)
-{
-	struct sprd_pwm_chip *spc = container_of(chip,
-		struct sprd_pwm_chip, chip);
-
-	sprd_pwm_writel(spc, pwm->hwpwm, PWM_ENABLE, 0);
-	clk_disable_unprepare(spc->clk_pwm[pwm->hwpwm]);
-	if (spc->eb_enabled[pwm->hwpwm]) {
-		clk_disable_unprepare(spc->clk_eb[pwm->hwpwm]);
-		spc->eb_enabled[pwm->hwpwm] = false;
-	}
+	writel_relaxed(val, spc->base + offset);
 }
 
 static void sprd_pwm_get_state(struct pwm_chip *chip, struct pwm_device *pwm,
 			       struct pwm_state *state)
 {
-	int rc, duty_ns, period_ns;
-	u32 enabled, duty, prescale;
-	u64 clk_rate, val;
-	struct sprd_pwm_chip *spc = container_of(chip,
-		struct sprd_pwm_chip, chip);
-
-	rc = clk_prepare_enable(spc->clk_eb[pwm->hwpwm]);
-	if (rc) {
-		dev_err(chip->dev, "enable pwm%u eb failed\n", pwm->hwpwm);
-		return;
-	}
-	spc->eb_enabled[pwm->hwpwm] = true;
-	rc = clk_prepare_enable(spc->clk_pwm[pwm->hwpwm]);
-	if (rc) {
-		clk_disable_unprepare(spc->clk_eb[pwm->hwpwm]);
-		spc->eb_enabled[pwm->hwpwm] = false;
-		dev_err(chip->dev, "enable pwm%u clk failed\n", pwm->hwpwm);
-		return;
-	}
-
-	duty = sprd_pwm_readl(spc, pwm->hwpwm, PWM_DUTY) & PWM_REG_MSK;
-	prescale = sprd_pwm_readl(spc, pwm->hwpwm, PWM_PRESCALE) & PWM_REG_MSK;
-	enabled = sprd_pwm_readl(spc, pwm->hwpwm, PWM_ENABLE) & BIT_ENABLE;
-
-	clk_rate = clk_get_rate(spc->clk_pwm[pwm->hwpwm]);
-	if (!clk_rate) {
-		dev_err(chip->dev, "get pwm%d clk rate failed\n", pwm->hwpwm);
-		goto out;
-	}
+	struct sprd_pwm_chip *spc =
+		container_of(chip, struct sprd_pwm_chip, chip);
+	struct sprd_pwm_chn *chn = &spc->chn[pwm->hwpwm];
+	u32 val, duty, prescale;
+	u64 tmp;
+	int ret;
 
 	/*
-	 * Find pv, dc and prescale to suit duty_ns and period_ns.
-	 * This is done according to formulas described below:
-	 *
-	 * period_ns = 10^9 * (PRESCALE + 1) * PV / PWM_CLK_RATE
-	 * duty_ns = 10^9 * (PRESCALE + 1) * DC / PWM_CLK_RATE
-	 *
-	 * PV = (PWM_CLK_RATE * period_ns) / (10^9 * (PRESCALE + 1))
-	 * DC = (PWM_CLK_RATE * duty_ns) / (10^9 * (PRESCALE + 1))
+	 * The clocks to PWM channel has to be enabled first before
+	 * reading to the registers.
 	 */
-	val = ((u64)prescale + 1) * NSEC_PER_SEC * PWM_MOD_MAX;
-	period_ns = div64_u64(val, clk_rate);
-	val = ((u64)prescale + 1) * NSEC_PER_SEC * duty;
-	duty_ns = div64_u64(val, clk_rate);
-
-	state->period = period_ns;
-	state->duty_cycle = duty_ns;
-	state->enabled = !!enabled;
-
-out:
-	if (!enabled) {
-		clk_disable_unprepare(spc->clk_pwm[pwm->hwpwm]);
-		clk_disable_unprepare(spc->clk_eb[pwm->hwpwm]);
-		spc->eb_enabled[pwm->hwpwm] = false;
+	ret = clk_bulk_prepare_enable(SPRD_PWM_CHN_CLKS_NUM, chn->clks);
+	if (ret) {
+		dev_err(spc->dev, "failed to enable pwm%u clocks\n",
+			pwm->hwpwm);
+		return;
 	}
+
+	val = sprd_pwm_read(spc, pwm->hwpwm, SPRD_PWM_ENABLE);
+	if (val & SPRD_PWM_ENABLE_BIT)
+		state->enabled = true;
+	else
+		state->enabled = false;
+
+	/*
+	 * The hardware provides a counter that is feed by the source clock.
+	 * The period length is (PRESCALE + 1) * MOD counter steps.
+	 * The duty cycle length is (PRESCALE + 1) * DUTY counter steps.
+	 * Thus the period_ns and duty_ns calculation formula should be:
+	 * period_ns = NSEC_PER_SEC * (prescale + 1) * mod / clk_rate
+	 * duty_ns = NSEC_PER_SEC * (prescale + 1) * duty / clk_rate
+	 */
+	val = sprd_pwm_read(spc, pwm->hwpwm, SPRD_PWM_PRESCALE);
+	prescale = val & SPRD_PWM_PRESCALE_MSK;
+	tmp = ((u64)prescale + 1) * NSEC_PER_SEC * SPRD_PWM_MOD_MAX;
+	state->period = DIV_ROUND_CLOSEST_ULL(tmp, chn->clk_rate);
+
+	val = sprd_pwm_read(spc, pwm->hwpwm, SPRD_PWM_DUTY);
+	duty = val & SPRD_PWM_DUTY_MSK;
+	tmp = ((u64)prescale + 1) * NSEC_PER_SEC * duty;
+	state->duty_cycle = DIV_ROUND_CLOSEST_ULL(tmp, chn->clk_rate);
+
+	/* Disable PWM clocks if the PWM channel is not in enable state. */
+	if (!state->enabled)
+		clk_bulk_disable_unprepare(SPRD_PWM_CHN_CLKS_NUM, chn->clks);
+}
+
+static int sprd_pwm_config(struct sprd_pwm_chip *spc, struct pwm_device *pwm,
+			   int duty_ns, int period_ns)
+{
+	struct sprd_pwm_chn *chn = &spc->chn[pwm->hwpwm];
+	u32 prescale, duty;
+	u64 tmp;
+
+	/*
+	 * The hardware provides a counter that is feed by the source clock.
+	 * The period length is (PRESCALE + 1) * MOD counter steps.
+	 * The duty cycle length is (PRESCALE + 1) * DUTY counter steps.
+	 *
+	 * To keep the maths simple we're always using MOD = SPRD_PWM_MOD_MAX.
+	 * The value for PRESCALE is selected such that the resulting period
+	 * gets the maximal length not bigger than the requested one with the
+	 * given settings (MOD = SPRD_PWM_MOD_MAX and input clock).
+	 */
+	tmp = (u64)duty_ns * SPRD_PWM_MOD_MAX;
+	duty = DIV_ROUND_CLOSEST_ULL(tmp, period_ns);
+
+	tmp = (u64)chn->clk_rate * period_ns;
+	do_div(tmp, NSEC_PER_SEC);
+	prescale = DIV_ROUND_CLOSEST_ULL(tmp, SPRD_PWM_MOD_MAX);
+	if (prescale < 1)
+		prescale = 1;
+	prescale--;
+
+	if (prescale > SPRD_PWM_PRESCALE_MSK)
+		prescale = SPRD_PWM_PRESCALE_MSK;
+
+	/*
+	 * Note: Writing DUTY triggers the hardware to actually apply the
+	 * values written to MOD and DUTY to the output, so must keep writing
+	 * DUTY last.
+	 *
+	 * The hardware can ensures that current running period is completed
+	 * before changing a new configuration to avoid mixed settings.
+	 */
+	sprd_pwm_write(spc, pwm->hwpwm, SPRD_PWM_PRESCALE, prescale);
+	sprd_pwm_write(spc, pwm->hwpwm, SPRD_PWM_MOD, SPRD_PWM_MOD_MAX);
+	sprd_pwm_write(spc, pwm->hwpwm, SPRD_PWM_DUTY, duty);
+
+	return 0;
+}
+
+static int sprd_pwm_apply(struct pwm_chip *chip, struct pwm_device *pwm,
+			  const struct pwm_state *state)
+{
+	struct sprd_pwm_chip *spc =
+		container_of(chip, struct sprd_pwm_chip, chip);
+	struct sprd_pwm_chn *chn = &spc->chn[pwm->hwpwm];
+	struct pwm_state *cstate = &pwm->state;
+	int ret;
+
+	if (state->enabled) {
+		if (!cstate->enabled) {
+			/*
+			 * The clocks to PWM channel has to be enabled first
+			 * before writing to the registers.
+			 */
+			ret = clk_bulk_prepare_enable(SPRD_PWM_CHN_CLKS_NUM,
+						      chn->clks);
+			if (ret) {
+				dev_err(spc->dev,
+					"failed to enable pwm%u clocks\n",
+					pwm->hwpwm);
+				return ret;
+			}
+		}
+
+		if (state->period != cstate->period ||
+		    state->duty_cycle != cstate->duty_cycle ||
+		    state->enabled != cstate->enabled) {
+			ret = sprd_pwm_config(spc, pwm, state->duty_cycle,
+					      state->period);
+			if (ret)
+				return ret;
+		}
+
+		sprd_pwm_write(spc, pwm->hwpwm, SPRD_PWM_ENABLE, 1);
+	} else if (cstate->enabled) {
+		/*
+		 * Note: After setting SPRD_PWM_ENABLE to zero, the controller
+		 * will not wait for current period to be completed, instead it
+		 * will stop the PWM channel immediately.
+		 */
+		sprd_pwm_write(spc, pwm->hwpwm, SPRD_PWM_ENABLE, 0);
+
+		clk_bulk_disable_unprepare(SPRD_PWM_CHN_CLKS_NUM, chn->clks);
+	}
+
+	return 0;
 }
 
 static const struct pwm_ops sprd_pwm_ops = {
-	.config = sprd_pwm_config,
-	.enable = sprd_pwm_enable,
-	.disable = sprd_pwm_disable,
+	.apply = sprd_pwm_apply,
 	.get_state = sprd_pwm_get_state,
 	.owner = THIS_MODULE,
 };
 
-static int sprd_pwm_clk_init(struct platform_device *pdev)
+static int sprd_pwm_clk_init(struct sprd_pwm_chip *spc)
 {
-	struct sprd_pwm_chip *spc = platform_get_drvdata(pdev);
-	struct clk *clk_parent;
-	char clk_name[64];
-	int i;
+	struct clk *clk_pwm;
+	int ret, i;
 
-	clk_parent = devm_clk_get(&pdev->dev, PWM_CLK_PARENT);
-	if (IS_ERR(clk_parent)) {
-		dev_err(&pdev->dev, "get clk parent failed\n");
-		return PTR_ERR(clk_parent);
-	}
+	for (i = 0; i < SPRD_PWM_CHN_NUM; i++) {
+		struct sprd_pwm_chn *chn = &spc->chn[i];
+		int j;
 
-	for (i = 0; i < NUM_PWM; i++) {
-		memset(clk_name, 0, sizeof(clk_name));
-		snprintf(clk_name, sizeof(clk_name) - 1, PWM_CLK"%d", i);
-		spc->clk_pwm[i] = devm_clk_get(&pdev->dev, clk_name);
-		if (IS_ERR(spc->clk_pwm[i])) {
-			if (PTR_ERR(spc->clk_pwm[i]) == -ENOENT)
+		for (j = 0; j < SPRD_PWM_CHN_CLKS_NUM; ++j)
+			chn->clks[j].id =
+				sprd_pwm_clks[i * SPRD_PWM_CHN_CLKS_NUM + j];
+
+		ret = devm_clk_bulk_get(spc->dev, SPRD_PWM_CHN_CLKS_NUM,
+					chn->clks);
+		if (ret) {
+			if (ret == -ENOENT)
 				break;
 
-			dev_err(&pdev->dev, "get clk %d failed\n", i);
-			return PTR_ERR(spc->clk_pwm[i]);
+			if (ret != -EPROBE_DEFER)
+				dev_err(spc->dev,
+					"failed to get channel clocks\n");
+
+			return ret;
 		}
 
-		memset(clk_name, 0, sizeof(clk_name));
-		snprintf(clk_name, sizeof(clk_name) - 1, PWM_CLK"%d_eb", i);
-		spc->clk_eb[i] = devm_clk_get(&pdev->dev, clk_name);
-		if (IS_ERR(spc->clk_eb[i])) {
-			dev_err(&pdev->dev, "get clk_eb %d failed\n", i);
-			return PTR_ERR(spc->clk_eb[i]);
-		}
+		clk_pwm = chn->clks[SPRD_PWM_CHN_OUTPUT_CLK].clk;
+		chn->clk_rate = clk_get_rate(clk_pwm);
+	}
 
-		clk_set_parent(spc->clk_pwm[i], clk_parent);
+	if (!i) {
+		dev_err(spc->dev, "no available PWM channels\n");
+		return -ENODEV;
 	}
 
 	spc->num_pwms = i;
@@ -269,17 +268,9 @@ static int sprd_pwm_clk_init(struct platform_device *pdev)
 	return 0;
 }
 
-static const struct of_device_id sprd_pwm_of_match[] = {
-	{ .compatible = "sprd,sharkl5-pwm", .data = (void *)&sharkl5_data},
-	{ .compatible = "sprd,qogirn6pro-pwm", .data = (void *)&qogirn6pro_data},
-	{},
-};
-MODULE_DEVICE_TABLE(of, sprd_pwm_of_match);
-
 static int sprd_pwm_probe(struct platform_device *pdev)
 {
 	struct sprd_pwm_chip *spc;
-	struct resource *res;
 	const void *priv_data;
 	int ret;
 
@@ -287,10 +278,9 @@ static int sprd_pwm_probe(struct platform_device *pdev)
 	if (!spc)
 		return -ENOMEM;
 
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	spc->mmio_base = devm_ioremap_resource(&pdev->dev, res);
-	if (IS_ERR(spc->mmio_base))
-		return PTR_ERR(spc->mmio_base);
+	spc->base = devm_platform_ioremap_resource(pdev, 0);
+	if (IS_ERR(spc->base))
+		return PTR_ERR(spc->base);
 
 	priv_data = of_device_get_match_data(&pdev->dev);
 	if (!priv_data) {
@@ -299,9 +289,10 @@ static int sprd_pwm_probe(struct platform_device *pdev)
 	}
 	spc->pdata = priv_data;
 
+	spc->dev = &pdev->dev;
 	platform_set_drvdata(pdev, spc);
 
-	ret = sprd_pwm_clk_init(pdev);
+	ret = sprd_pwm_clk_init(spc);
 	if (ret)
 		return ret;
 
@@ -311,29 +302,29 @@ static int sprd_pwm_probe(struct platform_device *pdev)
 	spc->chip.npwm = spc->num_pwms;
 
 	ret = pwmchip_add(&spc->chip);
-	if (ret < 0) {
-		dev_err(&pdev->dev, "add pwm chip failed\n");
-		return ret;
-	}
+	if (ret)
+		dev_err(&pdev->dev, "failed to add PWM chip\n");
 
-	return 0;
+	return ret;
 }
 
 static int sprd_pwm_remove(struct platform_device *pdev)
 {
 	struct sprd_pwm_chip *spc = platform_get_drvdata(pdev);
-	int i;
-
-	for (i = 0; i < spc->num_pwms; i++)
-		pwm_disable(&spc->chip.pwms[i]);
 
 	return pwmchip_remove(&spc->chip);
 }
 
+static const struct of_device_id sprd_pwm_of_match[] = {
+	{ .compatible = "sprd,sharkl5pro-pwm", .data = (void *)&sharkl5_data},
+	{ .compatible = "sprd,qogirn6pro-pwm", .data = (void *)&qogirn6pro_data},
+	{ },
+};
+MODULE_DEVICE_TABLE(of, sprd_pwm_of_match);
+
 static struct platform_driver sprd_pwm_driver = {
 	.driver = {
 		.name = "sprd-pwm",
-		.owner = THIS_MODULE,
 		.of_match_table = sprd_pwm_of_match,
 	},
 	.probe = sprd_pwm_probe,
@@ -344,4 +335,3 @@ module_platform_driver(sprd_pwm_driver);
 
 MODULE_DESCRIPTION("Spreadtrum PWM Driver");
 MODULE_LICENSE("GPL v2");
-MODULE_AUTHOR("Neo Hou <neo.hou@unisoc.com>");

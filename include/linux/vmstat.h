@@ -7,8 +7,32 @@
 #include <linux/mmzone.h>
 #include <linux/vm_event_item.h>
 #include <linux/atomic.h>
+#include <linux/static_key.h>
 
 extern int sysctl_stat_interval;
+
+#ifdef CONFIG_NUMA
+#define ENABLE_NUMA_STAT   1
+#define DISABLE_NUMA_STAT   0
+extern int sysctl_vm_numa_stat;
+DECLARE_STATIC_KEY_TRUE(vm_numa_stat_key);
+extern int sysctl_vm_numa_stat_handler(struct ctl_table *table,
+		int write, void __user *buffer, size_t *length, loff_t *ppos);
+#endif
+
+struct reclaim_stat {
+	unsigned nr_dirty;
+	unsigned nr_unqueued_dirty;
+	unsigned nr_congested;
+	unsigned nr_writeback;
+	unsigned nr_immediate;
+#ifdef CONFIG_LRU_BALANCE_BASE_THRASHING
+	unsigned nr_pageout;
+#endif
+	unsigned nr_activate[2];
+	unsigned nr_ref_keep;
+	unsigned nr_unmap_fail;
+};
 
 #ifdef CONFIG_VM_EVENT_COUNTERS
 /*
@@ -206,23 +230,6 @@ static inline unsigned long zone_page_state_snapshot(struct zone *zone,
 	return x;
 }
 
-static inline unsigned long node_page_state_snapshot(pg_data_t *pgdat,
-					enum node_stat_item item)
-{
-	long x = atomic_long_read(&pgdat->vm_stat[item]);
-
-#ifdef CONFIG_SMP
-	int cpu;
-	for_each_online_cpu(cpu)
-		x += per_cpu_ptr(pgdat->per_cpu_nodestats, cpu)->vm_node_stat_diff[item];
-
-	if (x < 0)
-		x = 0;
-#endif
-	return x;
-}
-
-
 #ifdef CONFIG_NUMA
 extern void __inc_numa_state(struct zone *zone, enum numa_stat_item item);
 extern unsigned long sum_zone_node_page_state(int node,
@@ -234,11 +241,6 @@ extern unsigned long node_page_state(struct pglist_data *pgdat,
 #define sum_zone_node_page_state(node, item) global_zone_page_state(item)
 #define node_page_state(node, item) global_node_page_state(item)
 #endif /* CONFIG_NUMA */
-
-#define add_zone_page_state(__z, __i, __d) mod_zone_page_state(__z, __i, __d)
-#define sub_zone_page_state(__z, __i, __d) mod_zone_page_state(__z, __i, -(__d))
-#define add_node_page_state(__p, __i, __d) mod_node_page_state(__p, __i, __d)
-#define sub_node_page_state(__p, __i, __d) mod_node_page_state(__p, __i, -(__d))
 
 #ifdef CONFIG_SMP
 void __mod_zone_page_state(struct zone *, enum zone_stat_item item, long);
@@ -372,15 +374,16 @@ static inline void drain_zonestat(struct zone *zone,
 			struct per_cpu_pageset *pset) { }
 #endif		/* CONFIG_SMP */
 
+unsigned long highatomic_nr_pages(void);
+void inc_high_atomic_nr_pages(long count);
 static inline void __mod_zone_freepage_state(struct zone *zone, int nr_pages,
 					     int migratetype)
 {
 	__mod_zone_page_state(zone, NR_FREE_PAGES, nr_pages);
 	if (is_migrate_cma(migratetype))
 		__mod_zone_page_state(zone, NR_FREE_CMA_PAGES, nr_pages);
-
-	if (migratetype == MIGRATE_HIGHATOMIC)
-		__mod_zone_page_state(zone, NR_FREE_HIGHATOMIC_PAGES, nr_pages);
+	else if (migratetype == MIGRATE_HIGHATOMIC)
+		inc_high_atomic_nr_pages(nr_pages);
 }
 
 extern const char * const vmstat_text[];

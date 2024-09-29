@@ -576,7 +576,7 @@ static int himax_hx83112_remove(void)
 	return 0;
 }
 
-static int __init himax_hx83112_init(void)
+int  himax_hx83112_init(void)
 {
 	int ret = 0;
 
@@ -584,14 +584,16 @@ static int __init himax_hx83112_init(void)
 	ret = himax_hx83112_probe();
 	return 0;
 }
+EXPORT_SYMBOL(himax_hx83112_init);
 
-static void __exit himax_hx83112_exit(void)
+void himax_hx83112_exit(void)
 {
 	himax_hx83112_remove();
 }
+EXPORT_SYMBOL(himax_hx83112_exit);
 
-module_init(himax_hx83112_init);
-module_exit(himax_hx83112_exit);
+//module_init(himax_hx83112_init);
+//module_exit(himax_hx83112_exit);
 
 MODULE_DESCRIPTION("HIMAX HX83112 touch driver");
 MODULE_LICENSE("GPL");

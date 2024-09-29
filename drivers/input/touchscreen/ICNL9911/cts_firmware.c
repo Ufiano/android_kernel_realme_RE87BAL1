@@ -360,6 +360,7 @@ static const struct cts_firmware * cts_request_newer_driver_builtin_firmware(
 #endif /* CFG_CTS_DRIVER_BUILTIN_FIRMWARE */
 
 #ifdef CFG_CTS_FIRMWARE_IN_FS
+/*
 bool is_filesystem_mounted(const char *filepath)
 {
     struct path root_path;
@@ -377,7 +378,7 @@ bool is_filesystem_mounted(const char *filepath)
     }
 
     if (path.mnt->mnt_sb == root_path.mnt->mnt_sb) {
-        /* not mounted */
+        //not mounted
         ret = false;
     } else {
         ret = true;
@@ -389,7 +390,10 @@ err_put_root_path:
 
     return !!ret;
 }
+*/
 
+//for GKI
+#if 0
 static int cts_request_firmware_full_filepath(struct cts_firmware *firmware,
 					      const char *filepath,
 					      int curr_version)
@@ -478,6 +482,14 @@ err_close_file:{
 	}
 
 	return ret;
+}
+#endif
+static int cts_request_firmware_full_filepath(struct cts_firmware *firmware,
+					      const char *filepath,
+					      int curr_version)
+{
+	cts_err("%s:for GKI, cancel request firmware by full path", __func__);
+	return 0;
 }
 
 static int cts_wrap_request_firmware(struct cts_firmware *firmware,
@@ -629,12 +641,12 @@ const struct cts_firmware *cts_request_firmware(
 
 #ifdef CFG_CTS_FIRMWARE_IN_FS
     /* Check firmware in file system when probe only when build to .ko */
-    if (is_filesystem_mounted(CFG_CTS_FIRMWARE_FILEPATH)) {
+    //if (is_filesystem_mounted(CFG_CTS_FIRMWARE_FILEPATH)) {
         firmware_from_file = cts_request_newer_firmware_from_fs(
             cts_dev, CFG_CTS_FIRMWARE_FILENAME,
             firmware_builtin ? FIRMWARE_VERSION(firmware_builtin) :
                                curr_firmware_ver);
-    }
+    //}
 #endif /* CFG_CTS_FIRMWARE_IN_FS */
 
     return firmware_from_file ? firmware_from_file : firmware_builtin;

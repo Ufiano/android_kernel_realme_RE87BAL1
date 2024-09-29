@@ -161,7 +161,7 @@ enum THP_INSPECTION_ENUM {
 	HX_ACT_IDLE_NOISE,
 	HX_ACT_IDLE_RAWDATA,
 	HX_ACT_IDLE_BPN_RAWDATA,
-	/*LPWUG test must put after Normal test*/
+/*LPWUG test must put after Normal test*/
 	HX_LP_WT_NOISE,
 	HX_LP_ABS_NOISE,
 	HX_LP_RAWDATA,

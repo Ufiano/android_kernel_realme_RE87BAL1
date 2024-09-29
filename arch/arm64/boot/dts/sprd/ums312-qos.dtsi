@@ -10,7 +10,6 @@
 / { qos {
 	#address-cells=<1>;
 	#size-cells=<0>;
-	ranges;
 
 	gpu_qos: qos@0 {
 		reg = <0>;
@@ -35,6 +34,8 @@
 		arqos-low  	= [01];
 	};
 	mm {
+		#address-cells=<1>;
+		#size-cells=<0>;
 		dcam_qos: qos@0 {
 			reg = <0>;
 			arqos		= [0a];
@@ -70,6 +71,8 @@
 		};
 	};
 	ap {
+		#address-cells=<1>;
+		#size-cells=<0>;
 		ap_qos0: qos0@0 {
 			reg = <0>;
 			arqos-ce  = [05];

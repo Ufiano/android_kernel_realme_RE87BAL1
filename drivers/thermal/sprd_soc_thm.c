@@ -1,15 +1,5 @@
-/*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
+// SPDX-License-Identifier: GPL-2.0
+// Copyright (C) 2020 Unisoc Inc.
 
 #include <linux/cpu_cooling.h>
 #include <linux/cpufreq.h>
@@ -21,162 +11,85 @@
 #include <linux/thermal.h>
 #include <linux/of.h>
 #include <linux/kernel.h>
-#include "sprd_thm_comm.h"
 
-struct sprd_ipa_info {
-	/*
-	 * Proportional parameter of the PID controller when
-	 * overshooting (i.e., when temperature is below the target)
-	 */
-	s32 k_po;
-
-	/*
-	 * Proportional parameter of the PID controller when
-	 * undershooting
-	 */
-	s32 k_pu;
-
-	/* Integral parameter of the PID controller */
-	s32 k_i;
-
-	/* Derivative parameter of the PID controller */
-	s32 k_d;
-
-	/* threshold below which the error is no longer accumulated */
-	s32 integral_cutoff;
-
-	/* The value that indicates err_integral needs to be cleared */
-	s32 clear_integral_cutoff;
+struct virtual_thm {
+	int id;
+	struct device *dev;
+	struct thermal_zone_device *thm_dev;
 };
 
-struct soc_sensor {
-	u16 sensor_id;
-	int nsensor;
-	struct sprd_ipa_info ipa_info;
-	struct sprd_thermal_zone *pzone;
-	const char *sensor_names[THM_SENSOR_NUMBER];
-	struct thermal_zone_device *thm_zones[THM_SENSOR_NUMBER];
+struct real_tz_list {
+	int temp;
+	struct thermal_zone_device *tz_dev;
 };
 
-struct soc_sensor soc_temp_sensor;
+struct virtual_thm_data {
+	int nr_thm;
+	struct real_tz_list *tz_list;
+	struct virtual_thm *vir_thm;
+};
 
-static int __sprd_get_max_temp(int *temp)
+static int virtual_thm_get_temp(void *devdata, int *temp)
 {
 	int i, ret = 0;
-	int soc_temp = 0;
-	int sum_temp = 0;
-	int sensor_temp[THM_SENSOR_NUMBER];
+	int max_temp = 0;
 	struct thermal_zone_device *tz = NULL;
-	struct soc_sensor *psensor = &soc_temp_sensor;
+	struct real_tz_list *tz_list = NULL;
+	struct virtual_thm_data *thm_data = devdata;
+	struct device *dev;
 
-	for (i = 0; i < psensor->nsensor; i++) {
-		tz = psensor->thm_zones[i];
-		if (!tz || IS_ERR(tz) || !tz->ops->get_temp) {
-			pr_err("get thermal zone failed\n");
-			return -ENODEV;
-		}
+	if (!thm_data || !temp)
+		return -EINVAL;
 
-		ret = tz->ops->get_temp(tz, &sensor_temp[i]);
+	dev = thm_data->vir_thm->dev;
+	for (i = 0; i < thm_data->nr_thm; i++) {
+		tz_list = &thm_data->tz_list[i];
+		tz = tz_list->tz_dev;
+		if (!tz || IS_ERR(tz) || !tz->ops->get_temp)
+			return -EINVAL;
+		ret = tz->ops->get_temp(tz, &tz_list->temp);
 		if (ret) {
-			pr_err("get thermal %s temp failed\n", tz->type);
+			dev_err(dev, "fail to get temp\n");
 			return ret;
 		}
+		max_temp = max(max_temp, tz_list->temp);
 	}
-
-	/*get max temperature of all thermal sensors*/
-	for (i = 0; i < psensor->nsensor; i++) {
-		soc_temp = max(soc_temp, sensor_temp[i]);
-		sum_temp += sensor_temp[i];
-	}
-
-	if (soc_temp >= 30000) {
-		*temp = soc_temp;
-	} else {
-		*temp = sum_temp / psensor->nsensor;
-	}
+	*temp = max_temp;
 
 	return ret;
 }
 
-static int sprd_temp_sensor_read(struct sprd_thermal_zone *pzone, int *temp)
+static void virtual_thm_unregister(struct platform_device *pdev)
 {
-	int ret = -EINVAL;
+	struct virtual_thm_data *data = platform_get_drvdata(pdev);
+	struct virtual_thm *vir_thm = data->vir_thm;
 
-	if (!pzone || !temp)
-		return ret;
-
-	ret = __sprd_get_max_temp(temp);
-	pr_debug("soc_sensor_id:%d, temp:%d\n", pzone->id, *temp);
-
-	return ret;
+	devm_thermal_zone_of_sensor_unregister(&pdev->dev, vir_thm->thm_dev);
 }
 
-struct thm_handle_ops sprd_soc_thm_ops = {
-	.read_temp = sprd_temp_sensor_read,
+static const struct thermal_zone_of_device_ops virtual_thm_ops = {
+	.get_temp = virtual_thm_get_temp,
 };
 
-static void sprd_ipa_info_copy(struct sprd_thermal_zone *pzone,
-				struct soc_sensor *psoc_sensor)
+static int virtual_thm_register(struct platform_device *pdev)
 {
-	struct sprd_ipa_info *ipa_info = &psoc_sensor->ipa_info;
-	struct thermal_zone_params *tzp = pzone->therm_dev->tzp;
+	struct device *dev = &pdev->dev;
+	struct virtual_thm_data *data = platform_get_drvdata(pdev);
+	struct virtual_thm *vir_thm = data->vir_thm;
 
-	if (ipa_info->k_po)
-		tzp->k_po = ipa_info->k_po;
-	if (ipa_info->k_pu)
-		tzp->k_pu = ipa_info->k_pu;
-	if (ipa_info->k_i)
-		tzp->k_i = ipa_info->k_i;
-	if (ipa_info->k_d)
-		tzp->k_d = ipa_info->k_d;
-	if (ipa_info->integral_cutoff)
-		tzp->integral_cutoff = ipa_info->integral_cutoff;
-	if (ipa_info->clear_integral_cutoff)
-		tzp->clear_integral_cutoff = ipa_info->clear_integral_cutoff;
+	vir_thm->thm_dev = devm_thermal_zone_of_sensor_register(dev,
+							   vir_thm->id, data,
+							   &virtual_thm_ops);
+	if (IS_ERR_OR_NULL(vir_thm->thm_dev))
+		return -ENODEV;
+	thermal_zone_device_update(vir_thm->thm_dev, THERMAL_EVENT_UNSPECIFIED);
+
+	return 0;
 }
 
-static void  sprd_ipa_info_parse_dt(const struct device_node *np,
-			struct sprd_ipa_info *ipa_info)
+static int get_thm_zone_counts(struct device *dev)
 {
-	int ret = 0;
-
-	ret = of_property_read_u32(np, "k-po", &ipa_info->k_po);
-	if (ret) {
-		ipa_info->k_po = 0;
-		pr_warn("no k_po property for soc thm\n");
-	}
-	ret = of_property_read_u32(np, "k-pu", &ipa_info->k_pu);
-	if (ret) {
-		ipa_info->k_pu = 0;
-		pr_warn("no k_pu property for soc thm\n");
-	}
-	ret = of_property_read_u32(np, "k-i", &ipa_info->k_i);
-	if (ret) {
-		ipa_info->k_i = 0;
-		pr_warn("no k_i property for soc thm\n");
-	}
-	ret = of_property_read_u32(np, "k-d", &ipa_info->k_d);
-	if (ret) {
-		ipa_info->k_d = 0;
-		pr_warn("no k_d property for soc thm\n");
-	}
-	ret = of_property_read_u32(np, "cutoff", &ipa_info->integral_cutoff);
-	if (ret) {
-		ipa_info->integral_cutoff = 0;
-		pr_warn("no cutoff property for soc thm\n");
-	}
-	ret = of_property_read_u32(np, "clear_integral",
-				&ipa_info->clear_integral_cutoff);
-	if (ret) {
-		ipa_info->clear_integral_cutoff = 0;
-		pr_warn("no clear_integral property for soc thm\n");
-	}
-}
-
-static int sprd_temp_sen_parse_dt(struct device *dev,
-				struct soc_sensor *psoc_sensor)
-{
-	int count, i, ret = 0;
+	int count;
 	struct device_node *np = dev->of_node;
 
 	if (!np) {
@@ -184,124 +97,117 @@ static int sprd_temp_sen_parse_dt(struct device *dev,
 		return -EINVAL;
 	}
 
-	count = of_property_count_strings(np, "sensor-names");
-	if (count < 0) {
-		dev_err(dev, "sensor names not found\n");
-		return count;
+	if (!of_find_property(np, "thmzone-cells", &count)) {
+		dev_err(dev, "thmzone-cells not found\n");
+		return -EINVAL;
 	}
+	count = count / sizeof(u32);
 
-	psoc_sensor->nsensor = count;
-	for (i = 0; i < count; i++) {
-		ret = of_property_read_string_index(np, "sensor-names",
-			i, &psoc_sensor->sensor_names[i]);
-		if (ret) {
-			dev_err(dev, "fail to get  sensor-names\n");
-			return ret;
+	return count;
+}
+
+static int get_thm_zone_device(struct platform_device *pdev)
+{
+	int i;
+	const char *name;
+	struct device *dev = &pdev->dev;
+	struct device_node *np = dev->of_node, *node = NULL;
+	struct real_tz_list *tz_list;
+	struct virtual_thm_data *data = platform_get_drvdata(pdev);
+
+	for (i = 0; i < data->nr_thm; i++) {
+		node = of_parse_phandle(np, "thmzone-cells", i);
+		if (!node) {
+			dev_err(dev, "thmzone-cell%d not found\n", i);
+			return -EINVAL;
+		}
+		name = node->name;
+		tz_list = &data->tz_list[i];
+		tz_list->tz_dev = thermal_zone_get_zone_by_name(name);
+		if (IS_ERR(tz_list->tz_dev)) {
+			dev_err(dev, "failed to get thermal zone by name\n");
+			return -EINVAL;
 		}
 	}
 
-	sprd_ipa_info_parse_dt(np, &psoc_sensor->ipa_info);
-
-	return ret;
+	return 0;
 }
 
-static int sprd_soc_thm_probe(struct platform_device *pdev)
+static int virtual_thm_probe(struct platform_device *pdev)
 {
-	int i = 0;
-	int ret = 0, sensor_id = 0;
-	struct sprd_thermal_zone *pzone = NULL;
-	struct soc_sensor *psoc_sensor = &soc_temp_sensor;
+	int count = 0, ret = 0, id;
+	struct virtual_thm_data *data;
+	struct device *dev = &pdev->dev;
 	struct device_node *np = pdev->dev.of_node;
 
 	if (!np) {
-		dev_err(&pdev->dev, "device node not found\n");
+		dev_err(dev, "device node not found\n");
 		return -EINVAL;
 	}
-
-	ret = sprd_temp_sen_parse_dt(&pdev->dev, psoc_sensor);
-	if (ret) {
-		dev_err(&pdev->dev, "not found ptrips\n");
-		return -EINVAL;
-	}
-
-	for (i = 0; i < psoc_sensor->nsensor; i++) {
-		psoc_sensor->thm_zones[i] =
-		thermal_zone_get_zone_by_name(psoc_sensor->sensor_names[i]);
-		if (IS_ERR(psoc_sensor->thm_zones[i])) {
-			pr_err("get thermal zone %s failed\n",
-					psoc_sensor->sensor_names[i]);
-			return -ENOMEM;
-		}
-	}
-
-	pzone = devm_kzalloc(&pdev->dev, sizeof(*pzone), GFP_KERNEL);
-	if (!pzone)
+	data = devm_kzalloc(dev, sizeof(*data), GFP_KERNEL);
+	if (!data)
 		return -ENOMEM;
 
-	mutex_init(&pzone->th_lock);
+	count = get_thm_zone_counts(dev);
+	if (count < 0) {
+		dev_err(dev, "failed to get thmzone count\n");
+		return -EINVAL;
+	}
+	data->nr_thm = count;
+	data->tz_list = devm_kzalloc(dev, sizeof(*data->tz_list) * data->nr_thm,
+				     GFP_KERNEL);
+	if (!data->tz_list)
+		return -ENOMEM;
 
-	sensor_id = of_alias_get_id(np, "thm-sensor");
-	if (sensor_id < 0) {
-		dev_err(&pdev->dev, "fail to get id\n");
+	data->vir_thm = devm_kzalloc(dev, sizeof(*data->vir_thm), GFP_KERNEL);
+	if (!data->vir_thm)
+		return -ENOMEM;
+
+	platform_set_drvdata(pdev, data);
+	ret = get_thm_zone_device(pdev);
+	if (ret) {
+		dev_err(dev, "failed to get thmzone device\n");
+		return -EINVAL;
+	}
+	id = of_alias_get_id(np, "thm-sensor");
+	if (id < 0) {
+		dev_err(dev, "failed to get id\n");
 		return -ENODEV;
 	}
-	pr_info("sprd soc sensor id %d\n", sensor_id);
-
-	pzone->dev = &pdev->dev;
-	pzone->id = sensor_id;
-	pzone->ops = &sprd_soc_thm_ops;
-	strlcpy(pzone->name, np->name, sizeof(pzone->name));
-
-	ret = sprd_thermal_init(pzone);
-	if (ret < 0) {
-		dev_err(&pdev->dev,
-			"soc sensor sw init error id =%d\n", pzone->id);
-		return ret;
+	data->vir_thm->id = id;
+	data->vir_thm->dev = dev;
+	ret = virtual_thm_register(pdev);
+	if (ret) {
+		dev_err(dev, "failed to register virtual thermal\n");
+		return -ENODEV;
 	}
 
-	sprd_ipa_info_copy(pzone, psoc_sensor);
-	psoc_sensor->pzone = pzone;
-	platform_set_drvdata(pdev, pzone);
-
 	return 0;
 }
 
-static int sprd_soc_thm_remove(struct platform_device *pdev)
+static int virtual_thm_remove(struct platform_device *pdev)
 {
-	struct sprd_thermal_zone *pzone = platform_get_drvdata(pdev);
-
-	sprd_thermal_remove(pzone);
+	virtual_thm_unregister(pdev);
 	return 0;
 }
 
-static const struct of_device_id soc_thermal_of_match[] = {
-	{ .compatible = "sprd,soc-thermal" },
+static const struct of_device_id virtual_thermal_of_match[] = {
+	{ .compatible = "virtual-thermal" },
 	{},
 };
-MODULE_DEVICE_TABLE(of, soc_thermal_of_match);
 
-static struct platform_driver sprd_soc_thermal_driver = {
-	.probe = sprd_soc_thm_probe,
-	.remove = sprd_soc_thm_remove,
+static struct platform_driver virtual_thermal_driver = {
+	.probe = virtual_thm_probe,
+	.remove = virtual_thm_remove,
 	.driver = {
 		   .owner = THIS_MODULE,
-		   .name = "soc-thermal",
-		   .of_match_table = of_match_ptr(soc_thermal_of_match),
-		   },
+		   .name = "virtual_thermal",
+		   .of_match_table = virtual_thermal_of_match,
+	},
 };
 
-static int __init sprd_soc_thermal_init(void)
-{
-	return platform_driver_register(&sprd_soc_thermal_driver);
-}
+module_platform_driver(virtual_thermal_driver);
 
-static void __exit sprd_soc_thermal_exit(void)
-{
-	platform_driver_unregister(&sprd_soc_thermal_driver);
-}
-
-device_initcall_sync(sprd_soc_thermal_init);
-module_exit(sprd_soc_thermal_exit);
-
-MODULE_DESCRIPTION("sprd thermal driver");
-MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Jeson Gao <jeson.gao@unisoc.com>");
+MODULE_DESCRIPTION("Unisoc virtual thermal driver");
+MODULE_LICENSE("GPL v2");

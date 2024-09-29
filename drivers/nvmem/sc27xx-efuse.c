@@ -10,12 +10,12 @@
 #include <linux/nvmem-provider.h>
 
 /* PMIC global registers definition */
-#define SC2731_MODULE_EN		0xc08
+#define SC27XX_MODULE_EN		0xc08
 #define SC2730_MODULE_EN		0x1808
 #define UMP9620_MODULE_EN		0x2008
 #define UMP9620_EFUSE_RTC		0x2010
-#define UMP9621_MODULE_EN		0xa008
-#define UMP9621_EFUSE_RTC		0xa010
+#define UMP9621_MODULE_EN		0x2008
+#define UMP9621_EFUSE_RTC		0x2010
 #define UMP96XX_CLK_GATE		BIT(3)
 #define SC27XX_EFUSE_EN			BIT(6)
 
@@ -82,7 +82,7 @@ struct sc27xx_efuse {
 };
 
 static const struct sc27xx_efuse_variant_data sc2731_edata = {
-	.module_en = SC2731_MODULE_EN,
+	.module_en = SC27XX_MODULE_EN,
 	.block_max = SC27XX_EFUSE_BLOCK_MAX,
 };
 
@@ -150,11 +150,11 @@ static int sc27xx_efuse_poll_status(struct sc27xx_efuse *efuse, u32 bits)
 static int ump962x_efuse_read(void *context, u32 offset, void *val, size_t bytes)
 {
 	struct sc27xx_efuse *efuse = context;
-	u32 buf, index = offset / SC27XX_EFUSE_BLOCK_WIDTH;
+	u32 buf, blk_index = offset / SC27XX_EFUSE_BLOCK_WIDTH;
 	u32 blk_offset = (offset % SC27XX_EFUSE_BLOCK_WIDTH) * BITS_PER_BYTE;
 	int ret;
 
-	if (index >= (efuse->var_data->block_max) ||
+	if (blk_index >= (efuse->var_data->block_max) ||
 			bytes > SC27XX_EFUSE_BLOCK_WIDTH)
 		return -EINVAL;
 
@@ -192,7 +192,7 @@ static int ump962x_efuse_read(void *context, u32 offset, void *val, size_t bytes
 				 SC27XX_EFUSE_CLR_RDDONE);
 
 	/* Read data from efuse memory. */
-	ret = regmap_read(efuse->regmap, (efuse->base + SC27XX_EFUSE_BLOCK_REG) + (0x4 * index),
+	ret = regmap_read(efuse->regmap, (efuse->base + SC27XX_EFUSE_BLOCK_REG) + (0x4 * blk_index),
 		  &buf);
 	if (ret)
 		goto disable_efuse;
@@ -214,11 +214,11 @@ unlock_efuse:
 static int sc27xx_efuse_read(void *context, u32 offset, void *val, size_t bytes)
 {
 	struct sc27xx_efuse *efuse = context;
-	u32 buf, index = offset / SC27XX_EFUSE_BLOCK_WIDTH;
+	u32 buf, blk_index = offset / SC27XX_EFUSE_BLOCK_WIDTH;
 	u32 blk_offset = (offset % SC27XX_EFUSE_BLOCK_WIDTH) * BITS_PER_BYTE;
 	int ret;
 
-	if (index >= (efuse->var_data->block_max) ||
+	if (blk_index > (efuse->var_data->block_max) ||
 			bytes > SC27XX_EFUSE_BLOCK_WIDTH)
 		return -EINVAL;
 
@@ -243,7 +243,7 @@ static int sc27xx_efuse_read(void *context, u32 offset, void *val, size_t bytes)
 	/* Set the block address to be read. */
 	ret = regmap_write(efuse->regmap,
 			   efuse->base + SC27XX_EFUSE_BLOCK_INDEX,
-			   index & SC27XX_EFUSE_BLOCK_MASK);
+			   blk_index & SC27XX_EFUSE_BLOCK_MASK);
 	if (ret)
 		goto disable_efuse;
 
@@ -346,6 +346,11 @@ static int sc27xx_efuse_probe(struct platform_device *pdev)
 					"sprd,ump9620-efuse")) ||
 		(of_device_is_compatible(efuse->dev->of_node,
 					"sprd,ump9621-efuse"))) {
+		econfig.id = of_alias_get_id(np, "pmic_efuse");
+		if (econfig.id < 0) {
+			dev_err(&pdev->dev, "failed to get pmic_efuse device id, econfig.id:%d\n", econfig.id);
+			return -EINVAL;
+		}
 		econfig.reg_read = ump962x_efuse_read;
 	} else {
 		econfig.reg_read = sc27xx_efuse_read;

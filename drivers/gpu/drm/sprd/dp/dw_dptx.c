@@ -7,9 +7,15 @@
 #include <linux/platform_device.h>
 #include "sprd_dp.h"
 #include "dw_dptx.h"
-#include "sprd_hdcp.h"
+#include <linux/extcon-provider.h>
+#include <drm/drm_probe_helper.h>
 
 static struct dptx *handle;
+
+static const unsigned int dptx_extcon_cable[] = {
+	EXTCON_DISP_HDMI,
+	EXTCON_NONE,
+};
 
 struct dptx *dptx_get_handle(void)
 {
@@ -38,7 +44,7 @@ static int handle_sink_request(struct dptx *dptx)
 	if (ret_dpcd < 0)
 		return ret_dpcd;
 
-	DRM_DEBUG("%s: IRQ_VECTOR: 0x%02x\n", __func__, vector);
+	DRM_INFO("%s: IRQ_VECTOR: 0x%02x\n", __func__, vector);
 
 	/* TODO handle sink interrupts */
 	if (!vector)
@@ -51,7 +57,7 @@ static int handle_sink_request(struct dptx *dptx)
 	}
 
 	if (vector & DP_AUTOMATED_TEST_REQUEST) {
-		DRM_DEBUG("%s: DP_AUTOMATED_TEST_REQUEST", __func__);
+		DRM_INFO("%s: DP_AUTOMATED_TEST_REQUEST", __func__);
 		retval = handle_automated_test_request(dptx);
 		if (retval) {
 			DRM_ERROR("Automated test request failed\n");
@@ -137,6 +143,8 @@ static int handle_hotunplug(struct dptx *dptx)
 	atomic_set(&dptx->sink_request, 0);
 	dptx->link.trained = false;
 
+	dptx->active = false;
+
 	return 0;
 }
 
@@ -204,6 +212,8 @@ static int handle_hotplug(struct dptx *dptx)
 	if (retval)
 		return retval;
 
+	dptx->active = true;
+
 	return 0;
 }
 
@@ -230,10 +240,13 @@ irqreturn_t dptx_threaded_irq(int irq, void *dev)
 		atomic_set(&dptx->c_connect, 0);
 
 		hpdsts = dptx_readl(dptx, DPTX_HPDSTS);
-		if (hpdsts & DPTX_HPDSTS_STATUS)
+		if (hpdsts & DPTX_HPDSTS_STATUS) {
 			handle_hotplug(dptx);
-		else
+			extcon_set_state_sync(dptx->edev, EXTCON_DISP_HDMI, 1);
+		} else {
 			handle_hotunplug(dptx);
+			extcon_set_state_sync(dptx->edev, EXTCON_DISP_HDMI, 0);
+		}
 
 		if (dptx->drm_dev)
 			drm_helper_hpd_irq_event(dptx->drm_dev);
@@ -393,7 +406,7 @@ struct dptx *dptx_init(struct device *dev, struct drm_device *drm_dev)
 	mutex_init(&dptx->mutex);
 	dptx_misc_reset(dptx);
 	dptx_video_params_reset(dptx);
-	dptx_audio_params_reset(&dptx->aparams);
+	//dptx_audio_params_reset(&dptx->aparams);
 	atomic_set(&dptx->sink_request, 0);
 	atomic_set(&dptx->c_connect, 0);
 
@@ -407,6 +420,20 @@ struct dptx *dptx_init(struct device *dev, struct drm_device *drm_dev)
 	if (retval) {
 		dev_err(dev, "Request for irq %d failed\n", dptx->irq);
 		return ERR_PTR(retval);
+	}
+
+	/* Allocate extcon device */
+	dptx->edev = devm_extcon_dev_allocate(dptx->dev, dptx_extcon_cable);
+	if (IS_ERR(dptx->edev)) {
+		dev_err(dev, "failed to allocate memory for extcon\n");
+		retval = -ENOMEM;
+	};
+
+	/* Register extcon device */
+	retval = devm_extcon_dev_register(dptx->dev, dptx->edev);
+	if (retval) {
+		dev_err(dev, "failed to register extcon device\n");
+		goto fail;
 	}
 
 	dptx_init_hwparams(dptx);

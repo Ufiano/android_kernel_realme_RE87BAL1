@@ -178,15 +178,6 @@ static inline void sprd_ssphy_reset_core(struct sprd_ssphy *phy)
 	ret |= regmap_write(phy->ipa_dispc1_glb_apb, DISPC1_GLB_APB_RST, reg);
 }
 
-/* Reset USB Core */
-static int sprd_ssphy_reset(struct usb_phy *x)
-{
-	struct sprd_ssphy *phy = container_of(x, struct sprd_ssphy, phy);
-
-	sprd_ssphy_reset_core(phy);
-	return 0;
-}
-
 static int sprd_ssphy_set_vbus(struct usb_phy *x, int on)
 {
 	struct sprd_ssphy *phy = container_of(x, struct sprd_ssphy, phy);
@@ -291,6 +282,7 @@ static int sprd_ssphy_init(struct usb_phy *x)
 	int	ret = 0;
 	int timeout;
 
+	printk(KERN_INFO "sprd_ssphy_init enter \n");
 	if (atomic_read(&phy->inited)) {
 		dev_info(x->dev, "%s is already inited!\n", __func__);
 		return 0;
@@ -473,6 +465,8 @@ static int sprd_ssphy_init(struct usb_phy *x)
 	}
 
 	atomic_set(&phy->inited, 1);
+
+	printk(KERN_INFO "ssphy_init exit \n");
 
 	return ret;
 }
@@ -699,6 +693,7 @@ static int sprd_ssphy_probe(struct platform_device *pdev)
 	int ret;
 	u32 reg, msk;
 
+	printk(KERN_INFO "sprd_ssphy_probe enter \n");
 	phy = devm_kzalloc(dev, sizeof(*phy), GFP_KERNEL);
 	if (!phy)
 		return -ENOMEM;
@@ -825,7 +820,6 @@ static int sprd_ssphy_probe(struct platform_device *pdev)
 	phy->phy.label				= "sprd-ssphy";
 	phy->phy.init				= sprd_ssphy_init;
 	phy->phy.shutdown			= sprd_ssphy_shutdown;
-	phy->phy.reset_phy			= sprd_ssphy_reset;
 	phy->phy.set_vbus			= sprd_ssphy_set_vbus;
 	phy->phy.type				= USB_PHY_TYPE_USB3;
 	phy->phy.vbus_nb.notifier_call		= sprd_ssphy_vbus_notify;

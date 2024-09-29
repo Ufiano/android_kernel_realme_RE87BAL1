@@ -128,7 +128,6 @@
  */
 
 #include "../workqueue_internal.h"
-#include <uapi/linux/sched/types.h>
 #include <linux/sched/loadavg.h>
 #include <linux/seq_file.h>
 #include <linux/proc_fs.h>
@@ -146,6 +145,7 @@
 static int psi_bug __read_mostly;
 
 DEFINE_STATIC_KEY_FALSE(psi_disabled);
+DEFINE_STATIC_KEY_TRUE(psi_cgroups_enabled);
 
 #ifdef CONFIG_PSI_DEFAULT_DISABLED
 static bool psi_enable;
@@ -174,7 +174,7 @@ static u64 psi_period __read_mostly;
 
 /* System-level pressure and stall tracking */
 static DEFINE_PER_CPU(struct psi_group_cpu, system_group_pcpu);
-static struct psi_group psi_system = {
+struct psi_group psi_system = {
 	.pcpu = &system_group_pcpu,
 };
 
@@ -212,6 +212,9 @@ void __init psi_init(void)
 		static_branch_enable(&psi_disabled);
 		return;
 	}
+
+	if (!cgroup_psi_enabled())
+		static_branch_disable(&psi_cgroups_enabled);
 
 	psi_period = jiffies_to_nsecs(PSI_FREQ);
 	group_init(&psi_system);
@@ -746,23 +749,23 @@ static u32 psi_group_change(struct psi_group *group, int cpu,
 
 static struct psi_group *iterate_groups(struct task_struct *task, void **iter)
 {
+	if (*iter == &psi_system)
+		return NULL;
+
 #ifdef CONFIG_CGROUPS
-	struct cgroup *cgroup = NULL;
+	if (static_branch_likely(&psi_cgroups_enabled)) {
+		struct cgroup *cgroup = NULL;
 
-	if (!*iter)
-		cgroup = task->cgroups->dfl_cgrp;
-	else if (*iter == &psi_system)
-		return NULL;
-	else
-		cgroup = cgroup_parent(*iter);
+		if (!*iter)
+			cgroup = task->cgroups->dfl_cgrp;
+		else
+			cgroup = cgroup_parent(*iter);
 
-	if (cgroup && cgroup_parent(cgroup)) {
-		*iter = cgroup;
-		return cgroup_psi(cgroup);
+		if (cgroup && cgroup_parent(cgroup)) {
+			*iter = cgroup;
+			return cgroup_psi(cgroup);
+		}
 	}
-#else
-	if (*iter)
-		return NULL;
 #endif
 	*iter = &psi_system;
 	return &psi_system;
@@ -1149,15 +1152,13 @@ static void psi_trigger_destroy(struct kref *ref)
 	 */
 	synchronize_rcu();
 	/*
-	 * Destroy psimon after releasing trigger_lock to prevent a
+	 * Stop kthread 'psimon' after releasing trigger_lock to prevent a
 	 * deadlock while waiting for psi_poll_work to acquire trigger_lock
 	 */
 	if (task_to_destroy) {
 		/*
 		 * After the RCU grace period has expired, the worker
 		 * can no longer be found through group->poll_task.
-		 * But it might have been already scheduled before
-		 * that - deschedule it cleanly before destroying it.
 		 */
 		kthread_stop(task_to_destroy);
 	}
@@ -1176,21 +1177,21 @@ void psi_trigger_replace(void **trigger_ptr, struct psi_trigger *new)
 		kref_put(&old->refcount, psi_trigger_destroy);
 }
 
-unsigned int psi_trigger_poll(void **trigger_ptr, struct file *file,
-			      poll_table *wait)
+__poll_t psi_trigger_poll(void **trigger_ptr,
+				struct file *file, poll_table *wait)
 {
-	unsigned int ret = DEFAULT_POLLMASK;
+	__poll_t ret = DEFAULT_POLLMASK;
 	struct psi_trigger *t;
 
 	if (static_branch_likely(&psi_disabled))
-		return DEFAULT_POLLMASK | POLLERR | POLLPRI;
+		return DEFAULT_POLLMASK | EPOLLERR | EPOLLPRI;
 
 	rcu_read_lock();
 
 	t = rcu_dereference(*(void __rcu __force **)trigger_ptr);
 	if (!t) {
 		rcu_read_unlock();
-		return DEFAULT_POLLMASK | POLLERR | POLLPRI;
+		return DEFAULT_POLLMASK | EPOLLERR | EPOLLPRI;
 	}
 	kref_get(&t->refcount);
 
@@ -1199,7 +1200,7 @@ unsigned int psi_trigger_poll(void **trigger_ptr, struct file *file,
 	poll_wait(file, &t->event_wait, wait);
 
 	if (cmpxchg(&t->event, 1, 0) == 1)
-		ret |= POLLPRI;
+		ret |= EPOLLPRI;
 
 	kref_put(&t->refcount, psi_trigger_destroy);
 
@@ -1257,7 +1258,7 @@ static ssize_t psi_cpu_write(struct file *file, const char __user *user_buf,
 	return psi_write(file, user_buf, nbytes, PSI_CPU);
 }
 
-static unsigned int psi_fop_poll(struct file *file, poll_table *wait)
+static __poll_t psi_fop_poll(struct file *file, poll_table *wait)
 {
 	struct seq_file *seq = file->private_data;
 

@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #ifndef __DPU_VSP_SYS_REG_qogirn6pro_H__
@@ -37,8 +29,8 @@ struct dpu_vspsys_dvfs_reg {
 	u32 dpu_vsp_vpu_dec_dvfs_cgm_cfg_dbg;
 	u32 dpu_vsp_vpu_gsp0_dvfs_cgm_cfg_dbg;
 	u32 dpu_vsp_vpu_gsp1_dvfs_cgm_cfg_dbg;
-	u32 dpu_vsp_dispc0_dvfs_cgm_cfg_dbg;
-	u32 reserved_0x80_0x12c[44];
+	u32 dpu_vsp_vpu_dispc0_dvfs_cgm_cfg_dbg;
+	u32 reserved_0x80_0x12c[38];
 	u32 dpu_vsp_dvfs_state_dbg;
 	u32 reserved_0x134_0x150[8];
 	u32 vpu_mtx_index0_map;
@@ -118,7 +110,7 @@ struct dpu_vspsys_dvfs_reg {
 	u32 dpu_vsp_dvfs_reserved_reg_cfg3;
 };
 
-char *qogirn6pro_apsys_val_to_volt(u32 val);
+char *qogirn6pro_dpu_vspsys_val_to_volt(u32 val);
 char *qogirn6pro_dpu_val_to_freq(u32 val);
 char *qogirn6pro_gsp_val_to_volt(u32 val);
 char *qogirn6pro_gsp_val_to_freq(u32 val);

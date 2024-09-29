@@ -1,35 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * MUSB OTG driver defines
  *
  * Copyright 2005 Mentor Graphics Corporation
  * Copyright (C) 2005-2006 by Texas Instruments
  * Copyright (C) 2006-2007 Nokia Corporation
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
- * 02110-1301 USA
- *
- * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.  IN
- * NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
- * NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF
- * USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON
- * ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
  */
 
 #ifndef __MUSB_CORE_H__
@@ -52,6 +27,7 @@
 struct musb;
 struct musb_hw_ep;
 struct musb_ep;
+struct musb_qh;
 
 /* Helper defines for struct musb->hwvers */
 #define MUSB_HWVERS_MAJOR(x)	((x >> 10) & 0x1f)
@@ -77,12 +53,6 @@ struct musb_ep;
  */
 #define is_peripheral_active(m)		(!(m)->is_host)
 #define is_host_active(m)		((m)->is_host)
-
-enum {
-	MUSB_PORT_MODE_HOST	= 1,
-	MUSB_PORT_MODE_GADGET,
-	MUSB_PORT_MODE_DUAL_ROLE,
-};
 
 /****************************** CONSTANTS ********************************/
 
@@ -150,12 +120,14 @@ struct musb_io;
  * @fifo_offset: returns the fifo offset
  * @readb:	read 8 bits
  * @writeb:	write 8 bits
+ * @clearb:	could be clear-on-readb or W1C
  * @readw:	read 16 bits
  * @writew:	write 16 bits
- * @readl:	read 32 bits
- * @writel:	write 32 bits
+ * @clearw:	could be clear-on-readw or W1C
  * @read_fifo:	reads the fifo
  * @write_fifo:	writes to fifo
+ * @get_toggle:	platform specific get toggle function
+ * @set_toggle:	platform specific set toggle function
  * @dma_init:	platform specific dma init function
  * @dma_exit:	platform specific dma exit function
  * @init:	turns on clocks, sets up platform-specific registers, etc
@@ -165,12 +137,12 @@ struct musb_io;
  * @recover:	platform-specific babble recovery
  * @vbus_status: returns vbus status if possible
  * @set_vbus:	forces vbus status
- * @adjust_channel_params: pre check for standard dma channel_program func
  * @pre_root_reset_end: called before the root usb port reset flag gets cleared
  * @post_root_reset_end: called after the root usb port reset flag gets cleared
  * @phy_callback: optional callback function for the phy to call
  */
 struct musb_platform_ops {
+
 #define MUSB_DMA_SPRD		BIT(10)
 #define MUSB_G_NO_SKB_RESERVE	BIT(9)
 #define MUSB_DA8XX		BIT(8)
@@ -195,14 +167,16 @@ struct musb_platform_ops {
 	u16	fifo_mode;
 	u32	(*fifo_offset)(u8 epnum);
 	u32	(*busctl_offset)(u8 epnum, u16 offset);
-	u8	(*readb)(const void __iomem *addr, unsigned offset);
-	void	(*writeb)(void __iomem *addr, unsigned offset, u8 data);
-	u16	(*readw)(const void __iomem *addr, unsigned offset);
-	void	(*writew)(void __iomem *addr, unsigned offset, u16 data);
-	u32	(*readl)(const void __iomem *addr, unsigned offset);
-	void	(*writel)(void __iomem *addr, unsigned offset, u32 data);
+	u8	(*readb)(void __iomem *addr, u32 offset);
+	void	(*writeb)(void __iomem *addr, u32 offset, u8 data);
+	u8	(*clearb)(void __iomem *addr, u32 offset);
+	u16	(*readw)(void __iomem *addr, u32 offset);
+	void	(*writew)(void __iomem *addr, u32 offset, u16 data);
+	u16	(*clearw)(void __iomem *addr, u32 offset);
 	void	(*read_fifo)(struct musb_hw_ep *hw_ep, u16 len, u8 *buf);
 	void	(*write_fifo)(struct musb_hw_ep *hw_ep, u16 len, const u8 *buf);
+	u16	(*get_toggle)(struct musb_qh *qh, int is_out);
+	u16	(*set_toggle)(struct musb_qh *qh, int is_out, struct urb *urb);
 	struct dma_controller *
 		(*dma_init) (struct musb *musb, void __iomem *base);
 	void	(*dma_exit)(struct dma_controller *c);
@@ -212,15 +186,22 @@ struct musb_platform_ops {
 
 	int	(*vbus_status)(struct musb *musb);
 	void	(*set_vbus)(struct musb *musb, int on);
-
-	int	(*adjust_channel_params)(struct dma_channel *channel,
-				u16 packet_sz, u8 *mode,
-				dma_addr_t *dma_addr, u32 *len);
 	void	(*pre_root_reset_end)(struct musb *musb);
 	void	(*post_root_reset_end)(struct musb *musb);
 	int	(*phy_callback)(enum musb_vbus_id_status status);
 	void	(*clear_ep_rxintr)(struct musb *musb, int epnum);
-	void	(*phy_set_emphasis)(struct musb *musb, bool enabled);
+};
+
+struct musb_host_ops {
+	void    (*host_start)(struct musb *musb);
+	void    (*advance_schedule)(struct musb *musb, struct urb *urb,
+			struct musb_hw_ep *hw_ep, int is_in);
+	bool    (*tx_dma_program)(struct dma_controller *dma,
+			struct musb_hw_ep *hw_ep, struct musb_qh *qh,
+			struct urb *urb, u32 offset, u32 length);
+	void    (*rx_dma_program)(struct dma_channel *dma_channel,
+			struct musb *musb, u8 epnum, struct musb_qh *qh,
+			struct urb *urb, u32 offset, size_t len);
 };
 
 /*
@@ -267,8 +248,8 @@ struct musb_hw_ep {
 	/* peripheral side */
 	struct musb_ep		ep_in;			/* TX */
 	struct musb_ep		ep_out;			/* RX */
-#ifdef CONFIG_USB_MUSB_SPRD
-	struct usb_host_endpoint		*hep[2];
+#if IS_ENABLED(CONFIG_USB_MUSB_SPRD)
+	struct usb_host_endpoint	*hep[2];
 #endif
 };
 
@@ -286,10 +267,8 @@ struct musb_csr_regs {
 	/* FIFO registers */
 	u16 txmaxp, txcsr, rxmaxp, rxcsr;
 	u16 rxfifoadd, txfifoadd;
-	u16 s_rxfifoadd, s_txfifoadd;
 	u8 txtype, txinterval, rxtype, rxinterval;
 	u8 rxfifosz, txfifosz;
-	u8 s_rxfifosz, s_txfifosz;
 	u8 txfunaddr, txhubaddr, txhubport;
 	u8 rxfunaddr, rxhubaddr, rxhubport;
 };
@@ -351,6 +330,7 @@ struct musb {
 	struct list_head	pending_list;	/* pending work list */
 
 	struct timer_list	otg_timer;
+	struct timer_list	dev_timer;
 	struct notifier_block	nb;
 
 	struct dma_controller	*dma_controller;
@@ -389,12 +369,10 @@ struct musb {
 
 	u8			min_power;	/* vbus for periph, in mA/2 */
 
-	int			port_mode;	/* MUSB_PORT_MODE_* */
+	enum musb_mode		port_mode;
 	bool			session;
 	unsigned long		quirk_retries;
 	bool			is_host;
-	bool			is_offload;	/* i2s mode for usb audio */
-	atomic_t		offload_used;
 
 	int			a_wait_bcon;	/* VBUS timeout in msecs */
 	unsigned long		idle_timeout;	/* Next timeout in jiffies */
@@ -445,32 +423,19 @@ struct musb {
 	struct usb_gadget	g;			/* the gadget */
 	struct usb_gadget_driver *gadget_driver;	/* its driver */
 	struct usb_hcd		*hcd;			/* the usb hcd */
-
-	/*
-	 * FIXME: Remove this flag.
-	 *
-	 * This is only added to allow Blackfin to work
-	 * with current driver. For some unknown reason
-	 * Blackfin doesn't work with double buffering
-	 * and that's enabled by default.
-	 *
-	 * We added this flag to forcefully disable double
-	 * buffering until we get it working.
-	 */
-	unsigned                double_buffer_not_ok:1;
 	unsigned		fixup_ep0fifo:1;
+	bool			is_offload;     /* i2s mode for usb audio */
+	u8			offload_used;
+	int			shutdowning;
 
-	struct musb_hdrc_config *config;
+	const struct musb_hdrc_config *config;
 
 	int			xceiv_old_state;
 #ifdef CONFIG_DEBUG_FS
 	struct dentry		*debugfs_root;
 #endif
-	int	shutdowning;
-#ifdef CONFIG_USB_MUSB_SPRD
-	bool power_always_on;
-#endif
-	bool restore_complete;
+	bool			restore_complete;
+	struct	musb_host_ops	hops;
 };
 
 /* This must be included after struct musb is defined */
@@ -504,34 +469,6 @@ static inline char *musb_ep_xfertype_string(u8 type)
 	}
 	return s;
 }
-
-#ifdef CONFIG_BLACKFIN
-static inline int musb_read_fifosize(struct musb *musb,
-		struct musb_hw_ep *hw_ep, u8 epnum)
-{
-	musb->nr_endpoints++;
-	musb->epmask |= (1 << epnum);
-
-	if (epnum < 5) {
-		hw_ep->max_packet_sz_tx = 128;
-		hw_ep->max_packet_sz_rx = 128;
-	} else {
-		hw_ep->max_packet_sz_tx = 1024;
-		hw_ep->max_packet_sz_rx = 1024;
-	}
-	hw_ep->is_shared_fifo = false;
-
-	return 0;
-}
-
-static inline void musb_configure_ep0(struct musb *musb)
-{
-	musb->endpoints[0].max_packet_sz_tx = MUSB_EP0_FIFOSIZE;
-	musb->endpoints[0].max_packet_sz_rx = MUSB_EP0_FIFOSIZE;
-	musb->endpoints[0].is_shared_fifo = true;
-}
-
-#else
 
 static inline int musb_read_fifosize(struct musb *musb,
 		struct musb_hw_ep *hw_ep, u8 epnum)
@@ -569,8 +506,6 @@ static inline void musb_configure_ep0(struct musb *musb)
 	musb->endpoints[0].max_packet_sz_rx = MUSB_EP0_FIFOSIZE;
 	musb->endpoints[0].is_shared_fifo = true;
 }
-#endif /* CONFIG_BLACKFIN */
-
 
 /***************************** Glue it together *****************************/
 
@@ -578,7 +513,6 @@ extern const char musb_driver_name[];
 
 extern void musb_stop(struct musb *musb);
 extern void musb_start(struct musb *musb);
-extern void musb_host_start(struct musb *musb);
 
 extern void musb_write_fifo(struct musb_hw_ep *ep, u16 len, const u8 *src);
 extern void musb_read_fifo(struct musb_hw_ep *ep, u16 len, u8 *dst);
@@ -590,8 +524,6 @@ extern irqreturn_t musb_interrupt(struct musb *);
 extern void musb_hnp_stop(struct musb *musb);
 
 extern int musb_reset_all_fifo_2_default(struct musb *musb);
-
-extern void musb_force_single_fifo(struct musb *musb, u8 epnum, u8 is_tx);
 
 int musb_queue_resume_work(struct musb *musb,
 			   int (*callback)(struct musb *musb, void *data),
@@ -678,13 +610,6 @@ static inline void musb_platform_clear_ep_rxintr(struct musb *musb, int epnum)
 {
 	if (musb->ops->clear_ep_rxintr)
 		musb->ops->clear_ep_rxintr(musb, epnum);
-}
-
-
-static inline void musb_platform_emphasis_set(struct musb *musb, bool enabled)
-{
-	if (musb->ops->phy_set_emphasis)
-		musb->ops->phy_set_emphasis(musb, enabled);
 }
 
 /*

@@ -1,5 +1,6 @@
-/*
- * Copyright (C) 2019 Spreadtrum Communications Inc.
+// SPDX-License-Identifier: GPL-2.0
+
+/* Copyright (C) 2019 Spreadtrum Communications Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -28,7 +29,6 @@
 #include <linux/types.h>
 #include <linux/of_platform.h>
 #include <linux/clk-provider.h>
-#include <linux/sprd-cpufreq.h>
 #include "sprd-cpufreq-common.h"
 
 static unsigned long boot_done_timestamp;
@@ -43,20 +43,6 @@ static struct cpufreq_driver sprd_cpufreq_driver;
 static int sprd_cpufreq_set_boost(int state);
 static int sprd_cpufreq_set_target(struct sprd_cpufreq_driver_data *cpufreq_data,
 				   unsigned int idx, bool force);
-
-static const struct of_device_id sprd_swdvfs_of_match[] = {
-	{
-		.compatible = "sprd,sharkl3-swdvfs",
-	},
-	{
-		.compatible = "sprd,pike2-swdvfs",
-	},
-	{
-		.compatible = "sprd,sharkle-swdvfs",
-	},
-	{},
-};
-MODULE_DEVICE_TABLE(of, sprd_swdvfs_of_match);
 
 void sprd_cpu_gpu_volt_lock(void)
 {
@@ -113,30 +99,24 @@ static int sprd_get_cpu_gpu_volt_parameters(struct device_node *np)
 		return 0;
 
 	mutex_init(&cpu_gpu_volt_lock);
-	aon_apb_reg_base = syscon_regmap_lookup_by_name(np,
-							"gpu_target_volt");
-	if (!IS_ERR(aon_apb_reg_base)) {
-		ret = syscon_get_args_by_name(np, "gpu_target_volt",
-						  2, reg_info);
-		if (ret != 2) {
-			pr_err("Failed to parse gpu_target_volt  syscon, ret = %d\n",
-				   ret);
-			return -EINVAL;
-		}
+
+	aon_apb_reg_base = syscon_regmap_lookup_by_phandle_args(np,
+				"gpu-target-volt-syscon", 2, reg_info);
+	if (IS_ERR(aon_apb_reg_base)) {
+		pr_err("Failed to parse gpu_target_volt syscon\n");
+		ret = PTR_ERR(aon_apb_reg_base);
+		return ret;
+	} else
 		gpu_target_volt_reg = reg_info[0];
-	}
-	aon_apb_reg_base = syscon_regmap_lookup_by_name(np,
-							"cpu_target_volt");
-	if (!IS_ERR(aon_apb_reg_base)) {
-		ret = syscon_get_args_by_name(np, "cpu_target_volt",
-						  2, reg_info);
-		if (ret != 2) {
-			pr_err("Failed to parse cpu_target_volt  syscon, ret = %d\n",
-			       ret);
-			return -EINVAL;
-		}
+
+	aon_apb_reg_base = syscon_regmap_lookup_by_phandle_args(np,
+				"cpu-target-volt-syscon", 2, reg_info);
+	if (IS_ERR(aon_apb_reg_base)) {
+		pr_err("Failed to parse cpu_target_volt syscon\n");
+		ret = PTR_ERR(aon_apb_reg_base);
+		return ret;
+	} else
 		cpu_target_volt_reg = reg_info[0];
-	}
 
 	return 0;
 }
@@ -1052,6 +1032,8 @@ static int sprd_cpufreq_init(struct cpufreq_policy *policy)
 	unsigned long clk_low_freq_p_max = 0;
 	struct cpufreq_frequency_table *freq_table = NULL;
 	int cpu = 0;
+	unsigned int cpumask = 0;
+	cpumask_t cluster_cpumask;
 
 	if (!policy) {
 		pr_err("invalid cpufreq_policy\n");
@@ -1206,20 +1188,16 @@ static int sprd_cpufreq_init(struct cpufreq_policy *policy)
 
 	pr_debug("going to initialize freq_table\n");
 	ret = dev_pm_opp_init_cpufreq_table(cpu_dev, &freq_table);
-
 	if (ret) {
 		pr_err("%d in initializing freq_table\n", ret);
 		goto free_opp;
 	}
 
-	ret = cpufreq_table_validate_and_show(policy, freq_table);
+	policy->freq_table = freq_table;
 
-	if (ret) {
-		pr_err("invalid frequency table: %d\n", ret);
-		goto free_table;
-	}
+	c->update_opp = sprd_cpufreq_update_opp_common;
+
 	pr_debug("going to prepare clock\n");
-
 	if (!c->clk_en) {
 		ret = clk_prepare_enable(cpu_clk);
 		if (ret) {
@@ -1242,7 +1220,13 @@ static int sprd_cpufreq_init(struct cpufreq_policy *policy)
 	}
 #ifdef CONFIG_SMP
 	/* CPUs in the same cluster share a clock and power domain. */
-	cpumask_or(policy->cpus, policy->cpus, cpu_coregroup_mask(policy->cpu));
+	ret = of_property_read_u32(np, "cpufreq-cluster-cpumask", &cpumask);
+	if (ret) {
+		pr_err("cpufreq cluster cpumask read fail\n");
+		goto free_table;
+	}
+	cluster_cpumask.bits[0] = (unsigned long)cpumask;
+	cpumask_or(policy->cpus, policy->cpus, &cluster_cpumask);
 #endif
 
 	c->online = 1;
@@ -1266,7 +1250,7 @@ static int sprd_cpufreq_init(struct cpufreq_policy *policy)
 
 	policy->driver_data = c;
 	policy->clk = cpu_clk;
-	policy->suspend_freq = freq_table[0].frequency;
+	policy->suspend_freq = policy->freq_table[0].frequency;
 	policy->cur = clk_get_rate(cpu_clk) / 1000;
 	policy->cpuinfo.transition_latency = transition_latency;
 	policy->dvfs_possible_from_any_cpu = true;
@@ -1377,9 +1361,9 @@ static int sprd_cpufreq_exit(struct cpufreq_policy *policy)
 	return 0;
 }
 
-static int sprd_cpufreq_table_verify(struct cpufreq_policy *policy)
+static int sprd_cpufreq_table_verify(struct cpufreq_policy_data *policy_data)
 {
-	return cpufreq_generic_frequency_table_verify(policy);
+	return cpufreq_generic_frequency_table_verify(policy_data);
 }
 
 static unsigned int sprd_cpufreq_get(unsigned int cpu)
@@ -1430,7 +1414,8 @@ static int sprd_cpufreq_set_boost(int state)
 static struct cpufreq_driver sprd_cpufreq_driver = {
 	.name = "sprd-cpufreq",
 	.flags = CPUFREQ_STICKY | CPUFREQ_NEED_INITIAL_FREQ_CHECK
-				| CPUFREQ_HAVE_GOVERNOR_PER_POLICY,
+				| CPUFREQ_HAVE_GOVERNOR_PER_POLICY
+				| CPUFREQ_IS_COOLING_DEV,
 	.init = sprd_cpufreq_init,
 	.exit = sprd_cpufreq_exit,
 	.verify = sprd_cpufreq_table_verify,
@@ -1454,6 +1439,7 @@ static int sprd_cpufreq_probe(struct platform_device *pdev)
 	int ret = 0;
 	unsigned int cpu;
 	struct nvmem_cell *cell;
+
 	boot_done_timestamp = jiffies + SPRD_CPUFREQ_DRV_BOOST_DURATOIN;
 
 	for_each_present_cpu(cpu) {
@@ -1500,7 +1486,7 @@ static int sprd_cpufreq_probe(struct platform_device *pdev)
 			goto put_np;
 		}
 
-		cpu_reg = devm_regulator_get(cpu_dev, CORE_SUPPLY);
+		cpu_reg = devm_regulator_get(cpu_dev, "cpu");
 		if (IS_ERR_OR_NULL(cpu_reg)) {
 			dev_err(&pdev->dev, "failed in cpu%u reg getting,%ld\n",
 				cpu, PTR_ERR(cpu_reg));
@@ -1559,6 +1545,20 @@ static int sprd_cpufreq_remove(struct platform_device *pdev)
 {
 	return cpufreq_unregister_driver(&sprd_cpufreq_driver);
 }
+
+static const struct of_device_id sprd_swdvfs_of_match[] = {
+	{
+		.compatible = "sprd,sharkl3-swdvfs",
+	},
+	{
+		.compatible = "sprd,pike2-swdvfs",
+	},
+	{
+		.compatible = "sprd,sharkle-swdvfs",
+	},
+	{},
+};
+MODULE_DEVICE_TABLE(of, sprd_swdvfs_of_match);
 
 static struct platform_driver sprd_cpufreq_platdrv = {
 	.probe		= sprd_cpufreq_probe,

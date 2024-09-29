@@ -9,7 +9,7 @@ MAIN_PATH = ''
 TAGS_FILE_NAME = '../../Documentation/sprd-tags.txt'
 
 GET_PATCH_INFO_COMMANDS = 'git log -1'
-GET_PATCH_MODIFY_FILE_INFO = 'git log -1 --pretty="format:" --name-only --diff-filter=AM'
+GET_PATCH_MODIFY_FILE_INFO = 'git log -1 --pretty="format:" --name-only'
 
 ATTRIBUTE_TAGS  = []
 SUBSYSTEM1_TAGS = []

@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/io.h>
@@ -19,9 +11,6 @@
 #include "sprd_dsi.h"
 #include "dsi_ctrl_r1p0.h"
 
-#define read32(c)	readl((void __force __iomem *)(c))
-#define write32(v, c)	writel(v, (void __force __iomem *)(c))
-
 /**
  * Get DSI Host core version
  * @param instance pointer to structure holding the DSI Host core information
@@ -30,7 +19,7 @@
 static bool dsi_check_version(struct dsi_context *ctx)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
-	u32 version = read32(&reg->DSI_VERSION);
+	u32 version = readl(&reg->DSI_VERSION);
 
 	if (version == 0x100)
 		return true;
@@ -50,10 +39,10 @@ static void dsi_power_enable(struct dsi_context *ctx, int enable)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 
-	write32(enable, &reg->SOFT_RESET);
+	writel(enable, &reg->SOFT_RESET);
 }
 /**
- * Enable/disable DPI video mode & halt function
+ * Enable/disable DPI video mode
  * @param instance pointer to structure holding the DSI Host core information
  * @param bit0 : DPI video mode enable (1) - disable (0)
  *	  bit1 : halt function  enable (1) - disable (0)
@@ -62,7 +51,7 @@ static void dsi_video_mode(struct dsi_context *ctx)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 
-	write32(0x2, &reg->DSI_MODE_CFG);
+	writel(0x2, &reg->DSI_MODE_CFG);
 }
 /**
  * Enable command mode (Generic interface)
@@ -73,14 +62,14 @@ static void dsi_cmd_mode(struct dsi_context *ctx)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 
-	write32(1, &reg->DSI_MODE_CFG);
+	writel(1, &reg->DSI_MODE_CFG);
 }
 
 static bool dsi_is_cmd_mode(struct dsi_context *ctx)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 
-	return read32(&reg->DSI_MODE_CFG) & BIT(0);
+	return readl(&reg->DSI_MODE_CFG) & BIT(0);
 }
 /**
  * Configure the read back virtual channel for the generic interface
@@ -92,10 +81,10 @@ static void dsi_rx_vcid(struct dsi_context *ctx, u8 vc)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x1C virtual_channel_id;
 
-	virtual_channel_id.val = read32(&reg->VIRTUAL_CHANNEL_ID);
+	virtual_channel_id.val = readl(&reg->VIRTUAL_CHANNEL_ID);
 	virtual_channel_id.bits.gen_rx_vcid = vc;
 
-	write32(virtual_channel_id.val, &reg->VIRTUAL_CHANNEL_ID);
+	writel(virtual_channel_id.val, &reg->VIRTUAL_CHANNEL_ID);
 }
 /**
  * Write the DPI video virtual channel destination
@@ -107,10 +96,10 @@ static void dsi_video_vcid(struct dsi_context *ctx, u8 vc)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x1C virtual_channel_id;
 
-	virtual_channel_id.val = read32(&reg->VIRTUAL_CHANNEL_ID);
+	virtual_channel_id.val = readl(&reg->VIRTUAL_CHANNEL_ID);
 	virtual_channel_id.bits.video_pkt_vcid = vc;
 
-	write32(virtual_channel_id.val, &reg->VIRTUAL_CHANNEL_ID);
+	writel(virtual_channel_id.val, &reg->VIRTUAL_CHANNEL_ID);
 }
 /**
  * Set DPI video mode type (burst/non-burst - with sync pulses or events)
@@ -123,10 +112,10 @@ static void dsi_dpi_video_burst_mode(struct dsi_context *ctx, int mode)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x38 vid_mode_cfg;
 
-	vid_mode_cfg.val = read32(&reg->VID_MODE_CFG);
+	vid_mode_cfg.val = readl(&reg->VID_MODE_CFG);
 	vid_mode_cfg.bits.vid_mode_type = mode;
 
-	write32(vid_mode_cfg.val, &reg->VID_MODE_CFG);
+	writel(vid_mode_cfg.val, &reg->VID_MODE_CFG);
 }
 /**
  * Set DPI video color coding
@@ -139,10 +128,10 @@ static void dsi_dpi_color_coding(struct dsi_context *ctx, int coding)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x20 dpi_video_format;
 
-	dpi_video_format.val = read32(&reg->DPI_VIDEO_FORMAT);
+	dpi_video_format.val = readl(&reg->DPI_VIDEO_FORMAT);
 	dpi_video_format.bits.dpi_video_mode_format = coding;
 
-	write32(dpi_video_format.val, &reg->DPI_VIDEO_FORMAT);
+	writel(dpi_video_format.val, &reg->DPI_VIDEO_FORMAT);
 }
 /**
  * Set DPI loosely packetisation video (used only when color depth = 18
@@ -154,37 +143,12 @@ static void dsi_dpi_18_loosely_packet_en(struct dsi_context *ctx, int enable)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x20 dpi_video_format;
 
-	dpi_video_format.val = read32(&reg->DPI_VIDEO_FORMAT);
+	dpi_video_format.val = readl(&reg->DPI_VIDEO_FORMAT);
 	dpi_video_format.bits.loosely18_en = enable;
 
-	write32(dpi_video_format.val, &reg->DPI_VIDEO_FORMAT);
+	writel(dpi_video_format.val, &reg->DPI_VIDEO_FORMAT);
 }
-/*
- * Set DPI color mode pin polarity
- * @param instance pointer to structure holding the DSI Host core information
- * @param active_low (1) or active high (0)
- */
-/*
- * Set DPI shut down pin polarity
- * @param instance pointer to structure holding the DSI Host core information
- * @param active_low (1) or active high (0)
- */
-/*
- * Set DPI horizontal sync pin polarity
- * @param instance pointer to structure holding the DSI Host core information
- * @param active_low (1) or active high (0)
- */
-/*
- * Set DPI vertical sync pin polarity
- * @param instance pointer to structure holding the DSI Host core information
- * @param active_low (1) or active high (0)
- */
-/*
- * Set DPI data enable pin polarity
- * @param instance pointer to structure holding the DSI Host core information
- * @param active_low (1) or active high (0)
- */
-/*
+/**
  * Configure the Horizontal Line time
  * @param instance pointer to structure holding the DSI Host core information
  * @param byte_cycle taken to transmit the total of the horizontal line
@@ -194,10 +158,10 @@ static void dsi_dpi_hline_time(struct dsi_context *ctx, u16 byte_cycle)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x2C video_line_time;
 
-	video_line_time.val = read32(&reg->VIDEO_LINE_TIME);
+	video_line_time.val = readl(&reg->VIDEO_LINE_TIME);
 	video_line_time.bits.video_line_time = byte_cycle;
 
-	write32(video_line_time.val, &reg->VIDEO_LINE_TIME);
+	writel(video_line_time.val, &reg->VIDEO_LINE_TIME);
 }
 /**
  * Configure the Horizontal back porch time
@@ -209,10 +173,10 @@ static void dsi_dpi_hbp_time(struct dsi_context *ctx, u16 byte_cycle)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x28 video_line_hblk_time;
 
-	video_line_hblk_time.val = read32(&reg->VIDEO_LINE_HBLK_TIME);
+	video_line_hblk_time.val = readl(&reg->VIDEO_LINE_HBLK_TIME);
 	video_line_hblk_time.bits.video_line_hbp_time = byte_cycle;
 
-	write32(video_line_hblk_time.val, &reg->VIDEO_LINE_HBLK_TIME);
+	writel(video_line_hblk_time.val, &reg->VIDEO_LINE_HBLK_TIME);
 }
 /**
  * Configure the Horizontal sync time
@@ -224,10 +188,10 @@ static void dsi_dpi_hsync_time(struct dsi_context *ctx, u16 byte_cycle)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x28 video_line_hblk_time;
 
-	video_line_hblk_time.val = read32(&reg->VIDEO_LINE_HBLK_TIME);
+	video_line_hblk_time.val = readl(&reg->VIDEO_LINE_HBLK_TIME);
 	video_line_hblk_time.bits.video_line_hsa_time = byte_cycle;
 
-	write32(video_line_hblk_time.val, &reg->VIDEO_LINE_HBLK_TIME);
+	writel(video_line_hblk_time.val, &reg->VIDEO_LINE_HBLK_TIME);
 }
 /**
  * Configure the vertical active lines of the video stream
@@ -239,10 +203,10 @@ static void dsi_dpi_vact(struct dsi_context *ctx, u16 lines)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x34 video_active_lines;
 
-	video_active_lines.val = read32(&reg->VIDEO_VACTIVE_LINES);
+	video_active_lines.val = readl(&reg->VIDEO_VACTIVE_LINES);
 	video_active_lines.bits.vactive_lines = lines;
 
-	write32(video_active_lines.val, &reg->VIDEO_VACTIVE_LINES);
+	writel(video_active_lines.val, &reg->VIDEO_VACTIVE_LINES);
 }
 /**
  * Configure the vertical front porch lines of the video stream
@@ -254,10 +218,10 @@ static void dsi_dpi_vfp(struct dsi_context *ctx, u16 lines)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x30 video_vblk_lines;
 
-	video_vblk_lines.val = read32(&reg->VIDEO_VBLK_LINES);
+	video_vblk_lines.val = readl(&reg->VIDEO_VBLK_LINES);
 	video_vblk_lines.bits.vfp_lines = lines;
 
-	write32(video_vblk_lines.val, &reg->VIDEO_VBLK_LINES);
+	writel(video_vblk_lines.val, &reg->VIDEO_VBLK_LINES);
 }
 /**
  * Configure the vertical back porch lines of the video stream
@@ -269,10 +233,10 @@ static void dsi_dpi_vbp(struct dsi_context *ctx, u16 lines)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x30 video_vblk_lines;
 
-	video_vblk_lines.val = read32(&reg->VIDEO_VBLK_LINES);
+	video_vblk_lines.val = readl(&reg->VIDEO_VBLK_LINES);
 	video_vblk_lines.bits.vbp_lines = lines;
 
-	write32(video_vblk_lines.val, &reg->VIDEO_VBLK_LINES);
+	writel(video_vblk_lines.val, &reg->VIDEO_VBLK_LINES);
 }
 /**
  * Configure the vertical sync lines of the video stream
@@ -284,10 +248,10 @@ static void dsi_dpi_vsync(struct dsi_context *ctx, u16 lines)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x30 video_vblk_lines;
 
-	video_vblk_lines.val = read32(&reg->VIDEO_VBLK_LINES);
+	video_vblk_lines.val = readl(&reg->VIDEO_VBLK_LINES);
 	video_vblk_lines.bits.vsa_lines = lines;
 
-	write32(video_vblk_lines.val, &reg->VIDEO_VBLK_LINES);
+	writel(video_vblk_lines.val, &reg->VIDEO_VBLK_LINES);
 }
 /**
  * Enable return to low power mode inside horizontal front porch periods when
@@ -300,12 +264,12 @@ static void dsi_dpi_hporch_lp_en(struct dsi_context *ctx, int enable)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x38 vid_mode_cfg;
 
-	vid_mode_cfg.val = read32(&reg->VID_MODE_CFG);
+	vid_mode_cfg.val = readl(&reg->VID_MODE_CFG);
 
 	vid_mode_cfg.bits.lp_hfp_en = enable;
 	vid_mode_cfg.bits.lp_hbp_en = enable;
 
-	write32(vid_mode_cfg.val, &reg->VID_MODE_CFG);
+	writel(vid_mode_cfg.val, &reg->VID_MODE_CFG);
 }
 /**
  * Enable return to low power mode inside vertical active lines periods when
@@ -318,14 +282,14 @@ static void dsi_dpi_vporch_lp_en(struct dsi_context *ctx, int enable)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x38 vid_mode_cfg;
 
-	vid_mode_cfg.val = read32(&reg->VID_MODE_CFG);
+	vid_mode_cfg.val = readl(&reg->VID_MODE_CFG);
 
 	vid_mode_cfg.bits.lp_vact_en = enable;
 	vid_mode_cfg.bits.lp_vfp_en = enable;
 	vid_mode_cfg.bits.lp_vbp_en = enable;
 	vid_mode_cfg.bits.lp_vsa_en = enable;
 
-	write32(vid_mode_cfg.val, &reg->VID_MODE_CFG);
+	writel(vid_mode_cfg.val, &reg->VID_MODE_CFG);
 }
 /**
  * Enable FRAME BTA ACK
@@ -337,12 +301,12 @@ static void dsi_dpi_frame_ack_en(struct dsi_context *ctx, int enable)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x38 vid_mode_cfg;
 
-	vid_mode_cfg.val = read32(&reg->VID_MODE_CFG);
+	vid_mode_cfg.val = readl(&reg->VID_MODE_CFG);
 	vid_mode_cfg.bits.frame_bta_ack_en = enable;
 
-	write32(vid_mode_cfg.val, &reg->VID_MODE_CFG);
+	writel(vid_mode_cfg.val, &reg->VID_MODE_CFG);
 }
-/*
+/**
  * Write no of chunks to core - taken into consideration only when multi packet
  * is enabled
  * @param instance pointer to structure holding the DSI Host core information
@@ -353,10 +317,10 @@ static void dsi_dpi_chunk_num(struct dsi_context *ctx, u16 num)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x24 video_pkt_config;
 
-	video_pkt_config.val = read32(&reg->VIDEO_PKT_CONFIG);
+	video_pkt_config.val = readl(&reg->VIDEO_PKT_CONFIG);
 	video_pkt_config.bits.video_line_chunk_num = num;
 
-	write32(video_pkt_config.val, &reg->VIDEO_PKT_CONFIG);
+	writel(video_pkt_config.val, &reg->VIDEO_PKT_CONFIG);
 }
 /**
  * Write the null packet size - will only be taken into account when null
@@ -370,10 +334,10 @@ static void dsi_dpi_null_packet_size(struct dsi_context *ctx, u16 size)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0xC0 video_nullpkt_size;
 
-	video_nullpkt_size.val = read32(&reg->VIDEO_NULLPKT_SIZE);
+	video_nullpkt_size.val = readl(&reg->VIDEO_NULLPKT_SIZE);
 	video_nullpkt_size.bits.video_nullpkt_size = size;
 
-	write32(video_nullpkt_size.val, &reg->VIDEO_NULLPKT_SIZE);
+	writel(video_nullpkt_size.val, &reg->VIDEO_NULLPKT_SIZE);
 }
 /**
  * Write video packet size. obligatory for sending video
@@ -386,10 +350,10 @@ static void dsi_dpi_video_packet_size(struct dsi_context *ctx, u16 size)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x24 video_pkt_config;
 
-	video_pkt_config.val = read32(&reg->VIDEO_PKT_CONFIG);
+	video_pkt_config.val = readl(&reg->VIDEO_PKT_CONFIG);
 	video_pkt_config.bits.video_pkt_size = size;
 
-	write32(video_pkt_config.val, &reg->VIDEO_PKT_CONFIG);
+	writel(video_pkt_config.val, &reg->VIDEO_PKT_CONFIG);
 }
 /**
  * Specifiy the size of the packet memory write start/continue
@@ -402,10 +366,10 @@ static void dsi_edpi_max_pkt_size(struct dsi_context *ctx, u16 size)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0xC4 dcs_wm_pkt_size;
 
-	dcs_wm_pkt_size.val = read32(&reg->DCS_WM_PKT_SIZE);
+	dcs_wm_pkt_size.val = readl(&reg->DCS_WM_PKT_SIZE);
 	dcs_wm_pkt_size.bits.dcs_wm_pkt_size = size;
 
-	write32(dcs_wm_pkt_size.val, &reg->DCS_WM_PKT_SIZE);
+	writel(dcs_wm_pkt_size.val, &reg->DCS_WM_PKT_SIZE);
 }
 /**
  * Enable tear effect acknowledge
@@ -417,10 +381,10 @@ static void dsi_tear_effect_ack_en(struct dsi_context *ctx, int enable)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x68 cmd_mode_cfg;
 
-	cmd_mode_cfg.val = read32(&reg->CMD_MODE_CFG);
+	cmd_mode_cfg.val = readl(&reg->CMD_MODE_CFG);
 	cmd_mode_cfg.bits.tear_fx_en = enable;
 
-	write32(cmd_mode_cfg.val, &reg->CMD_MODE_CFG);
+	writel(cmd_mode_cfg.val, &reg->CMD_MODE_CFG);
 }
 /**
  * Enable packets acknowledge request after each packet transmission
@@ -432,10 +396,10 @@ static void dsi_cmd_ack_request_en(struct dsi_context *ctx, int enable)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x68 cmd_mode_cfg;
 
-	cmd_mode_cfg.val = read32(&reg->CMD_MODE_CFG);
+	cmd_mode_cfg.val = readl(&reg->CMD_MODE_CFG);
 	cmd_mode_cfg.bits.ack_rqst_en = enable;
 
-	write32(cmd_mode_cfg.val, &reg->CMD_MODE_CFG);
+	writel(cmd_mode_cfg.val, &reg->CMD_MODE_CFG);
 }
 /**
  * Set DCS command packet transmission to transmission type
@@ -449,7 +413,7 @@ static void dsi_cmd_mode_lp_cmd_en(struct dsi_context *ctx, int enable)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x68 cmd_mode_cfg;
 
-	cmd_mode_cfg.val = read32(&reg->CMD_MODE_CFG);
+	cmd_mode_cfg.val = readl(&reg->CMD_MODE_CFG);
 
 	cmd_mode_cfg.bits.gen_sw_0p_tx = enable;
 	cmd_mode_cfg.bits.gen_sw_1p_tx = enable;
@@ -465,7 +429,7 @@ static void dsi_cmd_mode_lp_cmd_en(struct dsi_context *ctx, int enable)
 	cmd_mode_cfg.bits.gen_sr_2p_tx = enable;
 	cmd_mode_cfg.bits.dcs_sr_0p_tx = enable;
 
-	write32(cmd_mode_cfg.val, &reg->CMD_MODE_CFG);
+	writel(cmd_mode_cfg.val, &reg->CMD_MODE_CFG);
 }
 /**
  * Set DCS read command packet transmission to transmission type
@@ -479,10 +443,10 @@ static void dsi_video_mode_lp_cmd_en(struct dsi_context *ctx, int enable)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x38 vid_mode_cfg;
 
-	vid_mode_cfg.val = read32(&reg->VID_MODE_CFG);
+	vid_mode_cfg.val = readl(&reg->VID_MODE_CFG);
 	vid_mode_cfg.bits.lp_cmd_en = enable;
 
-	write32(vid_mode_cfg.val, &reg->VID_MODE_CFG);
+	writel(vid_mode_cfg.val, &reg->VID_MODE_CFG);
 }
 
 /**
@@ -509,7 +473,7 @@ static void dsi_set_packet_header(struct dsi_context *ctx,
 	gen_hdr.bits.gen_wc_lsbyte = wc_lsb;
 	gen_hdr.bits.gen_wc_msbyte = wc_msb;
 
-	write32(gen_hdr.val, &reg->GEN_HDR);
+	writel(gen_hdr.val, &reg->GEN_HDR);
 }
 /**
  * Write the payload of the long packet commands
@@ -521,7 +485,7 @@ static void dsi_set_packet_payload(struct dsi_context *ctx, u32 payload)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 
-	write32(payload, &reg->GEN_PLD_DATA);
+	writel(payload, &reg->GEN_PLD_DATA);
 }
 /**
  * Write the payload of the long packet commands
@@ -533,7 +497,7 @@ static u32 dsi_get_rx_payload(struct dsi_context *ctx)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 
-	return read32(&reg->GEN_PLD_DATA);
+	return readl(&reg->GEN_PLD_DATA);
 }
 
 /**
@@ -545,7 +509,7 @@ static void dsi_bta_en(struct dsi_context *ctx, int enable)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 
-	write32(enable, &reg->TA_EN);
+	writel(enable, &reg->TA_EN);
 }
 /**
  * Enable EOTp reception
@@ -557,10 +521,10 @@ static void dsi_eotp_rx_en(struct dsi_context *ctx, int enable)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0xBC eotp_en;
 
-	eotp_en.val = read32(&reg->EOTP_EN);
+	eotp_en.val = readl(&reg->EOTP_EN);
 	eotp_en.bits.rx_eotp_en = enable;
 
-	write32(eotp_en.val, &reg->EOTP_EN);
+	writel(eotp_en.val, &reg->EOTP_EN);
 }
 /**
  * Enable EOTp transmission
@@ -572,10 +536,10 @@ static void dsi_eotp_tx_en(struct dsi_context *ctx, int enable)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0xBC eotp_en;
 
-	eotp_en.val = read32(&reg->EOTP_EN);
+	eotp_en.val = readl(&reg->EOTP_EN);
 	eotp_en.bits.tx_eotp_en = enable;
 
-	write32(eotp_en.val, &reg->EOTP_EN);
+	writel(eotp_en.val, &reg->EOTP_EN);
 }
 /**
  * Enable ECC reception, error correction and reporting
@@ -587,10 +551,10 @@ static void dsi_ecc_rx_en(struct dsi_context *ctx, int enable)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0xB4 rx_pkt_check_config;
 
-	rx_pkt_check_config.val = read32(&reg->RX_PKT_CHECK_CONFIG);
+	rx_pkt_check_config.val = readl(&reg->RX_PKT_CHECK_CONFIG);
 	rx_pkt_check_config.bits.rx_pkt_ecc_en = enable;
 
-	write32(rx_pkt_check_config.val, &reg->RX_PKT_CHECK_CONFIG);
+	writel(rx_pkt_check_config.val, &reg->RX_PKT_CHECK_CONFIG);
 }
 /**
  * Enable CRC reception, error reporting
@@ -602,27 +566,11 @@ static void dsi_crc_rx_en(struct dsi_context *ctx, int enable)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0xB4 rx_pkt_check_config;
 
-	rx_pkt_check_config.val = read32(&reg->RX_PKT_CHECK_CONFIG);
+	rx_pkt_check_config.val = readl(&reg->RX_PKT_CHECK_CONFIG);
 	rx_pkt_check_config.bits.rx_pkt_crc_en = enable;
 
-	write32(rx_pkt_check_config.val, &reg->RX_PKT_CHECK_CONFIG);
+	writel(rx_pkt_check_config.val, &reg->RX_PKT_CHECK_CONFIG);
 }
-#if 0
-/**
- * Get status of read command
- * @param instance pointer to structure holding the DSI Host core information
- * @return 1 if busy
- */
-static bool dsi_is_bta_returned(struct dsi_context *ctx)
-{
-	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
-	union _0x98 cmd_mode_status;
-
-	cmd_mode_status.val = read32(&reg->CMD_MODE_STATUS);
-
-	return !cmd_mode_status.bits.gen_cmd_rdcmd_ongoing;
-}
-#endif
 /**
  * NOTE: dsi-ctrl-r1p0 only
  *
@@ -635,7 +583,7 @@ static bool dsi_is_rdcmd_done(struct dsi_context *ctx)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x98 cmd_mode_status;
 
-	cmd_mode_status.val = read32(&reg->CMD_MODE_STATUS);
+	cmd_mode_status.val = readl(&reg->CMD_MODE_STATUS);
 
 	return cmd_mode_status.bits.gen_cmd_rdcmd_done;
 }
@@ -649,7 +597,7 @@ static bool dsi_is_rx_payload_fifo_full(struct dsi_context *ctx)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x98 cmd_mode_status;
 
-	cmd_mode_status.val = read32(&reg->CMD_MODE_STATUS);
+	cmd_mode_status.val = readl(&reg->CMD_MODE_STATUS);
 
 	return cmd_mode_status.bits.gen_cmd_rdata_fifo_full;
 }
@@ -663,7 +611,7 @@ static bool dsi_is_rx_payload_fifo_empty(struct dsi_context *ctx)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x98 cmd_mode_status;
 
-	cmd_mode_status.val = read32(&reg->CMD_MODE_STATUS);
+	cmd_mode_status.val = readl(&reg->CMD_MODE_STATUS);
 
 	return cmd_mode_status.bits.gen_cmd_rdata_fifo_empty;
 }
@@ -677,7 +625,7 @@ static bool dsi_is_tx_payload_fifo_full(struct dsi_context *ctx)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x98 cmd_mode_status;
 
-	cmd_mode_status.val = read32(&reg->CMD_MODE_STATUS);
+	cmd_mode_status.val = readl(&reg->CMD_MODE_STATUS);
 
 	return cmd_mode_status.bits.gen_cmd_wdata_fifo_full;
 }
@@ -691,7 +639,7 @@ static bool dsi_is_tx_payload_fifo_empty(struct dsi_context *ctx)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x98 cmd_mode_status;
 
-	cmd_mode_status.val = read32(&reg->CMD_MODE_STATUS);
+	cmd_mode_status.val = readl(&reg->CMD_MODE_STATUS);
 
 	return cmd_mode_status.bits.gen_cmd_wdata_fifo_empty;
 }
@@ -705,7 +653,7 @@ static bool dsi_is_tx_cmd_fifo_full(struct dsi_context *ctx)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x98 cmd_mode_status;
 
-	cmd_mode_status.val = read32(&reg->CMD_MODE_STATUS);
+	cmd_mode_status.val = readl(&reg->CMD_MODE_STATUS);
 
 	return cmd_mode_status.bits.gen_cmd_cmd_fifo_full;
 }
@@ -719,7 +667,7 @@ static bool dsi_is_tx_cmd_fifo_empty(struct dsi_context *ctx)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x98 cmd_mode_status;
 
-	cmd_mode_status.val = read32(&reg->CMD_MODE_STATUS);
+	cmd_mode_status.val = readl(&reg->CMD_MODE_STATUS);
 
 	return cmd_mode_status.bits.gen_cmd_cmd_fifo_empty;
 }
@@ -736,10 +684,10 @@ static void dsi_dpi_sig_delay(struct dsi_context *ctx, u16 byte_cycle)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0xD0 video_sig_delay_config;
 
-	video_sig_delay_config.val = read32(&reg->VIDEO_SIG_DELAY_CONFIG);
+	video_sig_delay_config.val = readl(&reg->VIDEO_SIG_DELAY_CONFIG);
 	video_sig_delay_config.bits.video_sig_delay = byte_cycle;
 
-	write32(video_sig_delay_config.val, &reg->VIDEO_SIG_DELAY_CONFIG);
+	writel(video_sig_delay_config.val, &reg->VIDEO_SIG_DELAY_CONFIG);
 }
 /**
  * Configure how many cycles of byte clock would the PHY module take
@@ -753,10 +701,10 @@ static void dsi_datalane_hs2lp_config(struct dsi_context *ctx, u16 byte_cycle)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0xAC phy_datalane_time_config;
 
-	phy_datalane_time_config.val = read32(&reg->PHY_DATALANE_TIME_CONFIG);
+	phy_datalane_time_config.val = readl(&reg->PHY_DATALANE_TIME_CONFIG);
 	phy_datalane_time_config.bits.phy_datalane_hs_to_lp_time = byte_cycle;
 
-	write32(phy_datalane_time_config.val, &reg->PHY_DATALANE_TIME_CONFIG);
+	writel(phy_datalane_time_config.val, &reg->PHY_DATALANE_TIME_CONFIG);
 }
 /**
  * Configure how many cycles of byte clock would the PHY module take
@@ -770,10 +718,10 @@ static void dsi_datalane_lp2hs_config(struct dsi_context *ctx, u16 byte_cycle)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0xAC phy_datalane_time_config;
 
-	phy_datalane_time_config.val = read32(&reg->PHY_DATALANE_TIME_CONFIG);
+	phy_datalane_time_config.val = readl(&reg->PHY_DATALANE_TIME_CONFIG);
 	phy_datalane_time_config.bits.phy_datalane_lp_to_hs_time = byte_cycle;
 
-	write32(phy_datalane_time_config.val, &reg->PHY_DATALANE_TIME_CONFIG);
+	writel(phy_datalane_time_config.val, &reg->PHY_DATALANE_TIME_CONFIG);
 }
 /**
  * Configure how many cycles of byte clock would the PHY module take
@@ -787,10 +735,10 @@ static void dsi_clklane_hs2lp_config(struct dsi_context *ctx, u16 byte_cycle)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0xA8 phy_clklane_time_config;
 
-	phy_clklane_time_config.val = read32(&reg->PHY_CLKLANE_TIME_CONFIG);
+	phy_clklane_time_config.val = readl(&reg->PHY_CLKLANE_TIME_CONFIG);
 	phy_clklane_time_config.bits.phy_clklane_hs_to_lp_time = byte_cycle;
 
-	write32(phy_clklane_time_config.val, &reg->PHY_CLKLANE_TIME_CONFIG);
+	writel(phy_clklane_time_config.val, &reg->PHY_CLKLANE_TIME_CONFIG);
 }
 /**
  * Configure how many cycles of byte clock would the PHY module take
@@ -804,10 +752,10 @@ static void dsi_clklane_lp2hs_config(struct dsi_context *ctx, u16 byte_cycle)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0xA8 phy_clklane_time_config;
 
-	phy_clklane_time_config.val = read32(&reg->PHY_CLKLANE_TIME_CONFIG);
+	phy_clklane_time_config.val = readl(&reg->PHY_CLKLANE_TIME_CONFIG);
 	phy_clklane_time_config.bits.phy_clklane_lp_to_hs_time = byte_cycle;
 
-	write32(phy_clklane_time_config.val, &reg->PHY_CLKLANE_TIME_CONFIG);
+	writel(phy_clklane_time_config.val, &reg->PHY_CLKLANE_TIME_CONFIG);
 }
 /**
  * Configure how many cycles of byte clock would the PHY module take
@@ -820,7 +768,7 @@ static void dsi_max_read_time(struct dsi_context *ctx, u16 byte_cycle)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 
-	write32(byte_cycle, &reg->MAX_READ_TIME);
+	writel(byte_cycle, &reg->MAX_READ_TIME);
 }
 
 /**
@@ -834,7 +782,7 @@ static void dsi_vblk_cmd_trans_limit(struct dsi_context *ctx, u16 size)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 
-	write32(size, &reg->VBLK_CMD_TRANS_LIMIT);
+	writel(size, &reg->VBLK_CMD_TRANS_LIMIT);
 }
 
 /**
@@ -849,10 +797,10 @@ static void dsi_nc_clk_en(struct dsi_context *ctx, int enable)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x74 phy_clk_lane_lp_ctrl;
 
-	phy_clk_lane_lp_ctrl.val = read32(&reg->PHY_CLK_LANE_LP_CTRL);
+	phy_clk_lane_lp_ctrl.val = readl(&reg->PHY_CLK_LANE_LP_CTRL);
 	phy_clk_lane_lp_ctrl.bits.auto_clklane_ctrl_en = enable;
 
-	write32(phy_clk_lane_lp_ctrl.val, &reg->PHY_CLK_LANE_LP_CTRL);
+	writel(phy_clk_lane_lp_ctrl.val, &reg->PHY_CLK_LANE_LP_CTRL);
 }
 /**
  * Write transmission escape timeout
@@ -865,7 +813,7 @@ static void dsi_tx_escape_division(struct dsi_context *ctx, u8 div)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 
-	write32(div, &reg->TX_ESC_CLK_CONFIG);
+	writel(div, &reg->TX_ESC_CLK_CONFIG);
 }
 /* PRESP Time outs */
 /**
@@ -878,7 +826,7 @@ static void dsi_timeout_clock_division(struct dsi_context *ctx, u8 div)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 
-	write32(div, &reg->TIMEOUT_CNT_CLK_CONFIG);
+	writel(div, &reg->TIMEOUT_CNT_CLK_CONFIG);
 }
 /**
  * Configure the Low power receive time out
@@ -889,7 +837,7 @@ static void dsi_lp_rx_timeout(struct dsi_context *ctx, u16 byte_cycle)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 
-	write32(byte_cycle, &reg->LRX_H_TO_CONFIG);
+	writel(byte_cycle, &reg->LRX_H_TO_CONFIG);
 }
 /**
  * Configure a high speed transmission time out
@@ -900,7 +848,7 @@ static void dsi_hs_tx_timeout(struct dsi_context *ctx, u16 byte_cycle)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 
-	write32(byte_cycle, &reg->HTX_TO_CONFIG);
+	writel(byte_cycle, &reg->HTX_TO_CONFIG);
 }
 /**
  * Timeout for peripheral (for controller to stay still) after bus turn around
@@ -913,7 +861,7 @@ static void dsi_bta_presp_timeout(struct dsi_context *ctx, u16 byte_cycle)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 
-	write32(byte_cycle, &reg->BTA_PRESP_TO_CONFIG);
+	writel(byte_cycle, &reg->BTA_PRESP_TO_CONFIG);
 }
 /**
  * Timeout for peripheral (for controller to stay still) after LP data
@@ -927,7 +875,7 @@ static void dsi_lp_write_presp_timeout(struct dsi_context *ctx, u16 byte_cycle)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 
-	write32(byte_cycle, &reg->LPWR_PRESP_TO_CONFIG);
+	writel(byte_cycle, &reg->LPWR_PRESP_TO_CONFIG);
 }
 /**
  * Timeout for peripheral (for controller to stay still) after LP data
@@ -942,10 +890,10 @@ static void dsi_lp_read_presp_timeout(struct dsi_context *ctx, u16 byte_cycle)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x4C rd_presp_to_config;
 
-	rd_presp_to_config.val = read32(&reg->RD_PRESP_TO_CONFIG);
+	rd_presp_to_config.val = readl(&reg->RD_PRESP_TO_CONFIG);
 	rd_presp_to_config.bits.lprd_presp_to_cnt_limit = byte_cycle;
 
-	write32(rd_presp_to_config.val, &reg->RD_PRESP_TO_CONFIG);
+	writel(rd_presp_to_config.val, &reg->RD_PRESP_TO_CONFIG);
 }
 /**
  * Timeout for peripheral (for controller to stay still) after HS data
@@ -960,10 +908,10 @@ static void dsi_hs_write_presp_timeout(struct dsi_context *ctx, u16 byte_cycle)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x50 hswr_presp_to_config;
 
-	hswr_presp_to_config.val = read32(&reg->HSWR_PRESP_TO_CONFIG);
+	hswr_presp_to_config.val = readl(&reg->HSWR_PRESP_TO_CONFIG);
 	hswr_presp_to_config.bits.hswr_presp_to_cnt_limit = byte_cycle;
 
-	write32(hswr_presp_to_config.val, &reg->HSWR_PRESP_TO_CONFIG);
+	writel(hswr_presp_to_config.val, &reg->HSWR_PRESP_TO_CONFIG);
 }
 /**
  * Timeout for peripheral between HS data transmission read requests
@@ -977,10 +925,10 @@ static void dsi_hs_read_presp_timeout(struct dsi_context *ctx, u16 byte_cycle)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x4C rd_presp_to_config;
 
-	rd_presp_to_config.val = read32(&reg->RD_PRESP_TO_CONFIG);
+	rd_presp_to_config.val = readl(&reg->RD_PRESP_TO_CONFIG);
 	rd_presp_to_config.bits.hsrd_presp_to_cnt_limit = byte_cycle;
 
-	write32(rd_presp_to_config.val, &reg->RD_PRESP_TO_CONFIG);
+	writel(rd_presp_to_config.val, &reg->RD_PRESP_TO_CONFIG);
 }
 /**
  * Get the error 0 interrupt register status
@@ -993,8 +941,8 @@ static u32 dsi_int0_status(struct dsi_context *ctx)
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 	union _0x08 protocol_int_sts;
 
-	protocol_int_sts.val = read32(&reg->PROTOCOL_INT_STS);
-	write32(protocol_int_sts.val, &reg->PROTOCOL_INT_CLR);
+	protocol_int_sts.val = readl(&reg->PROTOCOL_INT_STS);
+	writel(protocol_int_sts.val, &reg->PROTOCOL_INT_CLR);
 
 	if (protocol_int_sts.bits.dphy_errors_0)
 		pr_err("dphy_err: escape entry error\n");
@@ -1073,8 +1021,8 @@ static u32 dsi_int1_status(struct dsi_context *ctx)
 	union _0x10 internal_int_sts;
 	u32 status = 0;
 
-	internal_int_sts.val = read32(&reg->INTERNAL_INT_STS);
-	write32(internal_int_sts.val, &reg->INTERNAL_INT_CLR);
+	internal_int_sts.val = readl(&reg->INTERNAL_INT_STS);
+	writel(internal_int_sts.val, &reg->INTERNAL_INT_CLR);
 
 	if (internal_int_sts.bits.receive_pkt_size_err)
 		pr_err("receive packet size error\n");
@@ -1129,7 +1077,7 @@ static u32 dsi_int2_status(struct dsi_context *ctx)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 
-	if (read32(&reg->INT_PLL_STS))
+	if (readl(&reg->INT_PLL_STS))
 		pr_err("pll interrupt\n");
 
 	return 0;
@@ -1143,7 +1091,7 @@ static void dsi_int0_mask(struct dsi_context *ctx, u32 mask)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 
-	write32(mask, &reg->MASK_PROTOCOL_INT);
+	writel(mask, &reg->MASK_PROTOCOL_INT);
 }
 /**
  * Configure MASK (hiding) of interrupts coming from error 1 source
@@ -1154,7 +1102,7 @@ static void dsi_int1_mask(struct dsi_context *ctx, u32 mask)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 
-	write32(mask, &reg->MASK_INTERNAL_INT);
+	writel(mask, &reg->MASK_INTERNAL_INT);
 }
 /**
  * Configure MASK (hiding) of interrupts coming from error 2 source
@@ -1165,10 +1113,10 @@ static void dsi_int2_mask(struct dsi_context *ctx, u32 mask)
 {
 	struct dsi_reg *reg = (struct dsi_reg *)ctx->base;
 
-	write32(mask, &reg->INT_PLL_MSK);
+	writel(mask, &reg->INT_PLL_MSK);
 }
 
-static struct dsi_core_ops dsi_ctrl_ops = {
+const struct dsi_core_ops dsi_ctrl_r1p0_ops = {
 	.check_version                  = dsi_check_version,
 	.power_en                       = dsi_power_enable,
 	.video_mode                     = dsi_video_mode,
@@ -1236,19 +1184,3 @@ static struct dsi_core_ops dsi_ctrl_ops = {
 	.int1_mask                      = dsi_int1_mask,
 	.int2_mask                      = dsi_int2_mask,
 };
-
-static struct ops_entry entry = {
-	.ver = "sprd,dsi-ctrl",
-	.ops = &dsi_ctrl_ops,
-};
-
-static int __init dsi_core_register(void)
-{
-	return dsi_core_ops_register(&entry);
-}
-
-subsys_initcall(dsi_core_register);
-
-MODULE_LICENSE("GPL");
-MODULE_AUTHOR("leon.he@unisoc.com");
-MODULE_DESCRIPTION("DSI Low-level registers operation for SPRD DSI_CTRL RXP0");

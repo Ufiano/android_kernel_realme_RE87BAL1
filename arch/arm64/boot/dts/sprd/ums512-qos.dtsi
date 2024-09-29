@@ -1,26 +1,17 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Spreadtrum Sharkl5Pro board common DTS file
  *
- * Copyright (C) 2017, Spreadtrum Communications Inc.
- *
- * This file is licensed under a dual GPLv2 or X11 license.
+ * Copyright (C) 2020~2021, Unisoc Communications Inc.
  */
 
 
 / { qos {
 	#address-cells=<1>;
 	#size-cells=<0>;
-	ranges;
 
-	gpu_qos: qos@0 {
+	dpu_qos: qos@0 {
 		reg = <0>;
-		arqos = [06];
-		awqos = [06];
-		arqos-threshold = [0f];
-		awqos-threshold = [0f];
-	};
-	dpu_qos: qos@1 {
-		reg = <1>;
 		awqos-high	= [0a];
 		awqos-low	= [0a];
 		arqos-high	= [0d];
@@ -28,13 +19,10 @@
 		arqos-threshold = [0c];
 		awqos-threshold = [0f];
 	};
-	vsp_qos: qos@2 {
-		reg = <2>;
-		awqos		= [01];
-		arqos-high	= [07];
-		arqos-low	= [01];
-	};
+
 	mm {
+		#address-cells=<1>;
+		#size-cells=<0>;
 		dcam_qos: qos@0 {
 			reg = <0>;
 			arqos		= [0a];
@@ -67,47 +55,6 @@
 			reg = <5>;
 			arqos-threshold = [06];
 			awqos-threshold = [06];
-		};
-	};
-	vdsp {
-		vdsp_qos: qos@0 {
-			reg = <0>;
-			arqos-vdsp-msti = [06];
-			arqos-vdsp-mstd = [06];
-			awqos-vdsp-mstd = [06];
-			arqos-vdsp-idma = [01];
-			awqos-vdsp-idma = [01];
-			arqos-vdma	= [01];
-			awqos-vdma	= [01];
-			arqos-threshold = [0f];
-			awqos-threshold = [0f];
-		};
-	};
-	ap {
-		ap_qos0: qos0@0 {
-			reg = <0>;
-			arqos-ce  = [05];
-			awqos-ce  = [05];
-			arqos-dma = [05];
-			awqos-dma = [05];
-		};
-		ap_qos1: qos@1{
-			reg = <1>;
-			arqos-sdio0 = [05];
-			awqos-sdio0 = [05];
-			arqos-sdio1 = [05];
-			awqos-sdio1 = [05];
-			arqos-sdio2 = [05];
-			awqos-sdio2 = [05];
-			arqos-emmc  = [05];
-			awqos-emmc  = [05];
-		};
-		ap_qos_threshold: qos@2 {
-			reg = <2>;
-			arqos-threshold-main	= [05];
-			awqos-threshold-main	= [05];
-			arqos-threshold-merge	= [06];
-			awqos-threshold-merge	= [06];
 		};
 	};
 }; };

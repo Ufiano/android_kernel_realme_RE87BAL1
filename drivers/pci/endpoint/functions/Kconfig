@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0
 #
 # PCI Endpoint Functions
 #
@@ -11,12 +12,3 @@ config PCI_EPF_TEST
 	   for PCI Endpoint.
 
 	   If in doubt, say "N" to disable Endpoint test driver.
-
-config PCIE_EPF_SPRD
-	tristate "SPRD PCIE Endpoint driver"
-	depends on PCI_ENDPOINT
-	help
-	   Enable this configuration option to enable the SPRD PCIe endpoint
-	   function driver.
-
-	   If in doubt, say "N" to disable SPRD PCIe endpoint function driver.

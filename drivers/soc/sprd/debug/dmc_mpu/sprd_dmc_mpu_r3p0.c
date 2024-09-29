@@ -925,5 +925,5 @@ static struct platform_driver sprd_dmc_mpu_driver = {
 module_platform_driver(sprd_dmc_mpu_driver);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Lanqing Liu <lanqing.liu@spreadtrum.com>");
-MODULE_DESCRIPTION("Spreadtrum platform dmc mpu driver");
+MODULE_AUTHOR("Bobs Wang <bobs.wang@unisoc.com>");
+MODULE_DESCRIPTION("Unisoc platform dmc mpu driver");

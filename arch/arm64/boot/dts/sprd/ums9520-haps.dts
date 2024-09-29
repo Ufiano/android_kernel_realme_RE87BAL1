@@ -7,14 +7,8 @@
 
 /dts-v1/;
 
-#include <dt-bindings/gpio/gpio.h>
 #include "ums9520-haps.dtsi"
 #include "ums9520-haps-mach.dtsi"
-#include "ums9520-haps-modem.dtsi"
-#include "ump9620.dtsi"
-#include "ump9621.dtsi"
-#include "ump9622.dtsi"
-
 
 / {
 	model = "Spreadtrum UMS9520 SoC";
@@ -35,18 +29,30 @@
 
 	chosen: chosen {
 		stdout-path = "serial1:115200n8";
-		bootargs = "earlycon=sprd_serial,0x20210000,115200n8 console=ttyS1,115200n8 loglevel=8 init=/init root=/dev/ram0 rwandroidboot.selinux=permissive printk.devkmsg=on";
 	};
+	reserved-memory {
+		#address-cells = <2>;
+		#size-cells = <2>;
+		ranges;
 
-	ion: ion {
-		compatible = "sprd,ion";
-		#address-cells = <1>;
-		#size-cells = <0>;
+		super_memdisk_reserved: super-memdisk-reserved@100000000{
+			reg = <0x1 0x00000000 0x0 0x72000000>;	/* super 1800M */
+		};
+};
+
+	sprd-memdisk {
+		compatible = "sprd,memdisk";
+
+		super {
+			memory-region = <&super_memdisk_reserved>;
+			label = "super";
+		};
+
 	};
 };
 
 &uart0 {
-	status = "disabled";
+	status = "okay";
 };
 
 &uart1 {

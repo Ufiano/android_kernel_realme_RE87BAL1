@@ -31,7 +31,6 @@ static int dsi_glb_parse_dt(struct dsi_context *ctx,
 				struct device_node *np)
 {
 	unsigned int syscon_args[2];
-	int ret;
 
 	clk_ap_ahb_dsi_eb =
 		of_clk_get_by_name(np, "clk_ap_ahb_dsi_eb");
@@ -40,18 +39,14 @@ static int dsi_glb_parse_dt(struct dsi_context *ctx,
 		clk_ap_ahb_dsi_eb = NULL;
 	}
 
-	ctx_reset.regmap = syscon_regmap_lookup_by_name(np, "reset");
+	ctx_reset.regmap = syscon_regmap_lookup_by_phandle_args(np,
+			"reset-syscon", 2, syscon_args);
 	if (IS_ERR(ctx_reset.regmap)) {
 		pr_warn("failed to map dsi glb reg\n");
 		return PTR_ERR(ctx_reset.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "reset", 2, syscon_args);
-	if (ret == 2) {
+	} else {
 		ctx_reset.ctrl_reg = syscon_args[0];
 		ctx_reset.ctrl_mask = syscon_args[1];
-	} else {
-		pr_warn("failed to parse dsi glb reg\n");
 	}
 
 	return 0;
@@ -90,24 +85,12 @@ static void dsi_reset(struct dsi_context *ctx)
 			(unsigned int)(~ctx_reset.ctrl_mask));
 }
 
-static struct dsi_glb_ops dsi_glb_ops = {
+const struct dsi_glb_ops qogirl6_dsi_glb_ops = {
 	.parse_dt = dsi_glb_parse_dt,
 	.reset = dsi_reset,
 	.enable = dsi_glb_enable,
 	.disable = dsi_glb_disable,
 };
-
-static struct ops_entry entry = {
-	.ver = "qogirl6",
-	.ops = &dsi_glb_ops,
-};
-
-static int __init dsi_glb_register(void)
-{
-	return dsi_glb_ops_register(&entry);
-}
-
-subsys_initcall(dsi_glb_register);
 
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Pony.Wu@unisoc.com");

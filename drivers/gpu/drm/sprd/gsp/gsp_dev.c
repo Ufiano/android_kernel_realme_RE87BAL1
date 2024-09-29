@@ -1,16 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
+#include <linux/compat.h>
+#include <linux/component.h>
 #include <linux/list.h>
 #include <linux/module.h>
 #include <linux/of_device.h>
@@ -20,7 +14,9 @@
 #include <linux/types.h>
 #include <linux/uaccess.h>
 #include <linux/pm_runtime.h>
+#include <drm/drmP.h>
 #include <drm/gsp_cfg.h>
+#include <uapi/drm/sprd_drm_gsp.h>
 #include "gsp_core.h"
 #include "gsp_dev.h"
 #include "gsp_debug.h"
@@ -29,19 +25,14 @@
 #include "gsp_sync.h"
 #include "gsp_sysfs.h"
 #include "gsp_workqueue.h"
-#include "gsp_r6p0/gsp_r6p0_core.h"
-#include "gsp_lite_r3p0/gsp_lite_r3p0_core.h"
 #include "gsp_lite_r2p0/gsp_lite_r2p0_core.h"
-#include "gsp_r7p0/gsp_r7p0_core.h"
+#include "gsp_lite_r3p0/gsp_lite_r3p0_core.h"
+#include "gsp_r6p0/gsp_r6p0_core.h"
 #include "gsp_r8p0/gsp_r8p0_core.h"
 #include "gsp_r9p0/gsp_r9p0_core.h"
-#include <linux/compat.h>
 
-#include <linux/component.h>
-#include <drm/drmP.h>
-#include "sprd_drm.h"
-#include "sprd_drm_gsp.h"
-#include <uapi/drm/sprd_drm_gsp.h>
+#include "../sprd_drm.h"
+#include "../sprd_drm_gsp.h"
 
 static struct gsp_core_ops gsp_r6p0_core_ops = {
 	.parse_dt = gsp_r6p0_core_parse_dt,
@@ -85,20 +76,6 @@ static struct gsp_core_ops gsp_lite_r3p0_core_ops = {
 	.dump = gsp_lite_r3p0_core_dump,
 };
 
-static struct gsp_core_ops gsp_r7p0_core_ops = {
-	.parse_dt = gsp_r7p0_core_parse_dt,
-	.alloc = gsp_r7p0_core_alloc,
-	.init = gsp_r7p0_core_init,
-	.copy = gsp_r7p0_core_copy_cfg,
-	.trigger = gsp_r7p0_core_trigger,
-	.release = gsp_r7p0_core_release,
-	.enable = gsp_r7p0_core_enable,
-	.disable = gsp_r7p0_core_disable,
-	.intercept = gsp_r7p0_core_intercept,
-	.reset = gsp_r7p0_core_reset,
-	.dump = gsp_r7p0_core_dump,
-};
-
 static struct gsp_core_ops gsp_r8p0_core_ops = {
 	.parse_dt = gsp_r8p0_core_parse_dt,
 	.alloc = gsp_r8p0_core_alloc,
@@ -130,35 +107,41 @@ static struct gsp_core_ops gsp_r9p0_core_ops = {
 static struct of_device_id gsp_dt_ids[] = {
 	{.compatible = "sprd,gsp-r6p0-sharkl3",
 	 .data = (void *)&gsp_r6p0_core_ops},
-	{.compatible = "sprd,gsp-lite_r3p0-sharkl5",
-	 .data = (void *)&gsp_lite_r3p0_core_ops},
 	{.compatible = "sprd,gsp-lite_r2p0-sharkle",
 	 .data = (void *)&gsp_lite_r2p0_core_ops},
 	{.compatible = "sprd,gsp-lite_r2p0-pike2",
 	 .data = (void *)&gsp_lite_r2p0_core_ops},
-	{.compatible = "sprd,gsp-r7p0-roc1",
-	 .data = (void *)&gsp_r7p0_core_ops},
+	{.compatible = "sprd,gsp-lite_r3p0-sharkl5",
+	 .data = (void *)&gsp_lite_r3p0_core_ops},
 	{.compatible = "sprd,gsp-r8p0-sharkl5pro",
 	 .data = (void *)&gsp_r8p0_core_ops},
 	{.compatible = "sprd,gsp-r8p0-qogirl6",
-	.data = (void *)&gsp_r8p0_core_ops},
+	 .data = (void *)&gsp_r8p0_core_ops},
 	{.compatible = "sprd,gsp-r9p0-qogirn6pro",
 	.data = (void *)&gsp_r9p0_core_ops},
 	{},
 };
 MODULE_DEVICE_TABLE(of, gsp_dt_ids);
 
-bool cali_mode;
-
-static int boot_mode_check(char *str)
+int boot_mode_check(void)
 {
-	if (str != NULL && !strncmp(str, "cali", strlen("cali")))
-		cali_mode = true;
-	else
-		cali_mode = false;
-	return 0;
+	struct device_node *np;
+	const char *cmd_line;
+	int ret = 0;
+
+	np = of_find_node_by_path("/chosen");
+	if (!np)
+		return 0;
+
+	ret = of_property_read_string(np, "bootargs", &cmd_line);
+	if (ret < 0)
+		return 0;
+
+	if (strstr(cmd_line, "androidboot.mode=cali"))
+		ret = 1;
+
+	return ret;
 }
-__setup("androidboot.mode=", boot_mode_check);
 
 int gsp_dev_name_cmp(struct gsp_dev *gsp)
 {
@@ -177,8 +160,7 @@ int gsp_dev_verify(struct gsp_dev *gsp)
 
 void gsp_dev_set(struct gsp_dev *gsp, struct platform_device *pdev)
 {
-	if (gsp_dev_verify(gsp)
-	    || IS_ERR_OR_NULL(pdev)) {
+	if (gsp_dev_verify(gsp) || IS_ERR_OR_NULL(pdev)) {
 		GSP_ERR("dev set params error\n");
 		return;
 	}
@@ -194,13 +176,11 @@ void gsp_drm_dev_set(struct drm_device *drm_dev, struct device *dev)
 	priv->gsp_dev = dev;
 }
 
-struct gsp_core *
-gsp_dev_to_core(struct gsp_dev *gsp, int index)
+struct gsp_core *gsp_dev_to_core(struct gsp_dev *gsp, int index)
 {
 	struct gsp_core *core = NULL;
 
-	if (index < 0
-	    || index > gsp->core_cnt) {
+	if (index < 0 || index > gsp->core_cnt) {
 		GSP_ERR("index value error\n");
 		return core;
 	}
@@ -229,11 +209,9 @@ int gsp_dev_to_io_cnt(struct gsp_dev *gsp)
 	return gsp->io_cnt;
 }
 
-static void gsp_dev_add_core(struct gsp_dev *gsp,
-			     struct gsp_core *core)
+static void gsp_dev_add_core(struct gsp_dev *gsp, struct gsp_core *core)
 {
-	if (IS_ERR_OR_NULL(gsp)
-	    || IS_ERR_OR_NULL(core)) {
+	if (IS_ERR_OR_NULL(gsp) || IS_ERR_OR_NULL(core)) {
 		GSP_ERR("add core params error\n");
 		return;
 	}
@@ -384,11 +362,11 @@ int gsp_dev_init(struct gsp_dev *gsp)
 		ret = gsp_core_init(core);
 		if (ret) {
 			GSP_DEV_ERR(gsp->dev, "init core[%d] failed\n",
-				 gsp_core_to_id(core));
+				gsp_core_to_id(core));
 			return ret;
 		}
 		GSP_DEV_INFO(gsp->dev, "initialize core[%d] success\n",
-				 gsp_core_to_id(core));
+				gsp_core_to_id(core));
 	}
 
 	ret = gsp_dev_prepare(gsp);
@@ -404,7 +382,7 @@ exit:
 static int gsp_dev_alloc(struct device *dev, struct gsp_dev **gsp)
 {
 	int ret = -1;
-	int i = 0;
+	int i;
 	u32 cnt = 0;
 	const char *name = NULL;
 	struct device_node *np = NULL;
@@ -463,15 +441,15 @@ static int gsp_dev_alloc(struct device *dev, struct gsp_dev **gsp)
 		ret = gsp_core_alloc(&core, ops, child);
 		if (ret)
 			break;
-		GSP_DEV_INFO(dev, "core[%d] allocate success\n", gsp_core_to_id(core));
+		GSP_DEV_INFO(dev, "core[%d] allocate success\n",
+				gsp_core_to_id(core));
 		gsp_dev_add_core(*gsp, core);
 	}
 
 	return ret;
 }
 
-int gsp_dev_get_capability(struct gsp_dev *gsp,
-		       struct gsp_capability **capa)
+int gsp_dev_get_capability(struct gsp_dev *gsp, struct gsp_capability **capa)
 {
 	struct gsp_core *core = NULL;
 	struct gsp_capability *capability = NULL;
@@ -483,15 +461,13 @@ int gsp_dev_get_capability(struct gsp_dev *gsp,
 
 	/* here set default value to zero */
 	core = gsp_dev_to_core(gsp, 0);
-	if (IS_ERR_OR_NULL(core)
-	    || IS_ERR_OR_NULL(core->ops)) {
+	if (IS_ERR_OR_NULL(core) || IS_ERR_OR_NULL(core->ops)) {
 		GSP_DEV_ERR(gsp->dev, "core ops has not been initialized\n");
 		return -1;
 	}
 
 	capability = gsp_core_get_capability(core);
-	if (IS_ERR_OR_NULL(capa)
-	    || IS_ERR_OR_NULL(capability)) {
+	if (IS_ERR_OR_NULL(capa) || IS_ERR_OR_NULL(capability)) {
 		GSP_DEV_ERR(gsp->dev, "get core[0] capability failed\n");
 		return -1;
 	}
@@ -616,7 +592,7 @@ int sprd_gsp_get_capability_ioctl(struct drm_device *drm_dev, void *data,
 	}
 
 	ret = copy_to_user((void __user *)drm_capa->cap,
-				   (const void *)capa, size);
+				(const void *)capa, size);
 
 	if (ret)
 		GSP_DEV_ERR(dev, "get capability copy error\n");
@@ -626,6 +602,7 @@ int sprd_gsp_get_capability_ioctl(struct drm_device *drm_dev, void *data,
 
 	return ret;
 }
+EXPORT_SYMBOL(sprd_gsp_get_capability_ioctl);
 
 int sprd_gsp_trigger_ioctl(struct drm_device *drm_dev, void *data,
 			 struct drm_file *file)
@@ -675,9 +652,9 @@ int sprd_gsp_trigger_ioctl(struct drm_device *drm_dev, void *data,
 	split = cmd->split;
 	size = cmd->size;
 
-	GSP_DEV_DEBUG(dev, "async: %d, split: %d, cnt: %d\n", async, split, cnt);
-	if (cnt > GSP_MAX_IO_CNT(gsp)
-	    || cnt < 1) {
+	GSP_DEV_DEBUG(dev, "async: %d, split: %d, cnt: %d\n",
+			async, split, cnt);
+	if (cnt > GSP_MAX_IO_CNT(gsp) || cnt < 1) {
 		GSP_DEV_ERR(dev, "request error number kcfgs\n");
 		ret = -EINVAL;
 		goto exit;
@@ -712,18 +689,11 @@ int sprd_gsp_trigger_ioctl(struct drm_device *drm_dev, void *data,
 		goto kcfg_list_release;
 	}
 
-	if (gsp_dev_is_suspending(gsp) ||
-		gsp_dev_is_suspend(gsp)) {
-		pm_runtime_mark_last_busy(gsp->dev);
-		pm_runtime_get_sync(gsp->dev);
+	pm_runtime_mark_last_busy(gsp->dev);
+	pm_runtime_get_sync(gsp->dev);
 
-		if (gsp_dev_resume_wait(gsp))
-			goto kcfg_list_release;
-		else
-			pm_runtime_mark_last_busy(gsp->dev);
-	} else {
-		pm_runtime_mark_last_busy(gsp->dev);
-	}
+	if (gsp_dev_resume_wait(gsp))
+		goto kcfg_list_release;
 
 	if (gsp_dev_is_suspend(gsp))
 		GSP_DEV_INFO(dev, "no need to process kcfg at suspend state\n");
@@ -744,6 +714,7 @@ kcfg_list_put:
 exit:
 	return ret;
 }
+EXPORT_SYMBOL(sprd_gsp_trigger_ioctl);
 
 static void gsp_miscdev_deregister(struct gsp_dev *gsp)
 {
@@ -773,8 +744,10 @@ static void gsp_dev_free(struct gsp_dev *gsp)
 	struct gsp_core *core = NULL;
 	struct gsp_core *tmp = NULL;
 
-	if (IS_ERR_OR_NULL(gsp))
+	if (IS_ERR_OR_NULL(gsp)) {
 		GSP_DEBUG("nothing to do for unalloc gsp\n");
+		return;
+	}
 
 	if (list_empty(&gsp->cores))
 		return;
@@ -787,15 +760,18 @@ static void gsp_dev_free(struct gsp_dev *gsp)
 
 static void gsp_dev_deinit(struct gsp_dev *gsp)
 {
-	struct gsp_core *core = NULL;
+	struct gsp_core *core;
+	struct gsp_core *tmp = NULL;
 
-	if (IS_ERR_OR_NULL(gsp))
+	if (IS_ERR_OR_NULL(gsp)) {
 		GSP_DEBUG("nothing to do for uninit gsp\n");
+		return;
+	}
 
 	if (list_empty(&gsp->cores))
 		return;
 
-	for_each_gsp_core(core, gsp) {
+	for_each_gsp_core_safe(core, tmp, gsp) {
 		if (!IS_ERR_OR_NULL(core))
 			gsp_core_deinit(core);
 	}
@@ -825,7 +801,7 @@ static int sprd_gsp_bind(struct device *dev, struct device *master, void *data)
 	int ret = -1;
 
 	if (IS_ERR_OR_NULL(dev)) {
-		GSP_ERR("dev initialze params error\n");
+		GSP_ERR("dev initialize params error\n");
 		return ret;
 	}
 
@@ -1073,7 +1049,8 @@ static int gsp_dev_resume(struct device *dev)
 	}
 
 	if (ret)
-		GSP_DEV_INFO(dev, "resume wait not success, force exec resume!\n");
+		GSP_DEV_INFO(dev,
+			"resume wait not success, force exec resume!\n");
 
 	ret = gsp_dev_prepare(gsp);
 	if (ret) {
@@ -1121,31 +1098,23 @@ static int gsp_dev_pm_resume(struct device *dev)
 
 	return ret;
 }
-
 #endif
 
 #ifdef CONFIG_PM
 static int gsp_dev_runtime_suspend(struct device *dev)
 {
-	int ret;
-
-	ret = gsp_dev_suspend(dev);
-	return ret;
+	return gsp_dev_suspend(dev);
 }
 
 static int gsp_dev_runtime_resume(struct device *dev)
 {
-	int ret;
-
-	ret = gsp_dev_resume(dev);
-	return ret;
+	return gsp_dev_resume(dev);
 }
 
 static int gsp_dev_runtime_idle(struct device *dev)
 {
 	return 0;
 }
-
 #endif
 
 static const struct dev_pm_ops gsp_dev_pmops = {
@@ -1174,7 +1143,7 @@ static int __init gsp_drv_init(void)
 {
 	int ret = -1;
 
-	if (cali_mode) {
+	if (boot_mode_check()) {
 		GSP_WARN("Calibration Mode! Don't register sprd gsp driver");
 		//return 0;
 	}
@@ -1201,4 +1170,4 @@ module_exit(gsp_drv_deinit);
 MODULE_AUTHOR("yintian.tao <yintian.tao@spreadtrum.com>");
 MODULE_AUTHOR("Chen He <chen.he@unisoc.com>");
 MODULE_DESCRIPTION("SPRD DRM GSP Driver");
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("GPL v2");

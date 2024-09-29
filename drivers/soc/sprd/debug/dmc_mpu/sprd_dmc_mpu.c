@@ -273,6 +273,7 @@ static int sprd_dmc_mpu_probe(struct platform_device *pdev)
 	struct sprd_dmpu_device *sprd_mpu;
 	struct sprd_dmpu_base *addr;
 	struct resource *res;
+	struct regmap *tregmap;
 	bool interleaved;
 	u32 args[2];
 	int i, ret;
@@ -302,35 +303,27 @@ static int sprd_dmc_mpu_probe(struct platform_device *pdev)
 			return PTR_ERR(addr[i].base);
 	}
 
-	sprd_mpu->irq_clear = syscon_regmap_lookup_by_name(np, "irq_clr");
-	if (IS_ERR(sprd_mpu->irq_clear)) {
+	tregmap = syscon_regmap_lookup_by_phandle_args(np, "mpu-irq-clr-syscon",
+						       2, args);
+	if (IS_ERR(tregmap)) {
 		dev_err(&pdev->dev, "get the irq_clear node fail\n");
-		return PTR_ERR(sprd_mpu->irq_clear);
+		return PTR_ERR(tregmap);
 	}
 
-	ret = syscon_get_args_by_name(np, "irq_clr", 2, args);
-	if (ret == 2) {
-		sprd_mpu->clear_offset = args[0];
-		sprd_mpu->clear_bit = args[1];
-	} else {
-		dev_err(&pdev->dev, "get the irq_clear offset and clear bit fail\n");
-		return -EINVAL;
-	}
+	sprd_mpu->irq_clear = tregmap;
+	sprd_mpu->clear_offset = args[0];
+	sprd_mpu->clear_bit = args[1];
 
-	sprd_mpu->irq_enable = syscon_regmap_lookup_by_name(np, "irq_en");
-	if (IS_ERR(sprd_mpu->irq_enable)) {
+	tregmap = syscon_regmap_lookup_by_phandle_args(np, "mpu-irq-en-syscon",
+						       2, args);
+	if (IS_ERR(tregmap)) {
 		dev_err(&pdev->dev, "get the irq_clear node fail\n");
-		return PTR_ERR(sprd_mpu->irq_enable);
+		return PTR_ERR(tregmap);
 	}
 
-	ret = syscon_get_args_by_name(np, "irq_en", 2, args);
-	if (ret == 2) {
-		sprd_mpu->enable_offset = args[0];
-		sprd_mpu->enable_bit = args[1];
-	} else {
-		dev_err(&pdev->dev, "get the irq_clear offset and clear bit fail\n");
-		return -EINVAL;
-	}
+	sprd_mpu->irq_enable = tregmap;
+	sprd_mpu->enable_offset = args[0];
+	sprd_mpu->enable_bit = args[1];
 
 	platform_set_drvdata(pdev, &sprd_mpu->core);
 
@@ -357,7 +350,6 @@ static const struct of_device_id sprd_dmc_mpu_of_match[] = {
 	{ .compatible = "sprd,orca-dmc-mpu", },
 	{ .compatible = "sprd,sharkl5pro-dmc-mpu", },
 	{ .compatible = "sprd,qogirl6-dmc-mpu", },
-	{ .compatible = "sprd,qogirn6pro-dmc-mpu", },
 	{},
 };
 MODULE_DEVICE_TABLE(of, sprd_dmpu_of_match);
@@ -374,5 +366,5 @@ static struct platform_driver sprd_dmc_mpu_driver = {
 module_platform_driver(sprd_dmc_mpu_driver);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Lanqing Liu <lanqing.liu@spreadtrum.com>");
-MODULE_DESCRIPTION("Spreadtrum platform dmc mpu driver");
+MODULE_AUTHOR("Bobs Wang <Bobs.wang@unisoc.com>");
+MODULE_DESCRIPTION("Unisoc platform dmc mpu driver");

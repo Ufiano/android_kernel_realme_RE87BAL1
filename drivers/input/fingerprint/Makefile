@@ -1,3 +1,3 @@
-obj-y += nico_fp_common/
-obj-y  += silead/
-obj-y  += jiiov/
+obj-m += nico_fp_common/
+obj-m  += silead/
+obj-m +=jiiov/

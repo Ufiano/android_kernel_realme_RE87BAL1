@@ -1,20 +1,8 @@
-/*
- * Register map access API - MMIO support
- *
- * Copyright (c) 2012, NVIDIA CORPORATION.  All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms and conditions of the GNU General Public License,
- * version 2, as published by the Free Software Foundation.
- *
- * This program is distributed in the hope it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+// SPDX-License-Identifier: GPL-2.0
+//
+// Register map access API - MMIO support
+//
+// Copyright (c) 2012, NVIDIA CORPORATION.  All rights reserved.
 
 #include <linux/clk.h>
 #include <linux/err.h>
@@ -28,6 +16,8 @@
 struct regmap_mmio_context {
 	void __iomem *regs;
 	unsigned val_bytes;
+
+	bool attached_clk;
 	struct clk *clk;
 
 	void (*reg_write)(struct regmap_mmio_context *ctx,
@@ -204,48 +194,13 @@ static void regmap_mmio_free_context(void *context)
 
 	if (!IS_ERR(ctx->clk)) {
 		clk_unprepare(ctx->clk);
-		clk_put(ctx->clk);
+		if (!ctx->attached_clk)
+			clk_put(ctx->clk);
 	}
 	kfree(context);
 }
 
-static int sprd_regmap_mmio_update_bits(void *context, unsigned int reg,
-					unsigned int mask, unsigned int val)
-{
-	struct regmap_mmio_context *ctx = context;
-	unsigned int set, clr;
-	int __maybe_unused tmp;
-	int ret;
-
-	if (!IS_ERR(ctx->clk)) {
-		ret = clk_enable(ctx->clk);
-		if (ret < 0)
-			return ret;
-	}
-
-	set = val & mask;
-	clr = ~set & mask;
-
-	if (set)
-		writel(set, ctx->regs + reg + 0x1000);
-
-	if (clr)
-		writel(clr, ctx->regs + reg + 0x2000);
-
-#ifdef CONFIG_SPRD_REGMAP_DEBUG
-	tmp = readl(ctx->regs + reg);
-	if ((tmp & mask) != (val & mask))
-		WARN_ONCE(1, "reg:0x%x mask:0x%x val:0x%x not support set/clr\n",
-			 reg, mask, val);
-#endif
-
-	if (!IS_ERR(ctx->clk))
-		clk_disable(ctx->clk);
-
-	return 0;
-}
-
-static struct regmap_bus regmap_mmio = {
+static const struct regmap_bus regmap_mmio = {
 	.fast_io = true,
 	.reg_write = regmap_mmio_write,
 	.reg_read = regmap_mmio_read,
@@ -376,9 +331,6 @@ struct regmap *__regmap_init_mmio_clk(struct device *dev, const char *clk_id,
 	if (IS_ERR(ctx))
 		return ERR_CAST(ctx);
 
-	if (!config->use_hwlock)
-		regmap_mmio.reg_update_bits = sprd_regmap_mmio_update_bits;
-
 	return __regmap_init(dev, &regmap_mmio, ctx, config,
 			     lock_key, lock_name);
 }
@@ -401,5 +353,27 @@ struct regmap *__devm_regmap_init_mmio_clk(struct device *dev,
 				  lock_key, lock_name);
 }
 EXPORT_SYMBOL_GPL(__devm_regmap_init_mmio_clk);
+
+int regmap_mmio_attach_clk(struct regmap *map, struct clk *clk)
+{
+	struct regmap_mmio_context *ctx = map->bus_context;
+
+	ctx->clk = clk;
+	ctx->attached_clk = true;
+
+	return clk_prepare(ctx->clk);
+}
+EXPORT_SYMBOL_GPL(regmap_mmio_attach_clk);
+
+void regmap_mmio_detach_clk(struct regmap *map)
+{
+	struct regmap_mmio_context *ctx = map->bus_context;
+
+	clk_unprepare(ctx->clk);
+
+	ctx->attached_clk = false;
+	ctx->clk = NULL;
+}
+EXPORT_SYMBOL_GPL(regmap_mmio_detach_clk);
 
 MODULE_LICENSE("GPL v2");

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 // Copyright (C) 2021 Spreadtrum Communications Inc.
 
+#include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
@@ -268,16 +269,24 @@ static int ump96xx_tsensor_disable(struct regmap *regmap, u32 base)
 				UMP96XX_TSEN_ADCLDO_EN, 0);
 }
 
-static int ump96xx_tsensor_mode_check(char *str)
+static int get_boot_mode(void)
 {
-	if (str && !strncmp(str, "cali", strlen("cali")))
+	struct device_node *cmdline_node;
+	const char *cmd_line;
+	int ret;
+
+	cmdline_node = of_find_node_by_path("/chosen");
+	ret = of_property_read_string(cmdline_node, "bootargs", &cmd_line);
+	if (ret)
+		return ret;
+
+	if (strstr(cmd_line, "androidboot.mode=cali"))
 		cali_mode = true;
 	else
 		cali_mode = false;
 
 	return 0;
 }
-__setup("androidboot.mode=", ump96xx_tsensor_mode_check);
 
 static int ump96xx_tsensor_get_temp(void *data, int *temp)
 {
@@ -306,6 +315,12 @@ static int ump96xx_tsen_probe(struct platform_device *pdev)
 	struct regmap *regmap;
 	u32 base;
 	int ret;
+
+	ret = get_boot_mode();
+	if (ret) {
+		pr_err("boot_mode can't not parse bootargs property\n");
+		return ret;
+	}
 
 	if (!cali_mode) {
 		dev_warn(&pdev->dev,

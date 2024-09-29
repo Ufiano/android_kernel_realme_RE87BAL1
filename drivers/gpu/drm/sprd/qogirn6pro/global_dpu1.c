@@ -8,6 +8,8 @@
 #include <linux/module.h>
 #include <linux/mfd/syscon.h>
 #include <linux/regmap.h>
+#include <linux/io.h>
+#include <linux/of_address.h>
 
 #include "sprd_dpu1.h"
 
@@ -42,7 +44,6 @@ static const u32 dpi_clk_src[] = {
 static struct dpu_glb_context {
 	unsigned int enable_reg;
 	unsigned int mask_bit;
-
 	struct regmap *regmap;
 } ctx_reset, ctx_force_shutdown;
 
@@ -177,6 +178,7 @@ static u32 calc_pixelpll_clk(u32 dpi_clock, u32 default_clock)
 	return pixelpll_clock;
 }
 
+
 static int dpu_clk_init(struct dpu_context *ctx)
 {
 	int ret;
@@ -244,6 +246,8 @@ static int dpu_clk_enable(struct dpu_context *ctx)
 
 static int dpu_clk_disable(struct dpu_context *ctx)
 {
+	int ret;
+	unsigned long default_pixel_pll = 2673000000UL;
 	struct dpu_clk_context *clk_ctx = &dpu_clk_ctx;
 
 	clk_disable_unprepare(clk_ctx->clk_dpu_dpi);
@@ -251,29 +255,29 @@ static int dpu_clk_disable(struct dpu_context *ctx)
 	clk_disable_unprepare(clk_ctx->clk_dpu_core);
 
 	clk_set_parent(clk_ctx->clk_dpu_dpi, clk_ctx->clk_pixelpll);
-	clk_set_parent(clk_ctx->clk_dpu_core, clk_ctx->clk_src_128m);
+	clk_set_parent(clk_ctx->clk_dpu_core, clk_ctx->clk_src_192m);
+	ret = clk_set_rate(clk_ctx->clk_pixelpll, default_pixel_pll);
+	if (ret)
+		pr_err("dpu reset pixelpll clk rate failed\n");
+	ret = clk_set_rate(clk_ctx->clk_dpu_dpi, default_pixel_pll);
+	if (ret)
+		pr_err("dpu reset dpi clk rate failed\n");
 
 	return 0;
 }
 
 static int dpu_glb_parse_dt(struct dpu_context *ctx,
-				struct device_node *np)
+		struct device_node *np)
 {
 	unsigned int syscon_args[2];
-	int ret;
-
-	ctx_reset.regmap = syscon_regmap_lookup_by_name(np, "reset");
+	ctx_reset.regmap = syscon_regmap_lookup_by_phandle_args(np,
+			"reset-syscon", 2, syscon_args);
 	if (IS_ERR(ctx_reset.regmap)) {
-		pr_warn("failed to map dpu glb reg: reset\n");
+		pr_warn("failed to reset syscon\n");
 		return PTR_ERR(ctx_reset.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "reset", 2, syscon_args);
-	if (ret == 2) {
+	}  else {
 		ctx_reset.enable_reg = syscon_args[0];
 		ctx_reset.mask_bit = syscon_args[1];
-	} else {
-		pr_warn("failed to parse dpu glb reg: reset\n");
 	}
 
 	clk_ipa_apb_dispc1_eb =
@@ -283,19 +287,14 @@ static int dpu_glb_parse_dt(struct dpu_context *ctx,
 		clk_ipa_apb_dispc1_eb = NULL;
 	}
 
-	ctx_force_shutdown.regmap =
-		syscon_regmap_lookup_by_name(np, "force-shutdown");
-	if (IS_ERR(ctx_force_shutdown.regmap)) {
-		pr_warn("failed to map dpu glb reg: force-shutdown\n");
-		return PTR_ERR(ctx_force_shutdown.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "force-shutdown", 2, syscon_args);
-	if (ret == 2) {
+	ctx_force_shutdown.regmap = syscon_regmap_lookup_by_phandle_args(np,
+			"force-shutdown-syscon", 2, syscon_args);
+	if (IS_ERR(ctx_reset.regmap)) {
+		pr_warn("failed to force-shutdown syscon\n");
+		return PTR_ERR(ctx_reset.regmap);
+	}  else {
 		ctx_force_shutdown.enable_reg = syscon_args[0];
 		ctx_force_shutdown.mask_bit = syscon_args[1];
-	} else {
-		pr_warn("failed to parse dpu glb reg: force-shutdown\n");
 	}
 
 	return 0;
@@ -348,39 +347,20 @@ static void dpu_power_domain(struct dpu_context *ctx, int enable)
 			ctx_force_shutdown.mask_bit);
 }
 
-static struct dpu_clk_ops dpu_clk_ops = {
+const struct dpu_clk_ops qogirn6pro_dpu1_clk_ops = {
 	.parse_dt = dpu_clk_parse_dt,
 	.init = dpu_clk_init,
 	.enable = dpu_clk_enable,
 	.disable = dpu_clk_disable,
 };
 
-static struct dpu_glb_ops dpu_glb_ops = {
+const struct dpu_glb_ops qogirn6pro_dpu1_glb_ops = {
 	.parse_dt = dpu_glb_parse_dt,
 	.reset = dpu_reset,
 	.enable = dpu_glb_enable,
 	.disable = dpu_glb_disable,
 	.power = dpu_power_domain,
 };
-
-static struct ops_entry clk_entry = {
-	.ver = "qogirn6pro1",
-	.ops = &dpu_clk_ops,
-};
-
-static struct ops_entry glb_entry = {
-	.ver = "qogirn6pro1",
-	.ops = &dpu_glb_ops,
-};
-
-static int __init dpu_glb_register(void)
-{
-	dpu_clk_ops_register(&clk_entry);
-	dpu_glb_ops_register(&glb_entry);
-	return 0;
-}
-
-subsys_initcall(dpu_glb_register);
 
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("chen.he@unisoc.com");

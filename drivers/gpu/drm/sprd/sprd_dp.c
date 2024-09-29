@@ -13,6 +13,9 @@
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_of.h>
+#include <drm/drm_connector.h>
+#include <drm/drm_probe_helper.h>
+#include <drm/drm_edid.h>
 #include <linux/pm_runtime.h>
 #include <linux/usb/typec_dp.h>
 
@@ -28,8 +31,8 @@
 #define connector_to_dp(connector) \
 	container_of(connector, struct sprd_dp, connector)
 
-#define drm_connector_update_edid_property(connector, edid) \
-	drm_mode_connector_update_edid_property(connector, edid)
+//#define drm_connector_update_edid_property(connector, edid) \
+//	drm_mode_connector_update_edid_property(connector, edid)
 
 LIST_HEAD(dp_glb_head);
 
@@ -71,7 +74,7 @@ static int sprd_dp_notify_callback(struct notifier_block *nb,
 			unsigned long action, void *data)
 {
 	struct sprd_dp *dp = container_of(nb, struct sprd_dp, dp_nb);
-	enum dp_hpd_status *hpd_status = data;
+	enum sprd_dp_hpd_status *hpd_status = data;
 
 	if (*hpd_status ==  DP_HOT_PLUG &&
 		dp->hpd_status == false) {
@@ -117,7 +120,7 @@ static void sprd_dp_encoder_enable(struct drm_encoder *encoder)
 {
 
 	struct sprd_dp *dp = encoder_to_dp(encoder);
-	struct sprd_dpu *dpu = crtc_to_dpu(encoder->crtc);
+	struct sprd_crtc *crtc = to_sprd_crtc(encoder->crtc);
 
 	DRM_INFO("%s()\n", __func__);
 
@@ -132,7 +135,7 @@ static void sprd_dp_encoder_enable(struct drm_encoder *encoder)
 
 	sprd_dp_timing_set(dp);
 
-	sprd_dpu1_run(dpu);
+	sprd_dpu1_run(crtc->priv);
 
 	dp->ctx.enabled = true;
 }
@@ -140,7 +143,7 @@ static void sprd_dp_encoder_enable(struct drm_encoder *encoder)
 static void sprd_dp_encoder_disable(struct drm_encoder *encoder)
 {
 	struct sprd_dp *dp = encoder_to_dp(encoder);
-	struct sprd_dpu *dpu = crtc_to_dpu(encoder->crtc);
+	struct sprd_crtc *crtc = to_sprd_crtc(encoder->crtc);
 
 	DRM_INFO("%s()\n", __func__);
 
@@ -149,7 +152,7 @@ static void sprd_dp_encoder_disable(struct drm_encoder *encoder)
 		return;
 	}
 
-	sprd_dpu1_stop(dpu);
+	sprd_dpu1_stop(crtc->priv);
 
 	sprd_dp_suspend(dp);
 
@@ -163,14 +166,15 @@ static void sprd_dp_encoder_mode_set(struct drm_encoder *encoder,
 				 struct drm_display_mode *adj_mode)
 {
 	struct sprd_dp *dp = encoder_to_dp(encoder);
-	struct sprd_dpu *dpu = crtc_to_dpu(encoder->crtc);
+	struct sprd_crtc *crtc = to_sprd_crtc(encoder->crtc);
+	struct sprd_dpu *dpu = crtc->priv;
 	struct drm_display_info *info = &dp->connector.display_info;
 	struct video_params *vparams = &dp->snps_dptx->vparams;
 
 	dptx_timing_cfg(dp->snps_dptx, mode, info);
 
 	if (dpu->ctx.bypass_mode) {
-		switch (dpu->crtc.primary->state->fb->format->format) {
+		switch (crtc->base.primary->state->fb->format->format) {
 		case DRM_FORMAT_NV12:
 			vparams->bpc = COLOR_DEPTH_8;
 			vparams->pix_enc = YCBCR420;
@@ -229,8 +233,11 @@ static int sprd_dp_encoder_init(struct drm_device *drm,
 		return ret;
 	}
 
-	/*TODO SPRD_DISPLAY_TYPE_DP */
-	encoder->possible_crtcs = 2;
+	ret = sprd_drm_set_possible_crtcs(encoder, SPRD_DISPLAY_TYPE_DP);
+	if (ret) {
+		DRM_ERROR("failed to find possible crtc\n");
+		return ret;
+	}
 
 	drm_encoder_helper_add(encoder, &sprd_encoder_helper_funcs);
 
@@ -250,7 +257,7 @@ static int sprd_dp_connector_get_modes(struct drm_connector *connector)
 		dp->sink_has_audio = drm_detect_monitor_audio(edid);
 		drm_connector_update_edid_property(&dp->connector, edid);
 		num_modes += drm_add_edid_modes(&dp->connector, edid);
-		drm_edid_to_eld(connector, edid);
+		//drm_edid_to_eld(connector, edid);
 		kfree(edid);
 	} else
 		DRM_ERROR("%s() no edid\n", __func__);
@@ -373,7 +380,8 @@ static int sprd_dp_connector_atomic_check(struct drm_connector *connector,
 	struct drm_connector_state *old_con_state =
 		drm_atomic_get_old_connector_state(state, connector);
 	struct sprd_dp *dp = connector_to_dp(connector);
-	struct sprd_dpu *dpu = crtc_to_dpu(dp->encoder.crtc);
+	struct sprd_crtc *crtc = to_sprd_crtc(dp->encoder.crtc);
+	struct sprd_dpu *dpu = crtc->priv;
 	int ret;
 
 	if (is_hdr_metadata_different(old_con_state, new_con_state)) {
@@ -447,7 +455,7 @@ static int sprd_dp_connector_init(struct drm_device *drm, struct sprd_dp *dp)
 	drm_connector_helper_add(connector,
 				 &sprd_dp_connector_helper_funcs);
 
-	drm_mode_connector_attach_encoder(connector, encoder);
+	drm_connector_attach_encoder(connector, encoder);
 
 	return 0;
 }
@@ -550,8 +558,13 @@ static int sprd_dp_context_init(struct sprd_dp *dp, struct device_node *np)
 	return 0;
 }
 
+static const struct sprd_dp_ops qogirn6pro_dp = {
+	.glb = &qogirn6pro_dp_glb_ops
+};
+
 static const struct of_device_id dp_match_table[] = {
-	{.compatible = "sprd,dptx"},
+	{.compatible = "sprd,dptx",
+	 .data = &qogirn6pro_dp},
 	{ }
 };
 
@@ -559,7 +572,7 @@ static int sprd_dp_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
 	struct sprd_dp *dp;
-	const char *str;
+	//const char *str;
 	int ret;
 
 	dp = devm_kzalloc(&pdev->dev, sizeof(*dp), GFP_KERNEL);
@@ -568,11 +581,6 @@ static int sprd_dp_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
-	if (!of_property_read_string(np, "sprd,soc", &str))
-		dp->glb = dp_glb_ops_attach(str);
-	else
-		DRM_WARN("error: 'sprd,soc' was not found\n");
-
 	ret = sprd_dp_context_init(dp, np);
 	if (ret)
 		return ret;
@@ -580,7 +588,7 @@ static int sprd_dp_probe(struct platform_device *pdev)
 	sprd_dp_device_create(dp, &pdev->dev);
 	platform_set_drvdata(pdev, dp);
 
-	sprd_dp_audio_codec_init(&pdev->dev);
+	//sprd_dp_audio_codec_init(&pdev->dev);
 
 	return component_add(&pdev->dev, &dp_component_ops);
 }
@@ -592,7 +600,7 @@ static int sprd_dp_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static struct platform_driver sprd_dp_driver = {
+struct platform_driver sprd_dp_driver = {
 	.probe = sprd_dp_probe,
 	.remove = sprd_dp_remove,
 	.driver = {
@@ -600,8 +608,6 @@ static struct platform_driver sprd_dp_driver = {
 		   .of_match_table = dp_match_table,
 	},
 };
-
-module_platform_driver(sprd_dp_driver);
 
 MODULE_AUTHOR("Chen He <chen.he@unisoc.com>");
 MODULE_DESCRIPTION("Unisoc DPTX Controller Driver");

@@ -34,7 +34,7 @@ struct sprd_efuse {
 	const struct sprd_efuse_variant_data *var_data;
 };
 
-static const struct sprd_efuse_variant_data sharkl5_data = {
+static const struct sprd_efuse_variant_data ums312_data = {
 	.blk_start = 0,
 	.blk_max = 23,
 	.blk_num = 24,
@@ -191,7 +191,7 @@ static int sprd_efuse_probe(struct platform_device *pdev)
 }
 
 static const struct of_device_id sprd_efuse_of_match[] = {
-	{ .compatible = "sprd,sharkl5-cache-efuse", .data = &sharkl5_data},
+	{ .compatible = "sprd,ums312-cache-efuse", .data = &ums312_data},
 	{ }
 };
 

@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
+ * Copyright (C) 2019 Spreadtrum Communications Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -10,12 +11,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-
-#ifdef pr_fmt
-#undef pr_fmt
-#endif
-#define pr_fmt(fmt) "sprd-sipc: " fmt
-
 #include <linux/debugfs.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
@@ -31,29 +26,8 @@
 #include <linux/wait.h>
 #include <linux/sipc.h>
 #include <linux/sizes.h>
-
-#ifdef CONFIG_SPRD_MAILBOX
-#include <linux/sprd_mailbox.h>
-#else
-#define SPRD_DEV_P2V(paddr)	(paddr)
-#define SPRD_DEV_V2P(vaddr)	(vaddr)
-#endif
-
 #include "sipc_priv.h"
 
-#define SMSG_TXBUF_ADDR		(0)
-#define SMSG_TXBUF_SIZE		(SZ_1K)
-#define SMSG_RXBUF_ADDR		(SMSG_TXBUF_SIZE)
-#define SMSG_RXBUF_SIZE		(SZ_1K)
-
-#define SMSG_RINGHDR		(SMSG_TXBUF_SIZE + SMSG_RXBUF_SIZE)
-#define SMSG_TXBUF_RDPTR	(SMSG_RINGHDR + 0)
-#define SMSG_TXBUF_WRPTR	(SMSG_RINGHDR + 4)
-#define SMSG_RXBUF_RDPTR	(SMSG_RINGHDR + 8)
-#define SMSG_RXBUF_WRPTR	(SMSG_RINGHDR + 12)
-
-struct sipc_core sipc_ap;
-EXPORT_SYMBOL_GPL(sipc_ap);
 
 #if defined(CONFIG_DEBUG_FS)
 void sipc_debug_putline(struct seq_file *m, char c, int n)
@@ -76,120 +50,52 @@ void sipc_debug_putline(struct seq_file *m, char c, int n)
 EXPORT_SYMBOL_GPL(sipc_debug_putline);
 #endif
 
-/* if it's upon mailbox arch, overwrite the implementation*/
-#ifdef CONFIG_SPRD_MAILBOX
-static u32 sipc_rxirq_status(u8 id)
+static u64 sprd_u32_to_u64(u32 *mssg)
 {
-	struct sipc_child_node_info *info = sipc_ap.sipc_tags[id];
+	u64 msg_64 = 0;
 
-	return mbox_core_fifo_full(info->core_id);
+	msg_64 = mssg[1];
+	msg_64 = msg_64 << 32;
+	msg_64 |= mssg[0];
+	return msg_64;
 }
 
-static void sipc_rxirq_clear(u8 id)
+static void sprd_rx_callback(struct mbox_client *client, void *message)
 {
-}
 
-static int sipc_txirq_trigger(u8 id, u64 msg)
-{
-	struct sipc_child_node_info *info = sipc_ap.sipc_tags[id];
+	struct smsg_ipc *ipc  = dev_get_drvdata(client->dev);
+	struct smsg *msg = NULL;
+	struct device *dev = client->dev;
+	u64 data;
 
-	return mbox_raw_sent(info->core_id, msg);
-}
-#else
-static u32 sipc_rxirq_status(u8 id)
-{
-	return 1;
-}
-
-static void sipc_rxirq_clear(u8 id)
-{
-	struct sipc_child_node_info *info = sipc_ap.sipc_tags[id];
-
-	__raw_writel(info->ap2cp_bit_clr,
-		     (__force void __iomem *)(unsigned long)
-		     info->cp2ap_int_ctrl);
-}
-
-static void sipc_txirq_trigger(u8 id)
-{
-	struct sipc_child_node_info *info = sipc_ap.sipc_tags[id];
-
-	writel_relaxed(info->ap2cp_bit_trig,
-		     (__force void __iomem *)(unsigned long)
-		     info->ap2cp_int_ctrl);
-}
-
-#endif
-static int sipc_create(struct sipc_device *sipc)
-{
-	struct sipc_init_data *pdata = sipc->pdata;
-	struct smsg_ipc *inst;
-	struct sipc_child_node_info *info;
-	void __iomem *base;
-	u32 num;
-	int ret = 0, i, j = 0;
-
-	if (!pdata)
-		return -ENODEV;
-
-	num = pdata->chd_nr;
-	inst = sipc->smsg_inst;
-	info = pdata->info_table;
-
-	for (i = 0; i < num; i++) {
-		if (j < pdata->newchd_nr && info[i].is_new) {
-			if (!info[i].mode) {
-				base = (void __iomem *)shmem_ram_vmap_nocache(
-							(u32)info[i].ring_base,
-							info[i].ring_size);
-				if (!base) {
-					pr_info("chd%d ioremap return 0\n",
-						i);
-					return -ENOMEM;
-				}
-				info[i].smem_vbase = (void *)base;
-
-				pr_info("[tag%d] after ioremap vbase=0x%p, pbase=0x%x, size=0x%x\n",
-					j, base,
-					info[i].ring_base,
-					info[i].ring_size);
-				inst[j].txbuf_size = SMSG_TXBUF_SIZE /
-					sizeof(struct smsg);
-				inst[j].txbuf_addr = (uintptr_t)base +
-					SMSG_TXBUF_ADDR;
-				inst[j].txbuf_rdptr = (uintptr_t)base +
-					SMSG_TXBUF_RDPTR;
-				inst[j].txbuf_wrptr = (uintptr_t)base +
-					SMSG_TXBUF_WRPTR;
-
-				inst[j].rxbuf_size = SMSG_RXBUF_SIZE /
-					sizeof(struct smsg);
-				inst[j].rxbuf_addr = (uintptr_t)base +
-					SMSG_RXBUF_ADDR;
-				inst[j].rxbuf_rdptr = (uintptr_t)base +
-					SMSG_RXBUF_RDPTR;
-				inst[j].rxbuf_wrptr = (uintptr_t)base +
-					SMSG_RXBUF_WRPTR;
-			}
-
-			inst[j].id = sipc_ap.sipc_tag_ids;
-			sipc_ap.sipc_tags[sipc_ap.sipc_tag_ids] = &info[i];
-			sipc_ap.sipc_tag_ids++;
-
-			ret = smsg_ipc_create(inst[j].dst, &inst[j]);
-
-			pr_info("[tag%d] created, dst = %d\n",
-				j, inst[j].dst);
-			j++;
-			if (ret)
-				break;
-		}
+	data = sprd_u32_to_u64(message);
+	if (!data) {
+		dev_err(dev, "receive data is null !\n");
+	} else {
+		msg = (struct smsg *)&data;
+		smsg_msg_process(ipc, msg, 1);
 	}
-	return ret;
 }
 
-static int sipc_get_smem_info(struct sipc_init_data *pdata,
-			      struct device_node *np)
+static void sprd_sensor_rx_callback(struct mbox_client *client, void *message)
+{
+
+	struct smsg_ipc *ipc  = dev_get_drvdata(client->dev);
+	struct smsg *msg = NULL;
+	struct device *dev = client->dev;
+	u64 data;
+
+	data = sprd_u32_to_u64(message);
+	if (!data) {
+		dev_err(dev, "receive data is null !\n");
+	} else {
+		msg = (struct smsg *)&data;
+		smsg_msg_process(ipc, msg, 0);
+	}
+}
+
+static int sprd_get_smem_info(struct device *dev,
+			      struct smsg_ipc *ipc, struct device_node *np)
 {
 	struct smem_item *smem_ptr;
 	int i, count;
@@ -202,283 +108,187 @@ static int sipc_get_smem_info(struct sipc_init_data *pdata,
 	}
 
 	count = count / sizeof(*smem_ptr);
-	smem_ptr = kcalloc(count,
-			   sizeof(*smem_ptr),
-			   GFP_KERNEL);
+	smem_ptr = kcalloc(count, sizeof(*smem_ptr), GFP_KERNEL);
 	if (!smem_ptr)
 		return -ENOMEM;
 
 	for (i = 0; i < count; i++) {
-		smem_ptr[i].base = be32_to_cpu(*list++);
-		smem_ptr[i].mapped_base = be32_to_cpu(*list++);
-		smem_ptr[i].size = be32_to_cpu(*list++);
-		pr_debug("smem=%d, base=0x%x, dstbase=0x%x, size=0x%x\n",
-			 i, smem_ptr[i].base,
-			 smem_ptr[i].mapped_base, smem_ptr[i].size);
+		smem_ptr[i].smem_base = be32_to_cpu(*list++);
+		smem_ptr[i].dst_smem_base = be32_to_cpu(*list++);
+		smem_ptr[i].smem_size = be32_to_cpu(*list++);
+		dev_info(dev, "smem count=%d, base=0x%x, dstbase=0x%x, size=0x%x\n",
+			 i,
+			 smem_ptr[i].smem_base,
+			 smem_ptr[i].dst_smem_base,
+			 smem_ptr[i].smem_size);
 	}
 
-	pdata->smem_cnt = count;
-	pdata->smem_ptr = smem_ptr;
+	ipc->smem_cnt = count;
+	ipc->smem_ptr = smem_ptr;
 
 	/* default mem */
-	pdata->smem_base = smem_ptr[0].base;
-	pdata->mapped_smem_base = smem_ptr[0].mapped_base;
-	pdata->smem_size = smem_ptr[0].size;
+	ipc->smem_base = smem_ptr[0].smem_base;
+	ipc->dst_smem_base = smem_ptr[0].dst_smem_base;
+	ipc->smem_size = smem_ptr[0].smem_size;
 
 	return 0;
 }
 
-static int sipc_parse_dt(struct sipc_init_data **init, struct device_node *node)
+static int sprd_ipc_parse_dt(struct device *dev,
+			     struct device_node *np, struct smsg_ipc *ipc)
 {
-#ifdef CONFIG_SPRD_MAILBOX
-	u32 val[3];
-	int ret = -1;
-	struct sipc_init_data *pdata;
-	struct sipc_child_node_info *info;
-	struct device_node *np = node;
+	u32 value;
+	int err;
 
-	pdata = kzalloc(sizeof(struct sipc_init_data) +
-			     sizeof(struct sipc_child_node_info),
-			     GFP_KERNEL);
-	if (!pdata)
+	/* Get sipc label */
+	err = of_property_read_string(np, "label", &ipc->name);
+	if (err)
+		return err;
+	dev_info(dev, "label  =%s\n", ipc->name);
+
+	/* Get sipc dst */
+	err = of_property_read_u32(np, "reg", &value);
+	if (err)
+		return err;
+	ipc->dst = (u8)value;
+	dev_info(dev, "dst    =%d\n", ipc->dst);
+
+	/* default mailbox */
+	ipc->type = SIPC_BASE_MBOX;
+
+	/* get smem info */
+	err = sprd_get_smem_info(dev, ipc, np);
+	if (err) {
+		dev_err(dev, "sipc: parse smem info failed.\n");
+		return err;
+	}
+	return 0;
+}
+
+static int sprd_ipc_probe(struct platform_device *pdev)
+{
+	struct device *dev = &pdev->dev;
+	struct device_node *np = pdev->dev.of_node;
+	struct smsg_ipc *ipc;
+	int ret;
+#if defined(CONFIG_DEBUG_FS)
+	struct dentry *root;
+#endif
+	ipc = devm_kzalloc(&pdev->dev,
+			   sizeof(struct smsg_ipc), GFP_KERNEL);
+	if (!ipc)
 		return -ENOMEM;
 
-	pdata->is_alloc = 1;
-	pdata->chd_nr = 1;
-	info = pdata->info_table;
-	info->mode = 1;
+	if (sprd_ipc_parse_dt(&pdev->dev, np, ipc)) {
+		dev_err(dev, "failed to parse dt!\n");
+		return -ENODEV;
+	}
 
-	ret = of_property_read_string(np,
-				      "sprd,name",
-				      (const char **)&info->name);
-	if (ret)
-		goto error;
-	pr_info("name=%s\n", info->name);
+	smsg_ipc_create(ipc);
+	platform_set_drvdata(pdev, ipc);
 
-	ret = of_property_read_u32_array(np, "sprd,dst", val, 3);
-	if (!ret)
-		info->core_sensor_id = (u8)val[2];
-	else
-		info->core_sensor_id = (u8)RECV_MBOX_SENSOR_ID;
+	/* mailbox request */
+	ipc->cl.dev = &pdev->dev;
+	ipc->cl.tx_block = false;
+	ipc->cl.knows_txdone = false;
+	/* Immediately Submit next message
+	 * Not notify the client,so not use tx_done
+	 */
+	ipc->cl.tx_done = NULL;
+	ipc->cl.rx_callback = sprd_rx_callback;
+	ipc->chan = mbox_request_channel(&ipc->cl, 0);
+	if (IS_ERR(ipc->chan)) {
+		dev_err(dev, "failed to sipc mailbox\n");
+		ret = PTR_ERR(ipc->chan);
+		goto out;
+	}
 
-	pr_info("core_sensor_id = %u\n", info->core_sensor_id);
+	/* request sensor mailbox channel */
+	if (ipc->dst == SIPC_ID_PM_SYS) {
+		/* mailbox request */
+		ipc->sensor_cl = ipc->cl;
+		ipc->sensor_cl.rx_callback = sprd_sensor_rx_callback;
+		ipc->sensor_chan = mbox_request_channel(&ipc->sensor_cl, 1);
+		if (IS_ERR(ipc->sensor_chan))
+			dev_err(dev, "failed to sipc sensor mailbox\n");
+		else
+			ipc->sensor_core = (uintptr_t)ipc->sensor_chan->con_priv;
+	}
 
+	init_waitqueue_head(&ipc->suspend_wait);
+	spin_lock_init(&ipc->suspend_pinlock);
+	spin_lock_init(&ipc->txpinlock);
+
+	dev_info(dev, "sprd ipc probe success\n");
+
+	/* populating sub-devices */
+	ret = devm_of_platform_populate(dev);
 	if (ret) {
-		ret = of_property_read_u32_array(np,
-						 "sprd,dst", val, 2);
-		if (ret) {
-			pr_err("parse dst info failed.\n");
-			goto error;
-		}
+		dev_err(dev, "Failed to populate sub-devices\n");
+		return ret;
 	}
 
-	info->dst = (u8)val[0];
-	info->core_id = (u8)val[1];
+#if defined(CONFIG_DEBUG_FS)
+	root = debugfs_create_dir("sipc", NULL);
+	if (!root)
+		return -ENXIO;
 
-	pr_info("dst = %u, core_id = %u\n", info->dst, info->core_id);
-	if (info->dst >= SIPC_ID_NR) {
-		pr_err("dst info is invalid.\n");
-		goto error;
-	}
-
-	if (!smsg_ipcs[info->dst]) {
-		pdata->newchd_nr++;
-		info->is_new = 1;
-	} else {
-		info->is_new = 0;
-	}
-
-	ret = sipc_get_smem_info(pdata, np);
-	if (ret)
-		goto error;
-
-	*init = pdata;
-
-	return 0;
-
-error:
-	kfree(pdata);
-
-	return ret;
-#else
-	return -EINVAL;
+	smem_init_debugfs(root);
+	smsg_init_debugfs(root);
+	sbuf_init_debugfs(root);
+	sblock_init_debugfs(root);
 #endif
+	return 0;
+out:
+	if (!IS_ERR(ipc->chan))
+		mbox_free_channel(ipc->chan);
+	if (!IS_ERR(ipc->sensor_chan))
+		mbox_free_channel(ipc->sensor_chan);
+	return ret;
 }
 
-static void sipc_destroy_pdata(struct sipc_init_data **ppdata,
-			       struct device *dev)
+static int sprd_ipc_remove(struct platform_device *pdev)
 {
-	struct sipc_init_data *pdata = *ppdata;
-	struct sipc_child_node_info *info;
-	int i, num;
+	struct smsg_ipc *ipc = platform_get_drvdata(pdev);
 
-	if (pdata) {
-		num = pdata->chd_nr;
-		for (i = 0; i < num; i++) {
-			info = pdata->info_table;
-			if (info[i].smem_vbase)
-				shmem_ram_unmap(info[i].smem_vbase);
-		}
-		if (pdata->is_alloc)
-			devm_kfree(dev, pdata);
-	}
+	smsg_ipc_destroy(ipc);
+	kfree(ipc->smem_ptr);
+
+	devm_kfree(&pdev->dev, ipc);
+	return 0;
 }
 
-static const struct of_device_id sipc_match_table[] = {
-	{.compatible = "sprd,sipc", .data = sipc_parse_dt, },
+static const struct of_device_id sprd_ipc_match_table[] = {
+	{ .compatible = "sprd,sipc", },
 	{ },
 };
 
-static int sipc_probe(struct platform_device *pdev)
-{
-	struct sipc_init_data *pdata = pdev->dev.platform_data;
-	struct sipc_device *sipc;
-	struct sipc_child_node_info *info;
-	struct smsg_ipc *smsg;
-	const struct of_device_id *of_id;
-	int (*parse)(struct sipc_init_data **, struct device_node *);
-	u32 num, dst;
-	int i, j = 0;
-	struct device_node *np, *chd;
-	int segnr;
-	struct smem_item *smem_ptr;
-	struct device *dev = &pdev->dev;
-
-	if (!pdata && pdev->dev.of_node) {
-		of_id = of_match_node(sipc_match_table, pdev->dev.of_node);
-		if (!of_id) {
-			dev_err(dev, "failed to get of_id\n");
-			return -ENODEV;
-		}
-
-		np = pdev->dev.of_node;
-		segnr = of_get_child_count(np);
-		dev_info(dev, "segnr = %d\n", segnr);
-		parse = (int(*)(struct sipc_init_data **,
-					struct device_node *))of_id->data;
-		for_each_child_of_node(np, chd) {
-			if (parse && parse(&pdata, chd)) {
-				dev_err(dev, "failed to parse dt, parse(0x%p)\n",
-						parse);
-				return -ENODEV;
-			}
-
-			sipc = devm_kzalloc(&pdev->dev, sizeof(struct sipc_device), GFP_KERNEL);
-			if (!sipc) {
-				sipc_destroy_pdata(&pdata, &pdev->dev);
-				return -ENOMEM;
-			}
-
-			num = pdata->chd_nr;
-			smsg = devm_kzalloc(&pdev->dev,
-					    pdata->newchd_nr * sizeof(struct smsg_ipc),
-					    GFP_KERNEL);
-			if (!smsg) {
-				sipc_destroy_pdata(&pdata, &pdev->dev);
-				devm_kfree(&pdev->dev, sipc);
-				return -ENOMEM;
-			}
-			dev_info(dev, "tag count = %d\n", num);
-			info = pdata->info_table;
-			j = 0;
-			for (i = 0; i < num; i++) {
-				if (j < pdata->newchd_nr && info[i].is_new) {
-					smsg[j].name = info[i].name;
-					smsg[j].dst = info[i].dst;
-#ifdef CONFIG_SPRD_MAILBOX
-					smsg[j].core_id = info[i].core_id;
-					smsg[j].core_sensor_id = info[i].core_sensor_id;
-#else
-					smsg[j].irq = info[i].irq;
-#endif
-					smsg[j].rxirq_status = sipc_rxirq_status;
-					smsg[j].rxirq_clear = sipc_rxirq_clear;
-					smsg[j].txirq_trigger = sipc_txirq_trigger;
-
-#ifdef CONFIG_SPRD_MAILBOX
-					dev_info(dev, "[tag%d] smsg name=%s, dst=%u, core_id=%d\n",
-						j, smsg[j].name, smsg[j].dst, smsg[j].core_id);
-#else
-					dev_info(dev, "[tag%d] smsg name=%s, dst=%u, irq=%d\n",
-						j, smsg[j].name, smsg[j].dst, smsg[j].irq);
-#endif
-					j++;
-				}
-			}
-
-			sipc->pdata = pdata;
-			sipc->smsg_inst = smsg;
-			dst = pdata->info_table->dst;
-			sipc_ap.sipc_dev[dst] = sipc;
-
-			dev_info(dev, "smem_init smem_base=0x%x, smem_size=0x%x\n",
-				pdata->smem_base, pdata->smem_size);
-			if (dst == SIPC_ID_LTE ||
-			    dst == SIPC_ID_CPW)
-				smem_set_default_pool(pdata->smem_base);
-
-			smem_ptr = pdata->smem_ptr;
-			for (i = 0; i < pdata->smem_cnt; i++)
-				smem_init(smem_ptr[i].base,
-					  smem_ptr[i].size, dst);
-
-			smsg_suspend_init();
-
-			sipc_create(sipc);
-
-			platform_set_drvdata(pdev, sipc);
-		}
-	}
-	return 0;
-}
-
-int get_smem_arear(u8 dst, u8 smem, struct arear *arear_ptr)
-{
-	if (dst >= SIPC_ID_NR ||
-	    !arear_ptr ||
-	    smem >= sipc_ap.sipc_dev[dst]->pdata->smem_cnt)
-		return -EINVAL;
-
-	arear_ptr->base = sipc_ap.sipc_dev[dst]->pdata->smem_ptr[smem].base;
-	arear_ptr->size = sipc_ap.sipc_dev[dst]->pdata->smem_ptr[smem].size;
-	return 0;
-}
-EXPORT_SYMBOL_GPL(get_smem_arear);
-
-static int sipc_remove(struct platform_device *pdev)
-{
-	struct sipc_device *sipc = platform_get_drvdata(pdev);
-
-	sipc_destroy_pdata(&sipc->pdata, &pdev->dev);
-	kfree(sipc->pdata->smem_ptr);
-	devm_kfree(&pdev->dev, sipc->smsg_inst);
-	devm_kfree(&pdev->dev, sipc);
-	return 0;
-}
-
-static struct platform_driver sipc_driver = {
+static struct platform_driver sprd_ipc_driver = {
 	.driver = {
 		.owner = THIS_MODULE,
 		.name = "sprd-sipc",
-		.of_match_table = sipc_match_table,
+		.of_match_table = sprd_ipc_match_table,
 	},
-	.probe = sipc_probe,
-	.remove = sipc_remove,
+	.probe = sprd_ipc_probe,
+	.remove = sprd_ipc_remove,
 };
 
-static int __init sipc_init(void)
+static int __init sprd_ipc_init(void)
 {
-	return platform_driver_register(&sipc_driver);
+	smsg_init_channel2index();
+	return platform_driver_register(&sprd_ipc_driver);
 }
 
-static void __exit sipc_exit(void)
+static void __exit sprd_ipc_exit(void)
 {
-	platform_driver_unregister(&sipc_driver);
+	platform_driver_unregister(&sprd_ipc_driver);
 }
 
-subsys_initcall_sync(sipc_init);
-module_exit(sipc_exit);
+subsys_initcall_sync(sprd_ipc_init);
+module_exit(sprd_ipc_exit);
 
-MODULE_AUTHOR("Qiu Yi");
-MODULE_DESCRIPTION("SIPC module driver");
-MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Wenping Zhou <wenping.zhou@unisoc.com>");
+MODULE_AUTHOR("Orson Zhai <orson.zhai@unisoc.com>");
+MODULE_AUTHOR("Haidong Yao <haidong.yao@unisoc.com>");
+MODULE_DESCRIPTION("Spreadtrum Inter Remote Processors Communication driver");
+MODULE_LICENSE("GPL v2");

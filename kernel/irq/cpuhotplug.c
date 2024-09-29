@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Generic cpu hotunplug interrupt migration code copied from the
  * arch/arm implementation
@@ -55,11 +56,10 @@ static bool migrate_one_irq(struct irq_desc *desc)
 	bool maskchip = !irq_can_move_pcntxt(d) && !irqd_irq_masked(d);
 	const struct cpumask *affinity;
 	bool brokeaff = false;
+	int err;
 #ifdef CONFIG_SPRD_CORE_CTL
 	struct cpumask available_cpus;
 #endif
-	int err;
-
 	/*
 	 * IRQ chip might be already torn down, but the irq descriptor is
 	 * still in the radix tree. Also if the chip has no affinity setter,
@@ -124,7 +124,7 @@ static bool migrate_one_irq(struct irq_desc *desc)
 		 */
 		if (irqd_affinity_is_managed(d)) {
 			irqd_set_managed_shutdown(d);
-			irq_shutdown(desc);
+			irq_shutdown_and_deactivate(desc);
 			return false;
 		}
 

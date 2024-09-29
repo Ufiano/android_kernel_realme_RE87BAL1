@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0
 #
 # USB Gadget support on a system involves
 #    (a) a peripheral controller, and
@@ -215,23 +216,20 @@ config USB_F_PRINTER
 config USB_F_TCM
 	tristate
 
-config USB_F_MTP
-        tristate
-
-config USB_F_PTP
-        tristate
+config USB_F_ACC
+	tristate
 
 config USB_F_AUDIO_SRC
 	tristate
 
-config USB_F_ACC
+config SPRD_USB_U_ETHER
+	tristate
+
+config SPRD_USB_F_RNDIS
 	tristate
 
 config USB_F_VSERIAL
 	tristate
-
-config USB_F_MBIM
-        tristate
 
 # this first set of drivers all depend on bulk-capable hardware.
 
@@ -245,12 +243,24 @@ config USB_CONFIGFS
 	  specified simply by creating appropriate directories in configfs.
 	  Associating functions with configurations is done by creating
 	  appropriate symbolic links.
-	  For more information see Documentation/usb/gadget_configfs.txt.
+	  For more information see Documentation/usb/gadget_configfs.rst.
+
+config USB_CONFIGFS_UEVENT
+	bool "Uevent notification of Gadget state"
+	depends on USB_CONFIGFS
+	help
+	  Enable uevent notifications to userspace when the gadget
+	  state changes. The gadget can be in any of the following
+	  three states: "CONNECTED/DISCONNECTED/CONFIGURED"
 
 config USB_F_VSERIAL_BYPASS_USER
 	bool "vser write bypass user"
 	help
 	  The function allow vser write in kernel.
+	  nop
+	  nop
+	  nop
+	  nop
 
 config USB_CONFIGFS_SERIAL
 	bool "Generic serial bulk in/out"
@@ -287,6 +297,7 @@ config USB_CONFIGFS_NCM
 	depends on NET
 	select USB_U_ETHER
 	select USB_F_NCM
+	select CRC32
 	help
 	  NCM is an advanced protocol for Ethernet encapsulation, allows
 	  grouping of several ethernet frames into one USB transfer and
@@ -336,6 +347,7 @@ config USB_CONFIGFS_EEM
 	depends on NET
 	select USB_U_ETHER
 	select USB_F_EEM
+	select CRC32
 	help
 	  CDC EEM is a newer USB standard that is somewhat simpler than CDC ECM
 	  and therefore can be supported by more hardware.  Technically ECM and
@@ -391,22 +403,8 @@ config USB_CONFIGFS_F_FS
 	  implemented in kernel space (for instance Ethernet, serial or
 	  mass storage) and other are implemented in user space.
 
-config USB_CONFIGFS_F_MTP
-	bool "MTP gadget"
-	depends on USB_CONFIGFS
-	select USB_F_MTP
-	help
-	  USB gadget MTP support
-
-config USB_CONFIGFS_F_PTP
-	bool "PTP gadget"
-	depends on USB_CONFIGFS && USB_CONFIGFS_F_MTP
-	select USB_F_PTP
-	help
-	  USB gadget PTP support
-
 config USB_CONFIGFS_F_ACC
-	boolean "Accessory gadget"
+	bool "Accessory gadget"
 	depends on USB_CONFIGFS
 	depends on HID=y
 	select USB_F_ACC
@@ -414,21 +412,13 @@ config USB_CONFIGFS_F_ACC
 	  USB gadget Accessory support
 
 config USB_CONFIGFS_F_AUDIO_SRC
-	boolean "Audio Source gadget"
-	depends on USB_CONFIGFS && USB_CONFIGFS_F_ACC
+	bool "Audio Source gadget"
+	depends on USB_CONFIGFS
 	depends on SND
 	select SND_PCM
 	select USB_F_AUDIO_SRC
 	help
 	  USB gadget Audio Source support
-
-config USB_CONFIGFS_UEVENT
-	boolean "Uevent notification of Gadget state"
-	depends on USB_CONFIGFS
-	help
-	  Enable uevent notifications to userspace when the gadget
-	  state changes. The gadget can be in any of the following
-	  three states: "CONNECTED/DISCONNECTED/CONFIGURED"
 
 config USB_CONFIGFS_F_UAC1
 	bool "Audio Class 1.0"
@@ -502,7 +492,7 @@ config USB_CONFIGFS_F_HID
 	  The HID function driver provides generic emulation of USB
 	  Human Interface Devices (HID).
 
-	  For more information, see Documentation/usb/gadget_hid.txt.
+	  For more information, see Documentation/usb/gadget_hid.rst.
 
 config USB_CONFIGFS_F_UVC
 	bool "USB Webcam function"
@@ -527,7 +517,7 @@ config USB_CONFIGFS_F_PRINTER
 	  receive or send printer data. It can use ioctl calls to
 	  the device file to get or set printer status.
 
-	  For more information, see Documentation/usb/gadget_printer.txt
+	  For more information, see Documentation/usb/gadget_printer.rst
 	  which includes sample code for accessing the device file.
 
 config USB_CONFIGFS_F_TCM
@@ -545,18 +535,20 @@ config USB_CONFIGFS_F_TCM
 	  UAS utilizes the USB 3.0 feature called streams support.
 
 config USB_CONFIGFS_F_VSERIAL
-	bool "Vendor Serial"
+	tristate "Vendor Serial"
 	depends on USB_CONFIGFS
 	select USB_F_VSERIAL
 	help
-	  USB gadget vendor serial support
+	USB gadget vendor serial support
 
-config USB_CONFIGFS_F_MBIM
-	bool "USB MBIM function"
+config SPRD_USB_CONFIGFS_RNDIS
+	tristate "Vendor Rndis"
 	depends on USB_CONFIGFS
-	select USB_F_MBIM
+	depends on NET
+	select SPRD_USB_U_ETHER
+	select SPRD_USB_F_RNDIS
 	help
-	  USB gadget mbim function support
+	USB gadget vendor rndis support
 
 source "drivers/usb/gadget/legacy/Kconfig"
 

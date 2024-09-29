@@ -61,10 +61,10 @@ static void buffer_io_error(struct buffer_head *bh)
 
 static void ext4_finish_bio(struct bio *bio)
 {
-	int i;
 	struct bio_vec *bvec;
+	struct bvec_iter_all iter_all;
 
-	bio_for_each_segment_all(bvec, bio, i) {
+	bio_for_each_segment_all(bvec, bio, iter_all) {
 		struct page *page = bvec->bv_page;
 		struct page *bounce_page = NULL;
 		struct buffer_head *bh, *head;
@@ -367,13 +367,13 @@ static int io_submit_init_bio(struct ext4_io_submit *io,
 	if (!bio)
 		return -ENOMEM;
 	fscrypt_set_bio_crypt_ctx_bh(bio, bh, GFP_NOIO);
-	wbc_init_bio(io->io_wbc, bio);
 	bio->bi_iter.bi_sector = bh->b_blocknr * (bh->b_size >> 9);
 	bio_set_dev(bio, bh->b_bdev);
 	bio->bi_end_io = ext4_end_bio;
 	bio->bi_private = ext4_get_io_end(io->io_end);
 	io->io_bio = bio;
 	io->io_next_block = bh->b_blocknr;
+	wbc_init_bio(io->io_wbc, bio);
 	return 0;
 }
 
@@ -398,7 +398,7 @@ submit_and_retry:
 	ret = bio_add_page(io->io_bio, page, bh->b_size, bh_offset(bh));
 	if (ret != bh->b_size)
 		goto submit_and_retry;
-	wbc_account_io(io->io_wbc, page, bh->b_size);
+	wbc_account_cgroup_owner(io->io_wbc, page, bh->b_size);
 	io->io_next_block++;
 	return 0;
 }
@@ -461,18 +461,24 @@ int ext4_bio_write_page(struct ext4_io_submit *io,
 				ext4_io_submit(io);
 			continue;
 		}
-		if (buffer_new(bh)) {
+		if (buffer_new(bh))
 			clear_buffer_new(bh);
-			clean_bdev_bh_alias(bh);
-		}
 		set_buffer_async_write(bh);
 		nr_to_submit++;
 	} while ((bh = bh->b_this_page) != head);
 
 	bh = head = page_buffers(page);
 
+	/*
+	 * If any blocks are being written to an encrypted file, encrypt them
+	 * into a bounce page.  For simplicity, just encrypt until the last
+	 * block which might be needed.  This may cause some unneeded blocks
+	 * (e.g. holes) to be unnecessarily encrypted, but this is rare and
+	 * can't happen in the common case of blocksize == PAGE_SIZE.
+	 */
 	if (fscrypt_inode_uses_fs_layer_crypto(inode) && nr_to_submit) {
 		gfp_t gfp_flags = GFP_NOFS;
+		unsigned int enc_bytes = round_up(len, i_blocksize(inode));
 
 		/*
 		 * Since bounce page allocation uses a mempool, we can only use
@@ -482,7 +488,7 @@ int ext4_bio_write_page(struct ext4_io_submit *io,
 		if (io->io_bio)
 			gfp_flags = GFP_NOWAIT | __GFP_NOWARN;
 	retry_encrypt:
-		bounce_page = fscrypt_encrypt_pagecache_blocks(page, PAGE_SIZE,
+		bounce_page = fscrypt_encrypt_pagecache_blocks(page, enc_bytes,
 							       0, gfp_flags);
 		if (IS_ERR(bounce_page)) {
 			ret = PTR_ERR(bounce_page);

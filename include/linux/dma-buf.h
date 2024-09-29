@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Header file for dma buffer sharing framework.
  *
@@ -8,18 +9,6 @@
  * Arnd Bergmann <arnd@arndb.de>, Rob Clark <rob@ti.com> and
  * Daniel Vetter <daniel@ffwll.ch> for their support in creation and
  * refining of this idea.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published by
- * the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * You should have received a copy of the GNU General Public License along with
- * this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #ifndef __DMA_BUF_H__
 #define __DMA_BUF_H__
@@ -32,6 +21,7 @@
 #include <linux/fs.h>
 #include <linux/dma-fence.h>
 #include <linux/wait.h>
+#include <linux/android_kabi.h>
 
 struct device;
 struct dma_buf;
@@ -39,27 +29,29 @@ struct dma_buf_attachment;
 
 /**
  * struct dma_buf_ops - operations possible on struct dma_buf
- * @map_atomic: maps a page from the buffer into kernel address
- *		space, users may not block until the subsequent unmap call.
- *		This callback must not sleep.
- * @unmap_atomic: [optional] unmaps a atomically mapped page from the buffer.
- *		  This Callback must not sleep.
- * @map: maps a page from the buffer into kernel address space.
- * @unmap: [optional] unmaps a page from the buffer.
  * @vmap: [optional] creates a virtual mapping for the buffer into kernel
  *	  address space. Same restrictions as for vmap and friends apply.
  * @vunmap: [optional] unmaps a vmap from the buffer
  */
 struct dma_buf_ops {
 	/**
+	  * @cache_sgt_mapping:
+	  *
+	  * If true the framework will cache the first mapping made for each
+	  * attachment. This avoids creating mappings for attachments multiple
+	  * times.
+	  */
+	bool cache_sgt_mapping;
+
+	/**
 	 * @attach:
 	 *
 	 * This is called from dma_buf_attach() to make sure that a given
-	 * &device can access the provided &dma_buf. Exporters which support
-	 * buffer objects in special locations like VRAM or device-specific
-	 * carveout areas should check whether the buffer could be move to
-	 * system memory (or directly accessed by the provided device), and
-	 * otherwise need to fail the attach operation.
+	 * &dma_buf_attachment.dev can access the provided &dma_buf. Exporters
+	 * which support buffer objects in special locations like VRAM or
+	 * device-specific carveout areas should check whether the buffer could
+	 * be move to system memory (or directly accessed by the provided
+	 * device), and otherwise need to fail the attach operation.
 	 *
 	 * The exporter should also in general check whether the current
 	 * allocation fullfills the DMA constraints of the new device. If this
@@ -77,8 +69,7 @@ struct dma_buf_ops {
 	 * to signal that backing storage is already allocated and incompatible
 	 * with the requirements of requesting device.
 	 */
-	int (*attach)(struct dma_buf *, struct device *,
-		      struct dma_buf_attachment *);
+	int (*attach)(struct dma_buf *, struct dma_buf_attachment *);
 
 	/**
 	 * @detach:
@@ -189,6 +180,41 @@ struct dma_buf_ops {
 	int (*begin_cpu_access)(struct dma_buf *, enum dma_data_direction);
 
 	/**
+	 * @begin_cpu_access_partial:
+	 *
+	 * This is called from dma_buf_begin_cpu_access_partial() and allows the
+	 * exporter to ensure that the memory specified in the range is
+	 * available for cpu access - the exporter might need to allocate or
+	 * swap-in and pin the backing storage.
+	 * The exporter also needs to ensure that cpu access is
+	 * coherent for the access direction. The direction can be used by the
+	 * exporter to optimize the cache flushing, i.e. access with a different
+	 * direction (read instead of write) might return stale or even bogus
+	 * data (e.g. when the exporter needs to copy the data to temporary
+	 * storage).
+	 *
+	 * This callback is optional.
+	 *
+	 * FIXME: This is both called through the DMA_BUF_IOCTL_SYNC command
+	 * from userspace (where storage shouldn't be pinned to avoid handing
+	 * de-factor mlock rights to userspace) and for the kernel-internal
+	 * users of the various kmap interfaces, where the backing storage must
+	 * be pinned to guarantee that the atomic kmap calls can succeed. Since
+	 * there's no in-kernel users of the kmap interfaces yet this isn't a
+	 * real problem.
+	 *
+	 * Returns:
+	 *
+	 * 0 on success or a negative error code on failure. This can for
+	 * example fail when the backing storage can't be allocated. Can also
+	 * return -ERESTARTSYS or -EINTR when the call has been interrupted and
+	 * needs to be restarted.
+	 */
+	int (*begin_cpu_access_partial)(struct dma_buf *dmabuf,
+					enum dma_data_direction,
+					unsigned int offset, unsigned int len);
+
+	/**
 	 * @end_cpu_access:
 	 *
 	 * This is called from dma_buf_end_cpu_access() when the importer is
@@ -206,10 +232,28 @@ struct dma_buf_ops {
 	 * to be restarted.
 	 */
 	int (*end_cpu_access)(struct dma_buf *, enum dma_data_direction);
-	void *(*map_atomic)(struct dma_buf *, unsigned long);
-	void (*unmap_atomic)(struct dma_buf *, unsigned long, void *);
-	void *(*map)(struct dma_buf *, unsigned long);
-	void (*unmap)(struct dma_buf *, unsigned long, void *);
+
+	/**
+	 * @end_cpu_access_partial:
+	 *
+	 * This is called from dma_buf_end_cpu_access_partial() when the
+	 * importer is done accessing the CPU. The exporter can use to limit
+	 * cache flushing to only the range specefied and to unpin any
+	 * resources pinned in @begin_cpu_access_umapped.
+	 * The result of any dma_buf kmap calls after end_cpu_access_partial is
+	 * undefined.
+	 *
+	 * This callback is optional.
+	 *
+	 * Returns:
+	 *
+	 * 0 on success or a negative error code on failure. Can return
+	 * -ERESTARTSYS or -EINTR when the call has been interrupted and needs
+	 * to be restarted.
+	 */
+	int (*end_cpu_access_partial)(struct dma_buf *dmabuf,
+				      enum dma_data_direction,
+				      unsigned int offset, unsigned int len);
 
 	/**
 	 * @mmap:
@@ -248,8 +292,65 @@ struct dma_buf_ops {
 	 */
 	int (*mmap)(struct dma_buf *, struct vm_area_struct *vma);
 
+	/**
+	 * @map:
+	 *
+	 * Maps a page from the buffer into kernel address space. The page is
+	 * specified by offset into the buffer in PAGE_SIZE units.
+	 *
+	 * This callback is optional.
+	 *
+	 * Returns:
+	 *
+	 * Virtual address pointer where requested page can be accessed. NULL
+	 * on error or when this function is unimplemented by the exporter.
+	 */
+	void *(*map)(struct dma_buf *, unsigned long);
+
+	/**
+	 * @unmap:
+	 *
+	 * Unmaps a page from the buffer. Page offset and address pointer should
+	 * be the same as the one passed to and returned by matching call to map.
+	 *
+	 * This callback is optional.
+	 */
+	void (*unmap)(struct dma_buf *, unsigned long, void *);
+
 	void *(*vmap)(struct dma_buf *);
 	void (*vunmap)(struct dma_buf *, void *vaddr);
+
+	/**
+	 * @get_uuid
+	 *
+	 * This is called by dma_buf_get_uuid to get the UUID which identifies
+	 * the buffer to virtio devices.
+	 *
+	 * This callback is optional.
+	 *
+	 * Returns:
+	 *
+	 * 0 on success or a negative error code on failure. On success uuid
+	 * will be populated with the buffer's UUID.
+	 */
+	int (*get_uuid)(struct dma_buf *dmabuf, uuid_t *uuid);
+
+	/**
+	 * @get_flags:
+	 *
+	 * This is called by dma_buf_get_flags and is used to get the buffer's
+	 * flags.
+	 * This callback is optional.
+	 *
+	 * Returns:
+	 *
+	 * 0 on success or a negative error code on failure. On success flags
+	 * will be populated with the buffer's flags.
+	 */
+	int (*get_flags)(struct dma_buf *dmabuf, unsigned long *flags);
+
+	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
 };
 
 /**
@@ -272,6 +373,7 @@ struct dma_buf_ops {
  * @poll: for userspace poll support
  * @cb_excl: for userspace poll support
  * @cb_shared: for userspace poll support
+ * @sysfs_entry: for exposing information about this buffer in sysfs.
  *
  * This represents a shared buffer, created by calling dma_buf_export(). The
  * userspace representation is a normal file descriptor, which can be created by
@@ -292,10 +394,11 @@ struct dma_buf {
 	void *vmap_ptr;
 	const char *exp_name;
 	const char *name;
+	spinlock_t name_lock; /* spinlock to protect name access */
 	struct module *owner;
 	struct list_head list_node;
 	void *priv;
-	struct reservation_object *resv;
+	struct dma_resv *resv;
 
 	/* poll support */
 	wait_queue_head_t poll;
@@ -304,8 +407,18 @@ struct dma_buf {
 		struct dma_fence_cb cb;
 		wait_queue_head_t *poll;
 
-		unsigned long active;
+		__poll_t active;
 	} cb_excl, cb_shared;
+#ifdef CONFIG_DMABUF_SYSFS_STATS
+	/* for sysfs stats */
+	struct dma_buf_sysfs_entry {
+		struct kobject kobj;
+		struct dma_buf *dmabuf;
+	} *sysfs_entry;
+#endif
+
+	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
 };
 
 /**
@@ -313,7 +426,11 @@ struct dma_buf {
  * @dmabuf: buffer for this attachment.
  * @dev: device attached to the buffer.
  * @node: list of dma_buf_attachment.
+ * @sgt: cached mapping.
+ * @dir: direction of cached mapping.
  * @priv: exporter specific attachment data.
+ * @dma_map_attrs: DMA attributes to be used when the exporter maps the buffer
+ * through dma_buf_map_attachment.
  *
  * This structure holds the attachment information between the dma_buf buffer
  * and its user device(s). The list contains one attachment struct per device
@@ -328,7 +445,20 @@ struct dma_buf_attachment {
 	struct dma_buf *dmabuf;
 	struct device *dev;
 	struct list_head node;
+	struct sg_table *sgt;
+	enum dma_data_direction dir;
 	void *priv;
+	unsigned long dma_map_attrs;
+#ifdef CONFIG_DMABUF_SYSFS_STATS
+	/* for sysfs stats */
+	struct dma_buf_attach_sysfs_entry {
+		struct kobject kobj;
+		unsigned int map_counter;
+	} *sysfs_entry;
+#endif
+
+	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
 };
 
 /**
@@ -350,8 +480,11 @@ struct dma_buf_export_info {
 	const struct dma_buf_ops *ops;
 	size_t size;
 	int flags;
-	struct reservation_object *resv;
+	struct dma_resv *resv;
 	void *priv;
+
+	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
 };
 
 /**
@@ -396,10 +529,14 @@ void dma_buf_unmap_attachment(struct dma_buf_attachment *, struct sg_table *,
 				enum dma_data_direction);
 int dma_buf_begin_cpu_access(struct dma_buf *dma_buf,
 			     enum dma_data_direction dir);
+int dma_buf_begin_cpu_access_partial(struct dma_buf *dma_buf,
+				     enum dma_data_direction dir,
+				     unsigned int offset, unsigned int len);
 int dma_buf_end_cpu_access(struct dma_buf *dma_buf,
 			   enum dma_data_direction dir);
-void *dma_buf_kmap_atomic(struct dma_buf *, unsigned long);
-void dma_buf_kunmap_atomic(struct dma_buf *, unsigned long, void *);
+int dma_buf_end_cpu_access_partial(struct dma_buf *dma_buf,
+				     enum dma_data_direction dir,
+				     unsigned int offset, unsigned int len);
 void *dma_buf_kmap(struct dma_buf *, unsigned long);
 void dma_buf_kunmap(struct dma_buf *, unsigned long, void *);
 
@@ -407,4 +544,7 @@ int dma_buf_mmap(struct dma_buf *, struct vm_area_struct *,
 		 unsigned long);
 void *dma_buf_vmap(struct dma_buf *);
 void dma_buf_vunmap(struct dma_buf *, void *vaddr);
+int dma_buf_get_flags(struct dma_buf *dmabuf, unsigned long *flags);
+int dma_buf_get_uuid(struct dma_buf *dmabuf, uuid_t *uuid);
+
 #endif /* __DMA_BUF_H__ */

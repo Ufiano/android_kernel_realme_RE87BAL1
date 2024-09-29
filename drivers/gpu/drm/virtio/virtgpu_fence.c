@@ -23,8 +23,8 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <drm/drmP.h>
 #include <trace/events/dma_fence.h>
+
 #include "virtgpu_drv.h"
 
 static const char *virtio_get_driver_name(struct dma_fence *f)
@@ -35,11 +35,6 @@ static const char *virtio_get_driver_name(struct dma_fence *f)
 static const char *virtio_get_timeline_name(struct dma_fence *f)
 {
 	return "controlq";
-}
-
-static bool virtio_enable_signaling(struct dma_fence *f)
-{
-	return true;
 }
 
 bool virtio_fence_signaled(struct dma_fence *f)
@@ -53,7 +48,7 @@ bool virtio_fence_signaled(struct dma_fence *f)
 
 static void virtio_fence_value_str(struct dma_fence *f, char *str, int size)
 {
-	snprintf(str, size, "%llu", (long long unsigned int) f->seqno);
+	snprintf(str, size, "%llu", f->seqno);
 }
 
 static void virtio_timeline_value_str(struct dma_fence *f, char *str, int size)
@@ -66,9 +61,7 @@ static void virtio_timeline_value_str(struct dma_fence *f, char *str, int size)
 static const struct dma_fence_ops virtio_fence_ops = {
 	.get_driver_name     = virtio_get_driver_name,
 	.get_timeline_name   = virtio_get_timeline_name,
-	.enable_signaling    = virtio_enable_signaling,
 	.signaled            = virtio_fence_signaled,
-	.wait                = dma_fence_default_wait,
 	.fence_value_str     = virtio_fence_value_str,
 	.timeline_value_str  = virtio_timeline_value_str,
 };

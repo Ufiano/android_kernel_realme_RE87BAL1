@@ -1,5 +1,5 @@
-/*
- * Copyright (C) 2016 Spreadtrum Communications Inc.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (C) 2016 Spreadtrum Communications Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-#define pr_fmt(fmt) "imsbr: " fmt
+#define pr_fmt(fmt) "sprd-imsbr: " fmt
 
 #include <linux/init.h>
 #include <linux/jhash.h>
@@ -56,7 +56,7 @@ static void imsbr_handover_state(struct imsbr_msghdr *msg, unsigned long unused)
 
 static struct imsbr_msglist {
 	const char *name;
-	void (*doit)(struct imsbr_msghdr *, unsigned long);
+	void (*doit)(struct imsbr_msghdr *msg, unsigned long arg);
 	unsigned long arg;
 	unsigned int req_len;
 } imsbr_msglists[] = {
@@ -207,7 +207,7 @@ void imsbr_flow_add(struct nf_conntrack_tuple *nft, u16 flow_type,
 	flow = imsbr_flow_find(nft, flow_type, h);
 	if (flow) {
 		pr_debug("flow duplicated!\n");
-		IMSBR_STAT_INC(flow_duplicated);
+		IMSBR_STAT_INC(imsbr_stats->flow_duplicated);
 		mutex_unlock(&imsbr_mutex);
 		return;
 	}
@@ -433,7 +433,8 @@ static void imsbr_cp_sync_esp(struct imsbr_msghdr *msg, unsigned long unused)
 		}
 	}
 
-	imsbr_esp_update_esphs((char *)esphs);
+	/* TODO GKI scan, we may need to abort this way */
+	//imsbr_esp_update_esphs((char *)esphs);
 }
 
 static void imsbr_handover_state(struct imsbr_msghdr *msg, unsigned long unused)
@@ -477,8 +478,10 @@ static void imsbr_echo_ping(struct imsbr_msghdr *msg, unsigned long unused)
 	struct sblock blk;
 	char *echostr;
 	int echolen;
+	int echolen_tmp;
 
 	echostr = msg->imsbr_payload;
+	echolen_tmp = strlen(echostr) + 1;
 	echolen = min_t(int, strlen(echostr) + 1, IMSBR_MSG_MAXLEN);
 
 	if (!imsbr_build_cmd("echo-pong", &blk, echostr, echolen))
@@ -489,6 +492,21 @@ static void imsbr_echo_pong(struct imsbr_msghdr *msg, unsigned long unused)
 {
 	pr_info("pong from cp: %s\n", msg->imsbr_payload);
 }
+
+#ifdef CONFIG_SPRD_IMS_BRIDGE_TEST
+
+void call_core_function(struct call_c_function *ccf)
+{
+	ccf->cptuple_update = imsbr_cptuple_update;
+	ccf->cp_sync_esp = imsbr_cp_sync_esp;
+	ccf->handover_state = imsbr_handover_state;
+	ccf->cptuple_reset = imsbr_cptuple_reset;
+	ccf->cp_reset = imsbr_cp_reset;
+	ccf->echo_ping = imsbr_echo_ping;
+	ccf->echo_pong = imsbr_echo_pong;
+}
+
+#endif
 
 static bool imsbr_msg_invalid(struct imsbr_msghdr *msghdr, int msglen)
 {
@@ -679,8 +697,7 @@ static struct hlist_node *imsbr_flow_get_first(struct seq_file *seq)
 	for (iter->bucket = 0;
 	     iter->bucket < IMSBR_FLOW_HSIZE;
 	     iter->bucket++) {
-		n = rcu_dereference(
-			hlist_first_rcu(&imsbr_flow_bucket[iter->bucket]));
+		n = rcu_dereference(hlist_first_rcu(&imsbr_flow_bucket[iter->bucket]));
 		if (n)
 			return n;
 	}
@@ -698,8 +715,7 @@ static struct hlist_node *imsbr_flow_get_next(struct seq_file *seq,
 		if (++iter->bucket >= IMSBR_FLOW_HSIZE)
 			return NULL;
 
-		head = rcu_dereference(
-			hlist_first_rcu(&imsbr_flow_bucket[iter->bucket]));
+		head = rcu_dereference(hlist_first_rcu(&imsbr_flow_bucket[iter->bucket]));
 	}
 
 	return head;
@@ -813,10 +829,28 @@ static const struct seq_operations imsbr_flow_seq_ops = {
 	.show  = imsbr_flow_seq_show
 };
 
+static void *imsbr_stat_start(struct seq_file *seq, loff_t *pos)
+	__acquires(RCU)
+{
+	rcu_read_lock();
+	return imsbr_flow_get_idx(seq, *pos);
+}
+
+static void *imsbr_stat_next(struct seq_file *s, void *v, loff_t *pos)
+{
+	(*pos)++;
+	return imsbr_flow_get_next(s, v);
+}
+
+static void imsbr_stat_stop(struct seq_file *s, void *v)
+	__releases(RCU)
+{
+	rcu_read_unlock();
+}
+
 static int imsbr_flow_open(struct inode *inode, struct file *file)
 {
-	return seq_open_net(inode, file, &imsbr_flow_seq_ops,
-			    sizeof(struct imsbr_flow_iter));
+	return seq_open(file, &imsbr_flow_seq_ops);
 }
 
 static const struct file_operations imsbr_flow_fops = {
@@ -824,7 +858,7 @@ static const struct file_operations imsbr_flow_fops = {
 	.open    = imsbr_flow_open,
 	.read    = seq_read,
 	.llseek  = seq_lseek,
-	.release = seq_release_net,
+	.release = seq_release,
 };
 
 static int imsbr_stat_show(struct seq_file *s, void *v)
@@ -909,9 +943,16 @@ static int imsbr_stat_show(struct seq_file *s, void *v)
 	return 0;
 }
 
+static const struct seq_operations imsbr_stat_ops = {
+	.start = imsbr_stat_start,
+	.next  = imsbr_stat_next,
+	.stop  = imsbr_stat_stop,
+	.show  = imsbr_stat_show
+};
+
 static int imsbr_stat_open(struct inode *inode, struct file *file)
 {
-	return single_open_net(inode, file, imsbr_stat_show);
+	return single_open(file, imsbr_stat_show, NULL);
 }
 
 static const struct file_operations imsbr_stat_fops = {
@@ -919,19 +960,21 @@ static const struct file_operations imsbr_stat_fops = {
 	.open	 = imsbr_stat_open,
 	.read	 = seq_read,
 	.llseek	 = seq_lseek,
-	.release = single_release_net,
+	.release = single_release,
 };
 
 static int imsbr_init_proc(struct net *net)
 {
-	if (!proc_create("imsbr_flow", 0444, net->proc_net,
-			 &imsbr_flow_fops)) {
+	if (!proc_create_net("imsbr_flow", 0444, net->proc_net,
+			     &imsbr_flow_seq_ops,
+			     sizeof(struct seq_net_private))) {
 		pr_err("proc create imsbr_flow fail!\n");
 		goto err_flow;
 	}
 
-	if (!proc_create("imsbr_stat", 0444, net->proc_net,
-			 &imsbr_stat_fops)) {
+	if (!proc_create_net("imsbr_stat", 0444, net->proc_net,
+			     &imsbr_stat_ops,
+			     sizeof(struct seq_net_private))) {
 		pr_err("proc create imsbr_flow fail!\n");
 		goto err_stat;
 	}

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * Copyright (C) 2012-2019 Spreadtrum Communications Inc.
  *
@@ -241,9 +242,20 @@ enum {
 	SMSG_TYPE_NR,		/* total type number */
 };
 
+struct smsg_callback_t {
+	void (*callback)(const struct smsg  *msg, void *data);
+	void *data;
+};
+
 /* flag for OPEN/CLOSE msg type */
 #define	SMSG_OPEN_MAGIC		0xBEEE
 #define	SMSG_CLOSE_MAGIC	0xEDDD
+
+void smsg_callback_register(u8 dst, u8 channel,
+			void (*callback)(const struct smsg *msg, void *data),
+			void *data);
+
+void smsg_callback_unregister(u8 dst, u8 channel);
 
 /**
 * sipc_get_wakeup_flag
@@ -318,7 +330,8 @@ int smsg_send(u8 dst, struct smsg *msg, int timeout);
 int smsg_recv(u8 dst, struct smsg *msg, int timeout);
 
 /* smsg_register_notifier  */
-int smsg_register_notifier(int dst, void(*handler)(phys_addr_t addr, void *data), void *data);
+int smsg_register_notifier(int dst, void(*handler)(phys_addr_t addr,
+						void *data), void *data);
 
 /**
  * sipc_channel2index
@@ -331,13 +344,6 @@ int smsg_register_notifier(int dst, void(*handler)(phys_addr_t addr, void *data)
 u8 sipc_channel2index(u8 ch);
 
 int smsg_ch_wake_unlock(u8 dst, u8 channel);
-
-struct arear {
-	u32	base;
-	u32	size;
-};
-
-int get_smem_arear(u8 dst, u8 smem, struct arear *arear_ptr);
 
 #if defined(CONFIG_DEBUG_FS)
 void sipc_debug_putline(struct seq_file *m, char c, int n);
@@ -375,12 +381,10 @@ static inline void smsg_close_ack(u8 dst, u16 channel)
 
 /* ****************************************************************** */
 /* SMEM interfaces */
-#ifdef CONFIG_SPRD_SIPC_V2
 /**
  * smem_alloc_ex -- allocate shared memory block
  *
  * @dst: dest processor ID
- * @smem: which smem will use, default is 0
  * @size: size to be allocated, page-aligned
  * @return: phys addr or 0 if failed
  */
@@ -391,7 +395,6 @@ u32 smem_alloc_ex(u8 dst, u16 smem, u32 size);
  * smem_free_ex -- free shared memory block
  *
  * @dst: dest processor ID
- * @smem: which smem will use, default is 0
  * @addr: smem phys addr to be freed
  * @order: size to be freed
  */
@@ -402,8 +405,6 @@ void smem_free_ex(u8 dst, u16 smem, u32 addr, u32 size);
 /**
  * shmem_ram_unmap_ex -- for sipc unmap ram address
  *
- * @dst: dest processor ID
- * @smem: which smem will use, default is 0
  * @mem: vir mem
  */
 void shmem_ram_unmap_ex(u8 dst, u16 smem, const void *mem);
@@ -412,8 +413,6 @@ void shmem_ram_unmap_ex(u8 dst, u16 smem, const void *mem);
 /**
  * shmem_ram_vmap_nocache_ex -- for sipc map ram address
  *
- * @dst: dest processor ID
- * @smem: which smem will use, default is 0
  * @start: start address
  * @size: size to be allocated, page-aligned
  * @return: phys addr or 0 if failed
@@ -426,8 +425,6 @@ void *shmem_ram_vmap_nocache_ex(u8 dst, u16 smem,
 /**
  * shmem_ram_vmap_cache_ex -- for sipc map ram address
  *
- * @dst: dest processor ID
- * @smem: which smem will use, default is 0
  * @start: start address
  * @size: size to be allocated, page-aligned
  * @return: phys addr or 0 if failed
@@ -463,67 +460,7 @@ void *modem_ram_vmap_nocache(u32 modem_type, phys_addr_t start, size_t size);
  * @return: phys addr or 0 if failed
  */
 void *modem_ram_vmap_cache(u32 modem_type, phys_addr_t start, size_t size);
-#else
 
-/**
- * smem_alloc -- allocate shared memory block
- *
- * @size: size to be allocated, page-aligned
- * @return: phys addr or 0 if failed
- */
-u32 smem_alloc(u32 size);
-
-/**
- * smem_alloc_ex -- allocate shared memory block
- *
- * @size: size to be allocated, page-aligned
- * @paddr: which pool wil used to malloc
- * @return: phys addr or 0 if failed
- */
-u32 smem_alloc_ex(u32 size, u32 paddr);
-
-/**
- * smem_free -- free shared memory block
- *
- * @addr: smem phys addr to be freed
- * @order: size to be freed
- */
-void smem_free(u32 addr, u32 size);
-
-/**
- * smem_free_ex -- free shared memory block
- *
- * @addr: smem phys addr to be freed
- * @paddr: which pool wil used to malloc
- * @order: size to be freed
- */
-void smem_free_ex(u32 addr, u32 size, u32 paddr);
-
-/**
- * shmem_ram_unmap -- for sipc unmap ram address
- *
- * @mem: vir mem
- */
-void shmem_ram_unmap(const void *mem);
-
-/**
- * shmem_ram_vmap_nocache -- for sipc map ram address
- *
- * @start: start address
- * @size: size to be allocated, page-aligned
- * @return: phys addr or 0 if failed
- */
-void *shmem_ram_vmap_nocache(phys_addr_t start, size_t size);
-
-/**
- * shmem_ram_vmap_cache -- for sipc map ram address
- *
- * @start: start address
- * @size: size to be allocated, page-aligned
- * @return: phys addr or 0 if failed
- */
-void *shmem_ram_vmap_cache(phys_addr_t start, size_t size);
-#endif
 /**
  * sbuf_set_no_need_wake_lock
  *
@@ -534,13 +471,11 @@ void *shmem_ram_vmap_cache(phys_addr_t start, size_t size);
 
 void sbuf_set_no_need_wake_lock(u8 dst, u8 channel, u32 bufnum);
 
-#ifdef CONFIG_SPRD_SIPC_V2
 /**
  * sbuf_create_ex -- create pipe ring buffers on a channel
  *
  * @dst: dest processor ID
  * @channel: channel ID
- * @smem: smem ID, default is 0
  * @txbufsize: tx buffer size
  * @rxbufsize: rx buffer size
  * @bufnum: how many buffers to be created
@@ -551,24 +486,6 @@ int sbuf_create_ex(u8 dst, u8 channel, u16 smem, u32 bufnum,
 		   u32 txbufsize, u32 rxbufsize);
 #define sbuf_create(dst, channel, bufnum, txbufsize, rxbufsize) \
 	sbuf_create_ex((dst), (channel), 0, (bufnum), (txbufsize), (rxbufsize))
-
-#else
-/**
- * sbuf_create_ex -- create pipe ring buffers on a channel
- *
- * @dst: dest processor ID
- * @channel: channel ID
- * @smem: smem ID,default is 0
- * @txbufsize: tx buffer size
- * @rxbufsize: rx buffer size
- * @bufnum: how many buffers to be created
- * @return: 0 on success, <0 on failure
- */
-int sbuf_create_ex(u8 dst, u8 channel, u32 smem_idx, u32 bufnum,
-		   u32 txbufsize, u32 rxbufsize);
-#define sbuf_create(dst, channel, bufnum, txbufsize, rxbufsize) \
-	sbuf_create_ex(dst, channel, 0, bufnum, txbufsize, rxbufsize)
-#endif
 
 /**
  * sbuf_destroy -- destroy the pipe ring buffers on a channel
@@ -653,12 +570,10 @@ int sbuf_register_notifier(u8 dst, u8 channel, u32 bufid,
 
 /* sblock structure: addr is the uncached virtual address */
 struct sblock {
-	void		*addr;
+	void	*addr;
 	u32	length;
-#ifdef CONFIG_SPRD_SIPC_ZERO_COPY_SIPX
-	u16        index;
-	u16        offset;
-#endif
+	u16	index;
+	u16	offset;
 };
 
 /**
@@ -695,7 +610,7 @@ int sblock_create_ex(u8 dst, u8 channel,
 			u32 rxblocknum, u32 rxblocksize,
 			void (*handler)(int event, void *data), void *data);
 
-#ifdef CONFIG_SPRD_SIPC_V2
+
 /* sblock_pcfg_create -- create preconfigured SBLOCK channel.
  *
  * @dst: dest processor ID
@@ -710,38 +625,37 @@ int sblock_create_ex(u8 dst, u8 channel,
  * open the channel. The client shall open the channel using
  * sblock_pcfg_open and close the channel using sblock_close.
  */
-int sblock_pcfg_create(u8 dst, u8 channel,
-		       u32 tx_blk_num, u32 tx_blk_sz,
-		       u32 rx_blk_num, u32 rx_blk_sz);
+int sblock_pcfg_create(u8 dst, u8 channel, u32 tx_blk_num, u32 tx_blk_sz,
+			u32 rx_blk_num, u32 rx_blk_sz);
 
 /* sblock_pcfg_open -- request to open preconfigured SBLOCK channel.
  *
  * @dst: dest processor ID
  * @channel: channel ID
  * @notifier: the event notification callback function. This function can
- *	      not sleep. If this parameter is NULL, no event will be
- *	      reported.
+ *		not sleep. If this parameter is NULL, no event will be
+ *		reported.
  * @event: SBLOCK_NOTIFY_GET, SBLOCK_NOTIFY_RECV, or both
  * @client: opaque data passed to the receiver
  * @return: if the channel is established, return 0; if the open procedure
- *          is started and not finished, return SIPC_ERR_IN_PROGRESS;
- *	    otherwise return a negative error code.
+ *		is started and not finished, return SIPC_ERR_IN_PROGRESS;
+ *		otherwise return a negative error code.
  *
  * The function starts the open procedure. If the open procedure is not
  * finished when the function returns, the SBLOCK system will report
  * the open result later through the notifier callback.
  */
 int sblock_pcfg_open(uint8_t dest, uint8_t channel,
-		     void (*notifier)(int event, void *client),
-		     void *client);
+			void (*notifier)(int event, void *client),
+			void *client);
 
 /* sblock_close -- request to close SBLOCK channel.
  *
  * @dst: dest processor ID
  * @channel: channel ID
  * @return: if the channel is closed, return 0; if the close procedure
- *          is started and not finished, return SIPC_ERR_IN_PROGRESS;
- *	    otherwise return a negative error code.
+ *		is started and not finished, return SIPC_ERR_IN_PROGRESS;
+ *		otherwise return a negative error code.
  *
  * The function starts the close procedure. If the close procedure is not
  * finished when the function returns, the SBLOCK system will report
@@ -756,8 +670,7 @@ int sblock_close(uint8_t dest, uint8_t channel);
  * @paddr: pointer to the variable to receive the address.
  */
 int sblock_get_smem_cp_addr(uint8_t dest, uint8_t channel,
-			    uint32_t *paddr);
-#endif
+			uint32_t *paddr);
 /**
  * sblock_destroy -- destroy sblock manager on a channel
  *
@@ -775,8 +688,8 @@ void sblock_destroy(u8 dst, u8 channel);
 
 /**
  * sblock_register_notifier -- register a callback that's called
- *		when a tx sblock is available or a rx block is received.
- *		non-blocked sblock_get or sblock_receive can be called.
+ * when a tx sblock is available or a rx block is received.
+ * non-blocked sblock_get or sblock_receive can be called.
  *
  * @dst: dest processor ID
  * @channel: channel ID
@@ -860,8 +773,6 @@ int sblock_release(u8 dst, u8 channel, struct sblock *blk);
  */
 int sblock_get_arrived_count(u8 dst, u8 channel);
 
-
-
 /**
  * sblock_get_free_count  -- get the count of available sblock(s) resident in
  * sblock pool on AP.
@@ -871,7 +782,6 @@ int sblock_get_arrived_count(u8 dst, u8 channel);
  * @return: >=0  the count of blocks
  */
 int sblock_get_free_count(u8 dst, u8 channel);
-
 
 /**
  * sblock_put  -- put a free sblock for sender
@@ -892,7 +802,8 @@ void sblock_put(u8 dst, u8 channel, struct sblock *blk);
  * @wait: poll table
  * @return: POLLIN or POLLOUT
  */
-unsigned int sblock_poll_wait(u8 dst, u8 channel, struct file *filp, poll_table *wait);
+unsigned int sblock_poll_wait(u8 dst,
+			u8 channel, struct file *filp, poll_table *wait);
 
 /**
  * sblock_query  -- sblock query status
@@ -902,7 +813,6 @@ unsigned int sblock_poll_wait(u8 dst, u8 channel, struct file *filp, poll_table 
  * @return: 0 on success, <0 on failure
  */
 int sblock_query(u8 dst, u8 channel);
-
 
 /* ****************************************************************** */
 
@@ -1027,10 +937,6 @@ int sipx_get_free_count(u8 dst, u8 channel);
  */
 int sipx_put(u8 dst, u8 channel, struct sblock *blk);
 
-/* ****************************************************************** */
-
-#ifdef CONFIG_SPRD_SIPC_ZERO_COPY_SIPX
-
 #define SBLOCK_CREATE(dst, channel,\
 		txblocknum, txblocksize, txpoolsize, \
 		rxblocknum, rxblocksize, rxpoolsize)  \
@@ -1069,51 +975,6 @@ sipx_chan_create(dst, channel)
 
 #define SBLOCK_PUT(dst, channel, blk) \
 	sipx_put(dst, channel, blk)
-
-
-#else /* CONFIG_SPRD_SIPC_ZERO_COPY_SIPX */
-
-#define SBLOCK_CREATE(dst, channel,\
-		txblocknum, txblocksize, txpoolsize, \
-		rxblocknum, rxblocksize, rxpoolsize)  \
-sblock_create(dst, channel,\
-		txblocknum, txblocksize,\
-		rxblocknum, rxblocksize)
-
-#define SBLOCK_DESTROY(dst, channel) \
-	sblock_destroy(dst, channel)
-
-#define SBLOCK_GET(dst, channel, blk, ack, timeout) \
-	sblock_get(dst, channel, blk, timeout)
-
-#define SBLOCK_REGISTER_NOTIFIER(dst, channel, handler, data) \
-	sblock_register_notifier(dst, channel, handler, data)
-
-#define SBLOCK_SEND(dst, channel, blk) \
-	sblock_send(dst, channel, blk)
-
-#define SBLOCK_SEND_PREPARE(dst, channel, blk) \
-	sblock_send_prepare(dst, channel, blk)
-
-#define SBLOCK_SEND_FINISH(dst, channel)\
-	sblock_send_finish(dst, channel)
-
-#define SBLOCK_RECEIVE(dst, channel, blk, timeout) \
-	sblock_receive(dst, channel, blk, timeout)
-
-#define SBLOCK_RELEASE(dst, channel, blk) \
-	sblock_release(dst, channel, blk)
-
-#define SBLOCK_GET_ARRIVED_COUNT(dst, channel) \
-	sblock_get_arrived_count(dst, channel)
-
-#define SBLOCK_GET_FREE_COUNT(dst, channel) \
-	sblock_get_free_count(dst, channel)
-
-#define SBLOCK_PUT(dst, channel, blk) \
-	sblock_put(dst, channel, blk)
-
-#endif /* CONFIG_SPRD_SIPC_ZERO_COPY_SIPX */
 
 #ifdef CONFIG_ARM64
 /**
@@ -1213,6 +1074,49 @@ static inline void unalign_memcpy(void *to, const void *from, size_t n)
 		}
 	}
 }
+
+static inline unsigned long _unalign_copy_to_user(void __user *to,
+						    const void *from,
+						    unsigned long n)
+{
+	if (((unsigned long)from & 7) && (n < 16)) {
+		while (n) {
+			if (_copy_to_user(to++, from++, 1))
+				break;
+			n--;
+		}
+		return n;
+	}
+
+	return _copy_to_user(to, from, n);
+}
+
+static inline unsigned long _unalign_copy_from_user(void *to,
+						    const void __user *from,
+						    unsigned long n)
+{
+	unsigned c1, c2, c3;
+
+	c1 = !((unsigned long)to & 0x7) && !(n < 16);
+	if (c1)
+		return _copy_from_user(to, from, n);
+
+	c2 = !((unsigned long)to & 0x7) && !((unsigned long)from & 0x7);
+	if (c2)
+		return _copy_from_user(to, from, n);
+
+	c3 = !(((unsigned long)to ^ (unsigned long)from) & 0x7) && (n > 15);
+	if (c3)
+		return _copy_from_user(to, from, n);
+
+	while (n) {
+		if (_copy_from_user(to++, from++, 1))
+			break;
+		n--;
+	}
+
+	return n;
+}
 #else
 static inline unsigned long unalign_copy_to_user(void __user *to,
 		const void *from,
@@ -1229,6 +1133,20 @@ static inline unsigned long unalign_copy_from_user(void *to,
 static inline void *unalign_memcpy(void *to, const void *from, size_t n)
 {
 	return memcpy(to, from, n);
+}
+
+static inline unsigned long _unalign_copy_to_user(void __user *to,
+						    const void *from,
+						    unsigned long n)
+{
+	return _copy_to_user(to, from, n);
+}
+
+static inline unsigned long _unalign_copy_from_user(void *to,
+						    const void __user *from,
+						    unsigned long n)
+{
+	return _copy_from_user(to, from, n);
 }
 #endif
 

@@ -105,7 +105,6 @@ enum {
 	UFSHCI_VERSION_11 = 0x00010100, /* 1.1 */
 	UFSHCI_VERSION_20 = 0x00000200, /* 2.0 */
 	UFSHCI_VERSION_21 = 0x00000210, /* 2.1 */
-	UFSHCI_VERSION_30 = 0x00000300, /* 3.0 */
 };
 
 /*
@@ -131,29 +130,26 @@ enum {
 /*
  * IS - Interrupt Status - 20h
  */
-#define UFS_BIT(x)	(1L << (x))
-
-#define UTP_TRANSFER_REQ_COMPL			UFS_BIT(0)
-#define UIC_DME_END_PT_RESET			UFS_BIT(1)
-#define UIC_ERROR				UFS_BIT(2)
-#define UIC_TEST_MODE				UFS_BIT(3)
-#define UIC_POWER_MODE				UFS_BIT(4)
-#define UIC_HIBERNATE_EXIT			UFS_BIT(5)
-#define UIC_HIBERNATE_ENTER			UFS_BIT(6)
-#define UIC_LINK_LOST				UFS_BIT(7)
-#define UIC_LINK_STARTUP			UFS_BIT(8)
-#define UTP_TASK_REQ_COMPL			UFS_BIT(9)
-#define UIC_COMMAND_COMPL			UFS_BIT(10)
-#define DEVICE_FATAL_ERROR			UFS_BIT(11)
-#define CONTROLLER_FATAL_ERROR			UFS_BIT(16)
-#define SYSTEM_BUS_FATAL_ERROR			UFS_BIT(17)
-#define CRYPTO_ENGINE_FATAL_ERROR		UFS_BIT(18)
+#define UTP_TRANSFER_REQ_COMPL			0x1
+#define UIC_DME_END_PT_RESET			0x2
+#define UIC_ERROR				0x4
+#define UIC_TEST_MODE				0x8
+#define UIC_POWER_MODE				0x10
+#define UIC_HIBERNATE_EXIT			0x20
+#define UIC_HIBERNATE_ENTER			0x40
+#define UIC_LINK_LOST				0x80
+#define UIC_LINK_STARTUP			0x100
+#define UTP_TASK_REQ_COMPL			0x200
+#define UIC_COMMAND_COMPL			0x400
+#define DEVICE_FATAL_ERROR			0x800
+#define CONTROLLER_FATAL_ERROR			0x10000
+#define SYSTEM_BUS_FATAL_ERROR			0x20000
+#define CRYPTO_ENGINE_FATAL_ERROR		0x40000
 
 #define UFSHCD_UIC_HIBERN8_MASK	(UIC_HIBERNATE_ENTER |\
 				UIC_HIBERNATE_EXIT)
 
-#define UFSHCD_UIC_PWR_MASK	(UIC_HIBERNATE_ENTER |\
-				UIC_HIBERNATE_EXIT |\
+#define UFSHCD_UIC_PWR_MASK	(UFSHCD_UIC_HIBERN8_MASK |\
 				UIC_POWER_MODE)
 
 #define UFSHCD_UIC_MASK		(UIC_COMMAND_COMPL | UFSHCD_UIC_PWR_MASK)
@@ -174,6 +170,8 @@ enum {
 #define UTP_TRANSFER_REQ_LIST_READY		0x2
 #define UTP_TASK_REQ_LIST_READY			0x4
 #define UIC_COMMAND_READY			0x8
+#define HOST_ERROR_INDICATOR			0x10
+#define DEVICE_ERROR_INDICATOR			0x20
 #define UIC_POWER_MODE_CHANGE_REQ_STATUS_MASK	UFS_MASK(0x7, 8)
 
 #define UFSHCD_STATUS_READY	(UTP_TRANSFER_REQ_LIST_READY |\
@@ -198,10 +196,15 @@ enum {
 #define UIC_PHY_ADAPTER_LAYER_ERROR			0x80000000
 #define UIC_PHY_ADAPTER_LAYER_ERROR_CODE_MASK		0x1F
 #define UIC_PHY_ADAPTER_LAYER_LANE_ERR_MASK		0xF
+#define UIC_PHY_ADAPTER_LAYER_GENERIC_ERROR		0x10
 
 /* UECDL - Host UIC Error Code Data Link Layer 3Ch */
 #define UIC_DATA_LINK_LAYER_ERROR		0x80000000
-#define UIC_DATA_LINK_LAYER_ERROR_CODE_MASK	0x7FFF
+#define UIC_DATA_LINK_LAYER_ERROR_CODE_MASK	0xFFFF
+#define UIC_DATA_LINK_LAYER_ERROR_TCX_REP_TIMER_EXP	0x2
+#define UIC_DATA_LINK_LAYER_ERROR_AFCX_REQ_TIMER_EXP	0x4
+#define UIC_DATA_LINK_LAYER_ERROR_FCX_PRO_TIMER_EXP	0x8
+#define UIC_DATA_LINK_LAYER_ERROR_RX_BUF_OF	0x20
 #define UIC_DATA_LINK_LAYER_ERROR_PA_INIT	0x2000
 #define UIC_DATA_LINK_LAYER_ERROR_NAC_RECEIVED	0x0001
 #define UIC_DATA_LINK_LAYER_ERROR_TCx_REPLAY_TIMEOUT 0x0002
@@ -209,10 +212,20 @@ enum {
 /* UECN - Host UIC Error Code Network Layer 40h */
 #define UIC_NETWORK_LAYER_ERROR			0x80000000
 #define UIC_NETWORK_LAYER_ERROR_CODE_MASK	0x7
+#define UIC_NETWORK_UNSUPPORTED_HEADER_TYPE	0x1
+#define UIC_NETWORK_BAD_DEVICEID_ENC		0x2
+#define UIC_NETWORK_LHDR_TRAP_PACKET_DROPPING	0x4
 
 /* UECT - Host UIC Error Code Transport Layer 44h */
 #define UIC_TRANSPORT_LAYER_ERROR		0x80000000
 #define UIC_TRANSPORT_LAYER_ERROR_CODE_MASK	0x7F
+#define UIC_TRANSPORT_UNSUPPORTED_HEADER_TYPE	0x1
+#define UIC_TRANSPORT_UNKNOWN_CPORTID		0x2
+#define UIC_TRANSPORT_NO_CONNECTION_RX		0x4
+#define UIC_TRANSPORT_CONTROLLED_SEGMENT_DROPPING	0x8
+#define UIC_TRANSPORT_BAD_TC			0x10
+#define UIC_TRANSPORT_E2E_CREDIT_OVERFOW	0x20
+#define UIC_TRANSPORT_SAFETY_VALUE_DROPPING	0x40
 
 /* UECDME - Host UIC Error Code DME 48h */
 #define UIC_DME_ERROR			0x80000000
@@ -494,22 +507,25 @@ struct utp_transfer_req_desc {
 	__le16  prd_table_offset;
 };
 
-/**
- * struct utp_task_req_desc - UTMRD structure
- * @header: UTMRD header DW-0 to DW-3
- * @task_req_upiu: Pointer to task request UPIU DW-4 to DW-11
- * @task_rsp_upiu: Pointer to task response UPIU DW12 to DW-19
+/*
+ * UTMRD structure.
  */
 struct utp_task_req_desc {
-
 	/* DW 0-3 */
 	struct request_desc_header header;
 
-	/* DW 4-11 */
-	__le32 task_req_upiu[TASK_REQ_UPIU_SIZE_DWORDS];
+	/* DW 4-11 - Task request UPIU structure */
+	struct utp_upiu_header	req_header;
+	__be32			input_param1;
+	__be32			input_param2;
+	__be32			input_param3;
+	__be32			__reserved1[2];
 
-	/* DW 12-19 */
-	__le32 task_rsp_upiu[TASK_RSP_UPIU_SIZE_DWORDS];
+	/* DW 12-19 - Task Management Response UPIU structure */
+	struct utp_upiu_header	rsp_header;
+	__be32			output_param1;
+	__be32			output_param2;
+	__be32			__reserved2[3];
 };
 
 #endif /* End of Header */

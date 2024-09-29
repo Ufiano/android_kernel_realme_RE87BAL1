@@ -2,7 +2,7 @@
 /*
  * Driver for Spreadtrum SC27XX USB Type-C
  *
- * Copyright (C) 2018 Spreadtrum Communications Inc.
+ * Copyright (C) 2020 Spreadtrum Communications Inc.
  */
 
 #include <linux/interrupt.h>
@@ -10,7 +10,6 @@
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
 #include <linux/usb/typec.h>
-#include <linux/spinlock.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/extcon.h>
@@ -19,8 +18,10 @@
 #include <linux/slab.h>
 #include <linux/of_gpio.h>
 #include <linux/gpio/consumer.h>
+#include <linux/extcon-provider.h>
 #include <linux/usb/tcpm.h>
 #include <linux/iio/consumer.h>
+#include <linux/workqueue.h>
 /* registers definitions for controller REGS_TYPEC */
 #define SC27XX_EN			0x00
 #define SC27XX_MODE			0x04
@@ -64,7 +65,8 @@
 #define UMP9620_EFUSE_CC1_SHIFT		1
 #define UMP9620_EFUSE_CC2_SHIFT		11
 
-#define SC27XX_CC_MASK(n)		GENMASK((n) + 4, (n))
+#define SC27XX_CC1_MASK(n)		GENMASK((n) + 9, (n) + 5)
+#define SC27XX_CC2_MASK(n)		GENMASK((n) + 4, (n))
 #define SC27XX_CC_SHIFT(n)		(n)
 
 /* sc2721 registers definitions for controller REGS_TYPEC */
@@ -127,7 +129,6 @@ enum sc27xx_typec_connection_state {
 };
 
 struct sprd_typec_variant_data {
-	u8 pmic_name;
 	u32 efuse_cc1_shift;
 	u32 efuse_cc2_shift;
 	u32 int_en;
@@ -140,7 +141,6 @@ struct sprd_typec_variant_data {
 };
 
 static const struct sprd_typec_variant_data sc2730_data = {
-	.pmic_name = SC2730,
 	.efuse_cc1_shift = SC2730_EFUSE_CC1_SHIFT,
 	.efuse_cc2_shift = SC2730_EFUSE_CC2_SHIFT,
 	.int_en = SC27XX_INT_EN,
@@ -153,7 +153,6 @@ static const struct sprd_typec_variant_data sc2730_data = {
 };
 
 static const struct sprd_typec_variant_data sc2721_data = {
-	.pmic_name = SC2721,
 	.efuse_cc1_shift = SC2721_EFUSE_CC1_SHIFT,
 	.efuse_cc2_shift = SC2721_EFUSE_CC2_SHIFT,
 	.int_en = SC2721_EN,
@@ -166,7 +165,6 @@ static const struct sprd_typec_variant_data sc2721_data = {
 };
 
 static const struct sprd_typec_variant_data ump9620_data = {
-	.pmic_name = UMP9620,
 	.efuse_cc1_shift = UMP9620_EFUSE_CC1_SHIFT,
 	.efuse_cc2_shift = UMP9620_EFUSE_CC2_SHIFT,
 	.int_en = SC27XX_INT_EN,
@@ -195,6 +193,7 @@ struct sc27xx_typec {
 	const struct sprd_typec_variant_data *var_data;
 	struct iio_channel	*cc1;
 	struct iio_channel	*cc2;
+	struct delayed_work		irq_enable_work;
 };
 
 bool sc27xx_typec_cc1_cc2_voltage_detect(struct sc27xx_typec *sc)
@@ -262,10 +261,10 @@ int force_set_typec_mode(struct sc27xx_typec *sc, const char *str)
 	return 0;
 }
 EXPORT_SYMBOL_GPL(force_set_typec_mode);
-
 volatile struct sc27xx_typec *psc = NULL;
 int g_cc_polarity = 0;
-
+EXPORT_SYMBOL_GPL(psc);
+EXPORT_SYMBOL_GPL(g_cc_polarity);
 static int sc27xx_typec_connect(struct sc27xx_typec *sc, u32 status)
 {
 	enum typec_data_role data_role = TYPEC_DEVICE;
@@ -354,7 +353,7 @@ static int sc27xx_typec_connect(struct sc27xx_typec *sc, u32 status)
 	}
 
 	if (!val || val == SC2730_CC_INSERT)
-		cc_polarity = TYPEC_NO_ATTACH;
+		g_cc_polarity = 0;
 
 	switch (cc_polarity) {
 	case TYPEC_POLARITY_CC1:
@@ -363,21 +362,15 @@ static int sc27xx_typec_connect(struct sc27xx_typec *sc, u32 status)
 	case TYPEC_POLARITY_CC2:
 		g_cc_polarity = 2;
 		break;
-	case TYPEC_NO_ATTACH:
 	default:
 		g_cc_polarity = 0;
 		break;
 	}
-
-	typec_set_cc_polarity_role(sc->port, cc_polarity);
-
 	return 0;
 }
 
 static void sc27xx_typec_disconnect(struct sc27xx_typec *sc, u32 status)
 {
-	enum typec_cc_polarity cc_polarity;
-
 	typec_unregister_partner(sc->partner);
 	sc->partner = NULL;
 	typec_set_pwr_opmode(sc->port, TYPEC_PWR_MODE_USB);
@@ -399,12 +392,10 @@ static void sc27xx_typec_disconnect(struct sc27xx_typec *sc, u32 status)
 	default:
 		break;
 	}
-
-	cc_polarity = TYPEC_NO_ATTACH;
 	g_cc_polarity = 0;
-	typec_set_cc_polarity_role(sc->port, cc_polarity);
 }
 
+#if 0
 static int sc27xx_typec_dr_set(const struct typec_capability *cap,
 				enum typec_data_role role)
 {
@@ -425,6 +416,7 @@ static int sc27xx_typec_vconn_set(const struct typec_capability *cap,
 	/* TODO: Vconn set */
 	return 0;
 }
+#endif
 
 static irqreturn_t sc27xx_typec_interrupt(int irq, void *data)
 {
@@ -472,10 +464,10 @@ static int sc27xx_typec_enable(struct sc27xx_typec *sc)
 
 	val &= ~SC27XX_MODE_MASK;
 	switch (sc->typec_cap.type) {
-	case TYPEC_PORT_SRC:
+	case TYPEC_PORT_DFP:
 		val |= SC27XX_MODE_SRC;
 		break;
-	case TYPEC_PORT_SNK:
+	case TYPEC_PORT_UFP:
 		val |= SC27XX_MODE_SNK;
 		break;
 	case TYPEC_PORT_DRP:
@@ -507,15 +499,6 @@ static int sc27xx_typec_enable(struct sc27xx_typec *sc)
 				SC27XX_TCC_DEBOUNCE_CNT);
 		if (ret)
 			return ret;
-	}
-
-	if (sc->var_data->pmic_name == UMP9620) {
-		ret = regmap_read(sc->regmap, UMP9620_RESERVERED_CORE, &val);
-		if (ret)
-			return ret;
-
-		val |= TRIM_CURRENT_FROMEFUSE;
-		regmap_write(sc->regmap, UMP9620_RESERVERED_CORE, val);
 	}
 
 	/* Enable typec interrupt and enable typec */
@@ -575,7 +558,7 @@ static int sc27xx_typec_get_cc1_efuse(struct sc27xx_typec *sc)
 	struct nvmem_cell *cell;
 	u32 calib_data = 0;
 	void *buf;
-	size_t len = 0;
+	size_t len;
 
 	cell = nvmem_cell_get(sc->dev, "typec_cc1_cal");
 	if (IS_ERR(cell))
@@ -588,7 +571,7 @@ static int sc27xx_typec_get_cc1_efuse(struct sc27xx_typec *sc)
 		return PTR_ERR(buf);
 
 	memcpy(&calib_data, buf, min(len, sizeof(u32)));
-	calib_data = (calib_data & SC27XX_CC_MASK(sc->var_data->efuse_cc1_shift))
+	calib_data = (calib_data & SC27XX_CC1_MASK(sc->var_data->efuse_cc1_shift))
 			>> SC27XX_CC_SHIFT(sc->var_data->efuse_cc1_shift);
 	kfree(buf);
 
@@ -613,7 +596,7 @@ static int sc27xx_typec_get_cc2_efuse(struct sc27xx_typec *sc)
 		return PTR_ERR(buf);
 
 	memcpy(&calib_data, buf, min(len, sizeof(u32)));
-	calib_data = (calib_data & SC27XX_CC_MASK(sc->var_data->efuse_cc2_shift))
+	calib_data = (calib_data & SC27XX_CC2_MASK(sc->var_data->efuse_cc2_shift))
 			>> SC27XX_CC_SHIFT(sc->var_data->efuse_cc2_shift);
 	kfree(buf);
 
@@ -637,6 +620,34 @@ static int typec_set_rtrim(struct sc27xx_typec *sc)
 
 	return regmap_write(sc->regmap, sc->base + SC27XX_RTRIM, rtrim);
 }
+
+static void typec_irq_enable_work(struct work_struct *work)
+{
+	struct sc27xx_typec *sc = container_of(work,
+				 struct sc27xx_typec, irq_enable_work.work);
+	int ret;
+
+	pr_err("typec_irq_enable_work\n");
+
+	ret = devm_request_threaded_irq(sc->dev, sc->irq, NULL,
+					sc27xx_typec_interrupt,
+					IRQF_EARLY_RESUME | IRQF_ONESHOT,
+					dev_name(sc->dev), sc);
+	if (ret) {
+		dev_err(sc->dev, "failed to request irq %d\n", ret);
+		goto error;
+	}
+
+	ret = sc27xx_typec_enable(sc);
+	if (ret)
+		goto error;
+
+	return;
+	
+	error:
+	typec_unregister_port(sc->port);
+}
+
 
 static int sc27xx_typec_probe(struct platform_device *pdev)
 {
@@ -687,7 +698,7 @@ static int sc27xx_typec_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	ret = of_property_read_u32(node, "mode", &mode);
+	ret = of_property_read_u32(node, "sprd,mode", &mode);
 	if (ret) {
 		dev_err(dev, "failed to get typec port mode type\n");
 		return ret;
@@ -718,9 +729,9 @@ static int sc27xx_typec_probe(struct platform_device *pdev)
 	sc->var_data = pdata;
 	sc->typec_cap.type = mode;
 	sc->typec_cap.data = TYPEC_PORT_DRD;
-	sc->typec_cap.dr_set = sc27xx_typec_dr_set;
-	sc->typec_cap.pr_set = sc27xx_typec_pr_set;
-	sc->typec_cap.vconn_set = sc27xx_typec_vconn_set;
+	//sc->typec_cap.dr_set = sc27xx_typec_dr_set;
+	//sc->typec_cap.pr_set = sc27xx_typec_pr_set;
+	//sc->typec_cap.vconn_set = sc27xx_typec_vconn_set;
 	sc->typec_cap.revision = USB_TYPEC_REV_1_2;
 	sc->typec_cap.prefer_role = TYPEC_NO_PREFERRED_ROLE;
 	sc->port = typec_register_port(&pdev->dev, &sc->typec_cap);
@@ -735,7 +746,7 @@ static int sc27xx_typec_probe(struct platform_device *pdev)
 		goto error;
 	}
 
-	if (of_property_read_bool(pdev->dev.of_node, "cc-to-vbus")) {
+	if (of_property_read_bool(pdev->dev.of_node,"cc-to-vbus")) {
 		sc->cc1 = devm_iio_channel_get(dev, "cc1");
 		if (IS_ERR_OR_NULL(sc->cc1)) {
 			ret = PTR_ERR(sc->cc1);
@@ -752,7 +763,7 @@ static int sc27xx_typec_probe(struct platform_device *pdev)
 	}
 
 	psc = sc;
-
+#if 0
 	ret = devm_request_threaded_irq(sc->dev, sc->irq, NULL,
 					sc27xx_typec_interrupt,
 					IRQF_EARLY_RESUME | IRQF_ONESHOT,
@@ -765,8 +776,12 @@ static int sc27xx_typec_probe(struct platform_device *pdev)
 	ret = sc27xx_typec_enable(sc);
 	if (ret)
 		goto error;
+#endif
+	INIT_DELAYED_WORK(&sc->irq_enable_work, typec_irq_enable_work);
 
 	platform_set_drvdata(pdev, sc);
+	schedule_delayed_work(&sc->irq_enable_work,
+				(HZ * 1));
 	return 0;
 
 error:
@@ -800,19 +815,6 @@ static struct platform_driver sc27xx_typec_driver = {
 		.of_match_table = typec_sprd_match,
 	},
 };
-
-static int __init sc27xx_typec_init(void)
-{
-	return platform_driver_register(&sc27xx_typec_driver);
-}
-
-static void __exit sc27xx_typec_exit(void)
-{
-	platform_driver_unregister(&sc27xx_typec_driver);
-}
-
-module_init(sc27xx_typec_init);
-module_exit(sc27xx_typec_exit);
-
+module_platform_driver(sc27xx_typec_driver);
 MODULE_LICENSE("GPL v2");
 

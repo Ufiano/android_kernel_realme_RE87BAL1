@@ -1,14 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * storage_common.c -- Common definitions for mass storage functionality
  *
  * Copyright (C) 2003-2008 Alan Stern
  * Copyeight (C) 2009 Samsung Electronics
  * Author: Michal Nazarewicz (mina86@mina86.com)
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
  */
 
 /*
@@ -175,11 +171,6 @@ void fsg_lun_close(struct fsg_lun *curlun)
 		LDBG(curlun, "close backing file\n");
 		fput(curlun->filp);
 		curlun->filp = NULL;
-		curlun->blksize = 0;
-		curlun->blkbits = 0;
-		curlun->ro = 0;
-		curlun->file_length = 0;
-		curlun->num_sectors = 0;
 	}
 }
 EXPORT_SYMBOL_GPL(fsg_lun_close);
@@ -449,10 +440,6 @@ ssize_t fsg_store_file(struct fsg_lun *curlun, struct rw_semaphore *filesem,
 		LDBG(curlun, "eject attempt prevented\n");
 		return -EBUSY;				/* "Door is locked" */
 	}
-
-	/* write 0 to close file */
-	if (count == 1 && buf[0] == '0')
-		((char *) buf)[0] = 0;
 
 	/* Remove a trailing newline */
 	if (count > 0 && buf[count-1] == '\n')

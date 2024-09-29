@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * File:shub_protocol.c
  * Author:Sensor Hub Team
@@ -14,9 +15,6 @@
 #include <linux/kernel.h>
 #include "shub_common.h"
 #include "shub_protocol.h"
-
-struct shub_data_processor shub_stream_processor;
-struct shub_data_processor shub_stream_processor_nwu;
 
 /**
  * Function :  shub_search_flag
@@ -61,14 +59,15 @@ static void shub_search_flag(struct shub_data_processor *stream,
 /**
  * Function :  shub_checksum
  * Description :
- * it Calculate the CRC  for the 8 bytes in head buffer
+ * it Calculate the CRC for the 8 bytes in head buffer
  * Parameters :
- * pHeadData: point the head  data
+ * head_data: point the head data
  * Return : void
  */
 static u16 shub_checksum(u8 *head_data)
 {
-	/* The first 4 octet is 0x7e
+	/*
+	 * The first 4 octet is 0x7e
 	 * 0x7e7e + 0x7e7e = 0xfcfc
 	 */
 	u32 sum = 0xfcfc;
@@ -97,8 +96,10 @@ static u16 shub_checksum(u8 *head_data)
  * Description :
  * it auto fill the encode head context in one packet
  * Parameters:
- * in_data : point the send data context
- * out_data : the one packet head address
+ * data : point the send data context
+ * out_len : the packet length
+ * Return :
+ * output CRC bytes
  */
 static u16 shub_data_checksum(u8 *data, u16 out_len)
 {
@@ -205,7 +206,7 @@ static void shub_collect_header(struct shub_data_processor *stream,
 	crc_inframe = stream->cur_header[8];
 	crc_inframe <<= 8;
 	crc_inframe |= stream->cur_header[9];
-	if (crc == crc_inframe)	{	/* We have got a right header*/
+	if (crc == crc_inframe)	{ /* We have got a right header*/
 		u16 data_len;
 
 		/* Set the frame length here*/
@@ -291,11 +292,11 @@ static int shub_collect_data(struct shub_data_processor *stream,
 }
 
 /**
- * Function:  shub_InitOnePacket
+ * Function:  shub_init_parse_packet
  * Description :
  * the init SHUB parse data
  * Parameters :
- * stream : point the current  parse  data
+ * stream : point the current parse data
  * Return :
  * TRUE   One  frame completed
  * FALSE  One  frame not completed
@@ -313,11 +314,11 @@ void shub_init_parse_packet(struct shub_data_processor *stream)
 /**
  * Function:  shub_parse_one_packet
  * Description :
- * Parse the input uart  data
+ * Parse the input data
  * Parameters :
- * stream : point the current  parse  data
- * UseData : point the uart buffer data
- * len       : the receive data length
+ * stream : point the current parse data
+ * data : point the buffer data
+ * len  : the receive data length
  * Return :
  * TRUE     One  frame completed
  * FALSE    One  frame not completed
@@ -326,12 +327,9 @@ void shub_init_parse_packet(struct shub_data_processor *stream)
 int shub_parse_one_packet(struct shub_data_processor *stream,
 			  u8 *data, u16 len)
 {
-	u8 *input;
-	u16 remain_len = 0;
+	u8 *input = data;
+	u16 remain_len = len;
 	u16 processed_len = 0;
-
-	remain_len = len;
-	input = data;
 
 	if (!stream || !data)
 		return -EINVAL;
@@ -412,3 +410,6 @@ int shub_encode_one_packet(struct cmd_data *in_data,
 
 	return len;
 }
+
+MODULE_DESCRIPTION("Sensorhub protocol support");
+MODULE_LICENSE("GPL v2");

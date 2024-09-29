@@ -285,7 +285,7 @@ struct camera_module {
 	struct mutex lock;
 	struct camera_group *grp;
 	uint32_t exit_flag;/*= 1, normal exit, =0, abnormal exit*/
-
+	uint32_t private_key;
 	int attach_sensor_id;
 	uint32_t iommu_enable;
 
@@ -395,6 +395,7 @@ struct camera_group {
 	struct camera_frame *mul_share_pyr_dec_buf;
 	struct camera_frame *mul_share_pyr_rec_buf;
 	struct mutex pyr_mulshare_lock;
+	struct wakeup_source *ws;
 };
 
 struct cam_ioctl_cmd {
@@ -2529,13 +2530,6 @@ static int camcore_isp_callback(enum isp_cb_type type, void *param, void *priv_d
 
 	if (unlikely(type == ISP_CB_DEV_ERR)) {
 		pr_err("fail to get isp state, camera %d\n", module->idx);
-		pframe = cam_queue_empty_frame_get();
-		if (pframe) {
-			pframe->evt = IMG_TX_ERR;
-			pframe->irq_type = CAMERA_IRQ_IMG;
-			ret = cam_queue_enqueue(&module->frm_queue, &pframe->list);
-		}
-		complete(&module->frm_com);
 		return 0;
 	}
 
@@ -6130,8 +6124,15 @@ static int camcore_raw_pre_proc(
 	ch->isp_ctx_id = -1;
 	ch->isp_path_id = -1;
 	ch->aux_dcam_path_id = -1;
-	ch->ch_uinfo.dcam_raw_fmt = -1;
-	ch->ch_uinfo.sensor_raw_fmt = -1;
+	//1231 sprd start 
+	ch->ch_uinfo.dcam_raw_fmt = module->channel[proc_info->ch_id].ch_uinfo.dcam_raw_fmt;
+	ch->ch_uinfo.sensor_raw_fmt = module->channel[proc_info->ch_id].ch_uinfo.sensor_raw_fmt;
+	pr_debug("proc_info->ch_id %d sensor_raw_fmt %d dcam_raw_fmt %d, ch->ch_id %d sensor_raw_fmt %d dcam_raw_fmt %d,\n",
+		proc_info->ch_id,
+		module->channel[proc_info->ch_id].ch_uinfo.sensor_raw_fmt,
+		module->channel[proc_info->ch_id].ch_uinfo.dcam_raw_fmt,
+		ch->ch_id, ch->ch_uinfo.sensor_raw_fmt, ch->ch_uinfo.dcam_raw_fmt);
+	//1231 sprd end 
 	dev = (struct dcam_pipe_dev *)module->dcam_dev_handle;
 	sw_ctx = &dev->sw_ctx[module->offline_cxt_id];
 	if (proc_info->scene == RAW_PROC_SCENE_HWSIM) {
@@ -7216,6 +7217,7 @@ static struct cam_ioctl_cmd ioctl_cmds_table[] = {
 	[_IOC_NR(SPRD_IMG_IO_SET_LONGEXP_CAP)]      = {SPRD_IMG_IO_SET_LONGEXP_CAP,      camioctl_longexp_mode_set},
 	[_IOC_NR(SPRD_IMG_IO_SET_MUL_MAX_SN_SIZE)]  = {SPRD_IMG_IO_SET_MUL_MAX_SN_SIZE,  camioctl_mul_max_sensor_size_set},
 	[_IOC_NR(SPRD_IMG_IO_SET_CAP_ZSL_INFO)]     = {SPRD_IMG_IO_SET_CAP_ZSL_INFO,     camioctl_cap_zsl_info_set},
+	[_IOC_NR(SPRD_IMG_IO_SET_KEY)]              = {SPRD_IMG_IO_SET_KEY,              camioctl_key_set},
 	[_IOC_NR(SPRD_IMG_IO_SET_DCAM_RAW_FMT)]     = {SPRD_IMG_IO_SET_DCAM_RAW_FMT,     camioctl_dcam_raw_fmt_set},
 };
 
@@ -7260,12 +7262,15 @@ static long camcore_ioctl(struct file *file, unsigned int cmd,
 		locked = 1;
 	}
 
-	ret = ioctl_cmd_p->cmd_proc(module, arg);
-	if (ret) {
-		pr_debug("fail to ioctl cmd:%x, nr:%d, func %ps\n",
-			cmd, nr, ioctl_cmd_p->cmd_proc);
-		goto exit;
-	}
+	if (cmd == SPRD_IMG_IO_SET_KEY || module->private_key == 1) {
+		ret = ioctl_cmd_p->cmd_proc(module, arg);
+		if (ret) {
+			pr_debug("fail to ioctl cmd:%x, nr:%d, func %ps\n",
+				cmd, nr, ioctl_cmd_p->cmd_proc);
+			goto exit;
+		}
+	} else
+		pr_err("cam %d fail to get ioctl permission %d\n", module->idx, module->private_key);
 
 	pr_debug("cam id:%d, %ps, done!\n",
 		module->idx, ioctl_cmd_p->cmd_proc);
@@ -7647,7 +7652,9 @@ static int camcore_open(struct inode *node, struct file *file)
 	if (atomic_read(&grp->camera_opened) == 1) {
 		/* should check all needed interface here. */
 		spin_lock_irqsave(&grp->module_lock, flag);
-
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
+		__pm_stay_awake(grp->ws);
+#endif
 		if (grp->hw_info && grp->hw_info->soc_dcam->pdev)
 			ret = cam_buf_iommudev_reg(
 				&grp->hw_info->soc_dcam->pdev->dev,
@@ -7726,6 +7733,8 @@ static int camcore_release(struct inode *node, struct file *file)
 		pr_err("fail to get valid input ptr\n");
 		return -EFAULT;
 	}
+
+	module->private_key = 0;
 
 	group = module->grp;
 	idx = module->idx;
@@ -7827,6 +7836,9 @@ static int camcore_release(struct inode *node, struct file *file)
 		atomic_set(&group->mul_buf_alloced, 0);
 		atomic_set(&group->mul_pyr_buf_alloced, 0);
 		group->is_mul_buf_share = 0;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
+		__pm_relax(group->ws);
+#endif
 		spin_unlock_irqrestore(&group->module_lock, flag);
 	}
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
@@ -7915,6 +7927,8 @@ static int camcore_probe(struct platform_device *pdev)
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
 	pm_runtime_set_active(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
+	group->ws = wakeup_source_create("Camdrv Wakeup lock");
+	wakeup_source_add(group->ws);
 #endif
 
 	/* for get ta status
@@ -7950,6 +7964,10 @@ static int camcore_remove(struct platform_device *pdev)
 	if (group) {
 		if (group->ca_conn)
 			cam_trusty_disconnect();
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(5, 4, 0))
+		wakeup_source_remove(group->ws);
+		wakeup_source_destroy(group->ws);
+#endif
 		kfree(group);
 		image_dev.this_device->platform_data = NULL;
 	}

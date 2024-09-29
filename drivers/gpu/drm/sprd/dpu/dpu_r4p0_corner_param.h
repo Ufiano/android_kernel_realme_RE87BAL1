@@ -1,8 +1,11 @@
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (C) 2020 Unisoc Inc.
+ */
+
 #ifndef __DPU_R4P0_CORNER_PARAM_H_
 #define __DPU_R4P0_CORNER_PARAM_H_
 
-#define TOP_CORNER_EN		BIT(0)
-#define BOT_CORNER_EN		BIT(16)
 #define RADIUS_MAX		128
 
 unsigned int corner_param[RADIUS_MAX][RADIUS_MAX] = {

@@ -1,18 +1,14 @@
 /*
- * Spreadtrum pin controller driver
- * Copyright (C) 2019 Spreadtrum  - http://www.spreadtrum.com
+ * SPDX-License-Identifier: GPL-2.0-only
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
+ * Unisoc qogirl6 pinctrl driver
  *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
+ * Copyright (C) 2021 Unisoc, Inc.
+ * Author: luting guo<luting.guo@unisoc.com>
  */
 
 #include <linux/module.h>
+#include <linux/mod_devicetable.h>
 #include <linux/platform_device.h>
 
 #include "pinctrl-sprd.h"
@@ -966,7 +962,6 @@ MODULE_DEVICE_TABLE(of, sprd_pinctrl_of_match);
 static struct platform_driver sprd_pinctrl_driver = {
 	.driver = {
 		.name = "sprd-pinctrl",
-		.owner = THIS_MODULE,
 		.of_match_table = sprd_pinctrl_of_match,
 	},
 	.probe = sprd_pinctrl_probe,
@@ -977,5 +972,5 @@ static struct platform_driver sprd_pinctrl_driver = {
 module_platform_driver(sprd_pinctrl_driver);
 
 MODULE_DESCRIPTION("SPREADTRUM Pin Controller Driver");
-MODULE_AUTHOR("linhua xu <linhua.xu@unisoc.com>");
+MODULE_AUTHOR("luting guo <luting.guo@unisoc.com>");
 MODULE_LICENSE("GPL v2");

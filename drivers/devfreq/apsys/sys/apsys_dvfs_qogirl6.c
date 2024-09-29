@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -92,10 +84,10 @@ char *qogirl6_vdsp_val_to_freq(u32 val)
 	}
 }
 
-static void apsys_dvfs_force_en(u32 force_en)
+static void apsys_dvfs_force_en(struct apsys_dev *apsys, u32 force_en)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct apsys_dvfs_reg *)apsys->apsys_base;
 
 	if (force_en)
 		reg->cgm_ap_dvfs_clk_gate_ctrl |= BIT(1);
@@ -103,10 +95,10 @@ static void apsys_dvfs_force_en(u32 force_en)
 		reg->cgm_ap_dvfs_clk_gate_ctrl &= ~BIT(1);
 }
 
-static void apsys_dvfs_auto_gate(u32 gate_sel)
+static void apsys_dvfs_auto_gate(struct apsys_dev *apsys, u32 gate_sel)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct apsys_dvfs_reg *)apsys->apsys_base;
 
 	if (gate_sel)
 		reg->cgm_ap_dvfs_clk_gate_ctrl |= BIT(0);
@@ -114,31 +106,31 @@ static void apsys_dvfs_auto_gate(u32 gate_sel)
 		reg->cgm_ap_dvfs_clk_gate_ctrl &= ~BIT(0);
 }
 
-static void apsys_dvfs_hold_en(u32 hold_en)
+static void apsys_dvfs_hold_en(struct apsys_dev *apsys, u32 hold_en)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct apsys_dvfs_reg *)apsys->apsys_base;
 
 	reg->ap_dvfs_hold_ctrl = hold_en;
 }
 
-static void apsys_dvfs_wait_window(u32 wait_window)
+static void apsys_dvfs_wait_window(struct apsys_dev *apsys, u32 wait_window)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct apsys_dvfs_reg *)apsys->apsys_base;
 
 	reg->ap_dvfs_wait_window_cfg = wait_window;
 }
 
-static void apsys_dvfs_min_volt(u32 min_volt)
+static void apsys_dvfs_min_volt(struct apsys_dev *apsys, u32 min_volt)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct apsys_dvfs_reg *)apsys->apsys_base;
 
 	reg->ap_min_voltage_cfg = min_volt;
 }
 
-static void apsys_top_dvfs_init(void)
+static void apsys_top_dvfs_init(struct apsys_dev *apsys)
 {
 	void __iomem *base;
 
@@ -148,15 +140,15 @@ static void apsys_top_dvfs_init(void)
 	if (IS_ERR(base))
 		pr_err("ioremap top dvfs address failed\n");
 
-	regmap_ctx.top_base = (unsigned long)base;
+	apsys->top_base = (unsigned long)base;
 
 }
 
-static int dcdc_modem_cur_volt(void)
+static int dcdc_modem_cur_volt(struct apsys_dev *apsys)
 {
 	volatile u32 rw32;
 
-	rw32 = *(volatile u32 *)(regmap_ctx.top_base + 0x0044);
+	rw32 = *(volatile u32 *)(apsys->top_base + 0x0044);
 
 	return (rw32 >> 20) & 0x07;
 }
@@ -198,14 +190,14 @@ static int apsys_dvfs_parse_dt(struct apsys_dev *apsys,
 
 static void apsys_dvfs_init(struct apsys_dev *apsys)
 {
-	apsys_dvfs_hold_en(apsys->dvfs_coffe.dvfs_hold_en);
-	apsys_dvfs_force_en(apsys->dvfs_coffe.dvfs_force_en);
-	apsys_dvfs_auto_gate(apsys->dvfs_coffe.dvfs_auto_gate);
-	apsys_dvfs_wait_window(apsys->dvfs_coffe.dvfs_wait_window);
-	apsys_dvfs_min_volt(apsys->dvfs_coffe.dvfs_min_volt);
+	apsys_dvfs_hold_en(apsys, apsys->dvfs_coffe.dvfs_hold_en);
+	apsys_dvfs_force_en(apsys, apsys->dvfs_coffe.dvfs_force_en);
+	apsys_dvfs_auto_gate(apsys, apsys->dvfs_coffe.dvfs_auto_gate);
+	apsys_dvfs_wait_window(apsys, apsys->dvfs_coffe.dvfs_wait_window);
+	apsys_dvfs_min_volt(apsys, apsys->dvfs_coffe.dvfs_min_volt);
 }
 
-static struct apsys_dvfs_ops apsys_dvfs_ops = {
+const struct apsys_dvfs_ops qogirl6_apsys_dvfs_ops = {
 	.parse_dt = apsys_dvfs_parse_dt,
 	.dvfs_init = apsys_dvfs_init,
 	.apsys_auto_gate = apsys_dvfs_auto_gate,
@@ -215,15 +207,3 @@ static struct apsys_dvfs_ops apsys_dvfs_ops = {
 	.top_dvfs_init = apsys_top_dvfs_init,
 	.top_cur_volt = dcdc_modem_cur_volt,
 };
-
-static struct dvfs_ops_entry apsys_dvfs_entry = {
-	.ver = "qogirl6",
-	.ops = &apsys_dvfs_ops,
-};
-
-static int __init apsys_dvfs_register(void)
-{
-	return apsys_dvfs_ops_register(&apsys_dvfs_entry);
-}
-
-subsys_initcall(apsys_dvfs_register);

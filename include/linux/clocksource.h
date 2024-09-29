@@ -27,6 +27,8 @@ struct module;
 #include <asm/clocksource.h>
 #endif
 
+#include <vdso/clocksource.h>
+
 /**
  * struct clocksource - hardware abstraction for a free running counter
  *	Provides mostly state-free accessors to the underlying hardware.
@@ -241,6 +243,11 @@ static inline void __clocksource_update_freq_khz(struct clocksource *cs, u32 khz
 	__clocksource_update_freq_scale(cs, 1000, khz);
 }
 
+#ifdef CONFIG_ARCH_CLOCKSOURCE_INIT
+extern void clocksource_arch_init(struct clocksource *cs);
+#else
+static inline void clocksource_arch_init(struct clocksource *cs) { }
+#endif
 
 extern int timekeeping_notify(struct clocksource *clock);
 
@@ -256,9 +263,6 @@ extern int clocksource_i8253_init(void);
 
 #define TIMER_OF_DECLARE(name, compat, fn) \
 	OF_DECLARE_1_RET(timer, name, compat, fn)
-
-#define CLOCKSOURCE_OF_DECLARE(name, compat, fn) \
-	TIMER_OF_DECLARE(name, compat, fn)
 
 #ifdef CONFIG_TIMER_PROBE
 extern void timer_probe(void);

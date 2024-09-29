@@ -42,12 +42,13 @@
 #include <linux/init.h>
 #include <linux/export.h>
 
+//liukangping add hardinfo sensor begin
 #if defined(CONFIG_NANOHUB) && defined(CONFIG_CUSTOM_KERNEL_SENSORHUB)
 #include "../mediatek/sensors-1.0/sensorHub/inc_v1/SCP_sensorHub.h"
 #include "../mediatek/sensors-1.0/hwmon/include/hwmsensor.h"
 #endif
+//liukangping add hardinfo sensor end
 
-extern char *saved_command_line;
 const char *dfy;
 
 
@@ -63,8 +64,9 @@ int nicky_gpio_value = -1;
 #define HARDWARE_INFO_NICKY "realme C35"
 #define HARDWARE_INFO_NICKY_A "narzo 50A Prime"
 char emmc_buf_size[16];
-static char *hw_info_prj_name;
-static char *fuse_flag;
+static char hw_info_prj_name[15];
+static char fuse_flag[5];
+static char lcd_hardware_name[50];
 int prj_name_flag = -1;
 
 /******************************************************************************
@@ -84,12 +86,14 @@ static BOARD_TYPE_TABLE pcba_type_table[] =
     { .type_value = -1, .pcba_type_name = "UNKNOWN", },
 };
 
+/*
 static EMMC_ID emmc_id[] = {
 	{.size = 32,  .id = "YMUS6A4TB1A2C1",},
 	{.size = 64,  .id = "YMUS7A4TB2A2C1",},
 	{.size = 128, .id = "YMUS8A4TB3A2C1",},
 	{.size = 256, .id = "YMUS9A4TB4A2C1",},
 };
+*/
 //static struct delayed_work psSetSensorConf_work;
 
 /******************************************************************************
@@ -109,17 +113,47 @@ void do_psSetSensorConf_work(struct work_struct *work)
 }
 */
 
-static int __init fuse_flag_setup(char *str)
+static int fuse_flag_setup(void)
 {
-	fuse_flag = str;
-	return 0;
+    struct device_node *cmdline_node;
+    const char *cmd_line, *temp_name;
+    int rc = 0;
+
+    cmdline_node = of_find_node_by_path("/chosen");
+    rc = of_property_read_string(cmdline_node, "bootargs", &cmd_line);
+    if (!rc) {
+        temp_name = strstr(cmd_line, "isfuse=");
+            if (temp_name) {
+                sscanf(temp_name, "isfuse=%s", fuse_flag);
+                pr_err("hardwareinfo: %s: isfuse=%s", __func__, fuse_flag);
+            } else {
+                pr_err("hardwareinfo: %s: isfuse read error", __func__);
+            }
+    }
+
+    return rc;
 }
-__setup("isfuse=", fuse_flag_setup);
 
-static int __init hq_prj_name_setup(char *str)
+static int hq_prj_name_setup(void)
 {
-	hw_info_prj_name = str;
+    struct device_node *cmdline_node;
+    const char *cmd_line, *temp_name;
+    int rc = 0;
 
+    cmdline_node = of_find_node_by_path("/chosen");
+    rc = of_property_read_string(cmdline_node, "bootargs", &cmd_line);
+    if (!rc) {
+        temp_name = strstr(cmd_line, "androidboot.keybox_id_value=");
+            if (temp_name) {
+                sscanf(temp_name, "androidboot.keybox_id_value=%s", hw_info_prj_name);
+                pr_err("hardwareinfo: %s: androidboot.keybox_id_value=%s", __func__, hw_info_prj_name);
+            } else {
+                pr_err("hardwareinfo: %s: androidboot.keybox_id_value read error", __func__);
+            }
+    } else {
+        return rc;
+    }
+    
     if (strncmp(hw_info_prj_name, "RE549C", 6) == 0){
         prj_name_flag = 1;
     }else if (strncmp(hw_info_prj_name, "RE87BAL1", 6) == 0){
@@ -131,9 +165,9 @@ static int __init hq_prj_name_setup(char *str)
     }else if (strncmp(hw_info_prj_name, "RE87DB", 6) == 0){
         prj_name_flag = 5;
     }
-	return 0;
+
+    return 0;
 }
-__setup("androidboot.keybox_id_value=", hq_prj_name_setup);
 
 void write_cam_otp_info(enum hardware_id id,struct global_otp_struct *cam_otp)
 {
@@ -168,8 +202,8 @@ void get_hardware_info_data(enum hardware_id id, const void *data)
         switch (id) {
         case HWID_CTP_DRIVER:
             hwinfo_data.ctp_driver = data;
-		    dfy = data;
-		printk("dfy=:%s,%s,%s,%d",dfy,hwinfo_data.ctp_driver,__func__,__LINE__);
+			dfy = data;
+			printk("dfy=:%s,%s,%s,%d",dfy,hwinfo_data.ctp_driver,__func__,__LINE__);
             break;
         case HWID_CTP_MODULE:
             hwinfo_data.ctp_module = data;
@@ -238,9 +272,11 @@ void get_hardware_info_data(enum hardware_id id, const void *data)
         case HWID_FINGERPRINT:
             hwinfo_data.fingerprint = data;
             break;
+        //fanjiafeng5 add for pdx213 fingerprint sn add begin
         case HWID_FINGERPRINT_SN:
             hwinfo_data.fingerprint_sn = (unsigned char *)data;
             break;
+        //fanjiafeng5  add end
         case HWID_MAIN_CAM_SN:
             strcpy(hwinfo_data.main_cam_sn, data);
             break;
@@ -270,15 +306,26 @@ void get_hardware_info_data(enum hardware_id id, const void *data)
 }
 EXPORT_SYMBOL(get_hardware_info_data);
 
-const char *lcd_hardware_name;
-static int __init lcd_name_get_1(char *str)
+static int lcd_name_get_1(void)
 {
-	if (str != NULL)
-		lcd_hardware_name = str;
-	DRM_INFO("lcd name from uboot: %s\n", lcd_hardware_name);
-	return 0;
+    struct device_node *cmdline_node;
+    const char *cmd_line, *temp_name;
+    int rc = 0;
+
+    cmdline_node = of_find_node_by_path("/chosen");
+    rc = of_property_read_string(cmdline_node, "bootargs", &cmd_line);
+    if (!rc) {
+        temp_name = strstr(cmd_line, "lcd_name=");
+            if (temp_name) {
+                sscanf(temp_name, "lcd_name=%s", lcd_hardware_name);
+                pr_err("hardwareinfo: %s: lcd_name=%s", __func__, lcd_hardware_name);
+            } else {
+                pr_err("hardwareinfo: %s: lcd_name read error", __func__);
+            }
+    }
+
+    return rc;
 }
-__setup("lcd_name=", lcd_name_get_1);
 
 static ssize_t show_lcm(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -317,7 +364,7 @@ static ssize_t show_fingerprint(struct device *dev, struct device_attribute *att
         return sprintf(buf, "fingerprint name :Not Found\n");
     }
 }
-
+//fanjiafeng5 add for pdx213 fingerprint sn add begin
 static ssize_t show_fingerprint_sn(struct device *dev, struct device_attribute *attr, char *buf)
 {
     if (NULL != hwinfo_data.fingerprint_sn) {
@@ -326,7 +373,7 @@ static ssize_t show_fingerprint_sn(struct device *dev, struct device_attribute *
         return sprintf(buf, "fingerprint_sn :Not Found\n");
     }
 }
-
+//fanjiafeng5  add end
 static ssize_t show_fw_info(struct device *dev, struct device_attribute *attr, char *buf)
 {
     if (NULL != hwinfo_data.ctp_fw_info) {
@@ -374,8 +421,10 @@ static ssize_t store_main_camera(struct device *dev, struct device_attribute *at
 
 static ssize_t show_main_camera(struct device *dev, struct device_attribute *attr, char *buf)
 {
+/*simon modified to show source camera for factory camera mixture in zal1806 start*/
     if (NULL != hw_info_main_otp.sensor_name)
 		hwinfo_data.main_camera = hw_info_main_otp.sensor_name;
+/*simon modified to show source camera for factory camera mixture in zal1806 end*/
     if (NULL != hwinfo_data.main_camera) {
         return sprintf(buf , "main camera :%s\n", hwinfo_data.main_camera);
     } else {
@@ -401,8 +450,10 @@ static ssize_t store_main_camera2(struct device *dev, struct device_attribute *a
 
 static ssize_t show_main_camera2(struct device *dev, struct device_attribute *attr, char *buf)
 {
+    /*simon modified to show source camera for factory camera mixture in zal1806 start*/
     if (NULL != hw_info_main2_otp.sensor_name)
 		hwinfo_data.main_camera2 = hw_info_main2_otp.sensor_name;
+    /*simon modified to show source camera for factory camera mixture in zal1806 end*/
     if (NULL != hwinfo_data.main_camera2) {
         return sprintf(buf , "main camera 2 :%s\n", hwinfo_data.main_camera2);
     } else {
@@ -453,8 +504,10 @@ static ssize_t store_sub_camera(struct device *dev, struct device_attribute *att
 
 static ssize_t show_sub_camera(struct device *dev, struct device_attribute *attr, char *buf)
 {
+    /*simon modified to show source camera for factory camera mixture in zal1806 start*/
     if (NULL != hw_info_sub_otp.sensor_name)
 		hwinfo_data.sub_camera = hw_info_sub_otp.sensor_name;
+    /*simon modified to show source camera for factory camera mixture in zal1806 end*/
     if (NULL != hwinfo_data.sub_camera) {
         return sprintf(buf , "sub camera :%s\n", hwinfo_data.sub_camera);
     } else {
@@ -506,6 +559,8 @@ static ssize_t show_sub_otp(struct device *dev, struct device_attribute *attr, c
     }
 }
 */
+
+/*
 #define EMMC_VENDOR_NAME "/sys/bus/platform/drivers/ufshcd-sprd/20200000.ufs/string_descriptors/manufacturer_name"
 static int get_emmc_vendor_name(char* buff_name)
 {
@@ -531,7 +586,7 @@ static int get_emmc_vendor_name(char* buff_name)
     set_fs(KERNEL_DS);
     pos = 0;
 
-    ret = vfs_read(pfile, vendor_name, emmc_len, &pos);
+    ret = kernel_read(pfile, vendor_name, emmc_len, &pos);
     if(ret <= 0) {
         printk("[HWINFO]: read EMMC_VENDOR_NAME  file failed!\n");
         goto ERR_1;
@@ -571,7 +626,7 @@ static unsigned long long get_emmc_version(void)
     set_fs(KERNEL_DS);
     pos = 0;
 
-    ret = vfs_read(pfile, emmc_buf_size, 16, &pos);
+    ret = kernel_read(pfile, emmc_buf_size, 16, &pos);
     if(ret <= 0) {
         printk("[HWINFO]: read emmc size file failed!\n");
         goto ERR_1;
@@ -615,15 +670,15 @@ static unsigned int get_emmc_size(void)
     set_fs(KERNEL_DS);
     pos = 0;
 
-    ret = vfs_read(pfile, buf_size_temp, emmc_len, &pos);
+    ret = kernel_read(pfile, buf_size_temp, emmc_len, &pos);
     strncpy(buf_size,buf_size_temp,18);
     buf_size[18] = '\0';
     if(ret <= 0) {
         printk("[HWINFO]: read emmc size file failed!\n");
         goto ERR_1;
     }
-
-    Size_buf = simple_strtoull(buf_size, NULL, 0);
+//    Size_buf = simple_strtoull(buf_size, NULL, 0);
+    kstrtoull(buf_size, 0, &Size_buf);
     Size_buf >>= 1; //Switch to KB
     emmc_size = (((unsigned int)Size_buf) / 1024) / 1024;
 
@@ -656,6 +711,7 @@ ERR_1:
 ERR_0:
     return emmc_size;
 }
+*/
 
 #define K(x) ((x) << (PAGE_SHIFT - 10))
 static unsigned int get_ram_size(void)
@@ -685,6 +741,7 @@ static unsigned int get_ram_size(void)
     return ram_size;
 }
 
+/*
 static ssize_t show_emmc_size(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	int emmc_size = 0;
@@ -693,14 +750,15 @@ static ssize_t show_emmc_size(struct device *dev, struct device_attribute *attr,
 	Size_buf = get_emmc_version();
     return sprintf(buf, "EMMC:%dGB %s\n", emmc_size,emmc_buf_size);
 }
-
+*/
+/*
 static ssize_t show_emmc_version(struct device *dev, struct device_attribute *attr, char *buf)
 {
     unsigned long long Size_buf = 0;
 	Size_buf = get_emmc_version();
     return sprintf(buf, "EMMC_Version:%s\n", emmc_buf_size);
 }
-
+*/
 static ssize_t show_ram_size(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	int ram_size = 0;
@@ -710,16 +768,25 @@ static ssize_t show_ram_size(struct device *dev, struct device_attribute *attr, 
 
 static ssize_t show_modem_id(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	char *ptr;
+	char ptr[5];
 	int rfboard_id = 0;
-	ptr = strstr(saved_command_line, "rfboard.id=");
-	if(ptr != 0){
-		ptr += strlen("rfboard.id=");
-		rfboard_id = simple_strtol(ptr, NULL, 12);
-	}else{
-		rfboard_id = 0;
+	int ret = 0;
+	struct device_node *cmdline_node;
+	const char *cmd_line, *temp_name;
+
+	pr_err("%s: rfboard.id read start", __func__);
+	cmdline_node = of_find_node_by_path("/chosen");
+	ret = of_property_read_string(cmdline_node, "bootargs", &cmd_line);
+	if (!ret) {
+		temp_name = strstr(cmd_line, "rfboard.id=");
+		if (temp_name) {
+			sscanf(temp_name, "rfboard.id=%s", ptr);
+			rfboard_id = simple_strtol(ptr, NULL, 12);
+			pr_err("%s: rfboard.id=%d", __func__, rfboard_id);
+		} else {
+			pr_err("%s: rfboard.id read error", __func__);
+		}
 	}
-	printk("[kernel] Read rfboard_id id: %d", rfboard_id);
     return sprintf(buf, "modem_id:%d\n", rfboard_id);
 }
 
@@ -740,19 +807,29 @@ static ssize_t show_flash_slot(struct device *dev, struct device_attribute *attr
 
 static ssize_t show_stage_id(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	char *ptr;
+	char ptr[5];
 	int stage_id = 0;
-	ptr = strstr(saved_command_line, "pcb_version=");
-	if(ptr != 0){
-		ptr += strlen("pcb_version=");
-		stage_id = simple_strtol(ptr, NULL, 13);
-	}else{
-		stage_id = 0;
+	int ret = 0;
+	struct device_node *cmdline_node;
+	const char *cmd_line, *temp_name;
+
+	pr_err("%s: pcb_version read start", __func__);
+	cmdline_node = of_find_node_by_path("/chosen");
+	ret = of_property_read_string(cmdline_node, "bootargs", &cmd_line);
+	if (!ret) {
+		temp_name = strstr(cmd_line, "pcb_version=");
+		if (temp_name) {
+			sscanf(temp_name, "pcb_version=%s", ptr);
+			stage_id = simple_strtol(ptr, NULL, 13);
+			pr_err("%s: pcb_version=%d", __func__, stage_id);
+		} else {
+			pr_err("%s: pcb_version read error", __func__);
+		}
 	}
-	printk("[kernel] Read stage_id id: %d", stage_id);
     return sprintf(buf, "stage_id:%d\n", stage_id);
 }
 
+/*
 char* get_emmc_id(void)
 {
     unsigned int size;
@@ -765,22 +842,23 @@ char* get_emmc_id(void)
         }
     return emmc_id[i].id;
 }
-
+*/
 
 static ssize_t show_flash(struct device *dev, struct device_attribute *attr, char *buf)
 {
-    char emmc_vendor_name[32] = {0};
-    int emmc_size = 0;
-    get_emmc_vendor_name(emmc_vendor_name);
-    emmc_size = get_emmc_size();
-	return sprintf(buf, "flash name :%s %dGB+%dGB %s" , DDR_TYPE, get_ram_size(), emmc_size,emmc_vendor_name);
+//    char emmc_vendor_name[32] = {0};
+//    int emmc_size = 0;
+//    get_emmc_vendor_name(emmc_vendor_name);
+//    emmc_size = get_emmc_size();
+//	return sprintf(buf, "flash name :%s %dGB+%dGB %s" , DDR_TYPE, get_ram_size(), emmc_size,emmc_vendor_name);
+    return sprintf(buf, "flash name :%s %dGB" , DDR_TYPE, get_ram_size());
 }
-
+/*
 static ssize_t show_ufs_id(struct device *dev, struct device_attribute *attr, char *buf)
 {
     return sprintf(buf, "ufs_id:%s\n " , get_emmc_id());
 }
-
+*/
 static ssize_t show_wifi(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	if (prj_name_flag == 1) {
@@ -811,7 +889,7 @@ static ssize_t show_bt(struct device *dev, struct device_attribute *attr, char *
     } else if (prj_name_flag == 5){
         return sprintf(buf, "bt name :%s\n", HARDWARE_INFO_NICO_C);
     }else{
-        return sprintf(buf, "bt name :%s\n", "unknown");
+        return sprintf(buf, "bt name :%s\n","unknown");
     }
 }
 
@@ -1049,7 +1127,6 @@ static ssize_t show_version(struct device *dev, struct device_attribute *attr, c
     }
 }
 #if 0
-
 static ssize_t show_charger_ic(struct device *dev, struct device_attribute *attr, char *buf)
 {
     if(chipid_num == 0x02){
@@ -1209,11 +1286,11 @@ static DEVICE_ATTR(main_camera2, 0644, show_main_camera2, store_main_camera2);
 static DEVICE_ATTR(main_camera3, 0644, show_main_camera3, store_main_camera3);
 static DEVICE_ATTR(sub_camera, 0644, show_sub_camera, store_sub_camera);
 static DEVICE_ATTR(flash, 0444, show_flash, NULL);
-static DEVICE_ATTR(ufs_id, 0444, show_ufs_id, NULL);
+//static DEVICE_ATTR(ufs_id, 0444, show_ufs_id, NULL);
 static DEVICE_ATTR(flash_slot, 0444, show_flash_slot, NULL);
 //static DEVICE_ATTR(hifi_name, 0444, show_hifi, NULL);
-static DEVICE_ATTR(emmc_size, 0444, show_emmc_size, NULL);
-static DEVICE_ATTR(emmc_version, 0444, show_emmc_version, NULL);
+//static DEVICE_ATTR(emmc_size, 0444, show_emmc_size, NULL);
+//static DEVICE_ATTR(emmc_version, 0444, show_emmc_version, NULL);
 static DEVICE_ATTR(ram_size, 0444, show_ram_size, NULL);
 static DEVICE_ATTR(modem_id, 0444, show_modem_id, NULL);
 static DEVICE_ATTR(stage_id, 0444, show_stage_id, NULL);
@@ -1237,7 +1314,9 @@ static DEVICE_ATTR(bat_id, 0444, show_bat_id,NULL );
 static DEVICE_ATTR(nfc, 0444, show_nfc,NULL );
 //static DEVICE_ATTR(hw_id, 0444, show_hw_id, NULL);
 static DEVICE_ATTR(fingerprint, 0444, show_fingerprint, NULL);
+//fanjiafeng5 add for pdx213 fingerprint sn add begin
 static DEVICE_ATTR(fingerprint_sn, 0444, show_fingerprint_sn, NULL);
+//fanjiafeng5 add end
 static DEVICE_ATTR(main_cam_sn, 0444, show_main_cam_sn, NULL);
 static DEVICE_ATTR(main_cam_2_sn, 0444, show_main_cam_2_sn, NULL);
 static DEVICE_ATTR(main_cam_3_sn, 0444, show_main_cam_3_sn, NULL);
@@ -1262,10 +1341,10 @@ static struct attribute *hdinfo_attributes[] = {
     &dev_attr_sub_camera.attr,
     &dev_attr_flash.attr,
     &dev_attr_flash_slot.attr,
-    &dev_attr_ufs_id.attr,
+    //&dev_attr_ufs_id.attr,
     //&dev_attr_hifi_name.attr,
-    &dev_attr_emmc_size.attr,
-	&dev_attr_emmc_version.attr,
+    //&dev_attr_emmc_size.attr,
+    //&dev_attr_emmc_version.attr,
     &dev_attr_ram_size.attr,
     &dev_attr_modem_id.attr,
     &dev_attr_stage_id.attr,
@@ -1289,7 +1368,9 @@ static struct attribute *hdinfo_attributes[] = {
     &dev_attr_nfc.attr,
     //&dev_attr_hw_id.attr,
     &dev_attr_fingerprint.attr,
+    //fanjiafeng5  add for pdx213 fingerprint sn add begin
     &dev_attr_fingerprint_sn.attr,
+    //fanjiafeng5  add end
     &dev_attr_main_cam_sn.attr,
     &dev_attr_main_cam_2_sn.attr,
     &dev_attr_main_cam_3_sn.attr,
@@ -1341,6 +1422,19 @@ static int HardwareInfo_driver_probe(struct platform_device *pdev)
     memset(&hw_info_main3_otp, 0, sizeof(hw_info_main3_otp));
 
     printk("[HWINFO] HardwareInfo_driver_probe!\n", ret);
+
+    ret = fuse_flag_setup();
+    if (ret < 0) {
+        pr_err("%s: cmdline isfuse read error\n", __func__);
+    }
+    ret = hq_prj_name_setup();
+    if (ret < 0) {
+        pr_err("%s: cmdline androidboot.keybox_id_value read error\n", __func__);
+    }
+    ret = lcd_name_get_1();
+    if (ret < 0) {
+        pr_err("%s: cmdline lcd_name read error\n", __func__);
+    }
 
     ret = hw_info_parse_dt(pdev->dev.of_node);
     if (ret < 0) {

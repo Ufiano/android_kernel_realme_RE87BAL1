@@ -16,6 +16,7 @@ struct audio_params {
 	u8 inf_type;
 	u8 mute;
 	u8 ats_ver;
+	u32 rate;
 };
 
 enum audio_sample_freq {

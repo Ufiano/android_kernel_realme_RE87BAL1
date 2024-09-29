@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * Universal Interface for Intel High Definition Audio Codec
  *
@@ -8,20 +9,6 @@
  *
  * Based on patch_cmedia.c and patch_realtek.c
  * Copyright (c) 2004 Takashi Iwai <tiwai@suse.de>
- *
- *  This driver is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; either version 2 of the License, or
- *  (at your option) any later version.
- *
- *  This driver is distributed in the hope that it will be useful,
- *  but WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *  GNU General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307 USA
  */
 
 #include <linux/init.h>
@@ -32,7 +19,7 @@
 #include <linux/module.h>
 #include <sound/core.h>
 #include <sound/jack.h>
-#include "hda_codec.h"
+#include <sound/hda_codec.h>
 #include "hda_local.h"
 #include "hda_auto_parser.h"
 #include "hda_beep.h"
@@ -333,33 +320,15 @@ static void stac_gpio_set(struct hda_codec *codec, unsigned int mask,
 }
 
 /* hook for controlling mic-mute LED GPIO */
-static void stac_capture_led_hook(struct hda_codec *codec,
-				  struct snd_kcontrol *kcontrol,
-				  struct snd_ctl_elem_value *ucontrol)
+static void stac_capture_led_update(struct hda_codec *codec)
 {
 	struct sigmatel_spec *spec = codec->spec;
-	unsigned int mask;
-	bool cur_mute, prev_mute;
 
-	if (!kcontrol || !ucontrol)
-		return;
-
-	mask = 1U << snd_ctl_get_ioffidx(kcontrol, &ucontrol->id);
-	prev_mute = !spec->mic_enabled;
-	if (ucontrol->value.integer.value[0] ||
-	    ucontrol->value.integer.value[1])
-		spec->mic_enabled |= mask;
+	if (spec->gen.micmute_led.led_value)
+		spec->gpio_data |= spec->mic_mute_led_gpio;
 	else
-		spec->mic_enabled &= ~mask;
-	cur_mute = !spec->mic_enabled;
-	if (cur_mute != prev_mute) {
-		if (cur_mute)
-			spec->gpio_data |= spec->mic_mute_led_gpio;
-		else
-			spec->gpio_data &= ~spec->mic_mute_led_gpio;
-		stac_gpio_set(codec, spec->gpio_mask,
-			      spec->gpio_dir, spec->gpio_data);
-	}
+		spec->gpio_data &= ~spec->mic_mute_led_gpio;
+	stac_gpio_set(codec, spec->gpio_mask, spec->gpio_dir, spec->gpio_data);
 }
 
 static int stac_vrefout_set(struct hda_codec *codec,
@@ -826,7 +795,7 @@ static int find_mute_led_cfg(struct hda_codec *codec, int default_polarity)
 static bool has_builtin_speaker(struct hda_codec *codec)
 {
 	struct sigmatel_spec *spec = codec->spec;
-	hda_nid_t *nid_pin;
+	const hda_nid_t *nid_pin;
 	int nids, i;
 
 	if (spec->gen.autocfg.line_out_type == AUTO_PIN_SPEAKER_OUT) {
@@ -1005,15 +974,6 @@ static int stac_create_spdif_mux_ctls(struct hda_codec *codec)
 
 	return 0;
 }
-
-/*
- */
-
-static const struct hda_verb stac9200_core_init[] = {
-	/* set dac0mux for dac converter */
-	{ 0x07, AC_VERB_SET_CONNECT_SEL, 0x00},
-	{}
-};
 
 static const struct hda_verb stac9200_eapd_init[] = {
 	/* set dac0mux for dac converter */
@@ -2222,7 +2182,7 @@ static void hp_envy_ts_fixup_dac_bind(struct hda_codec *codec,
 					    int action)
 {
 	struct sigmatel_spec *spec = codec->spec;
-	static hda_nid_t preferred_pairs[] = {
+	static const hda_nid_t preferred_pairs[] = {
 		0xd, 0x13,
 		0
 	};
@@ -4676,8 +4636,7 @@ static void stac_setup_gpio(struct hda_codec *codec)
 		spec->gpio_dir |= spec->mic_mute_led_gpio;
 		spec->mic_enabled = 0;
 		spec->gpio_data |= spec->mic_mute_led_gpio;
-
-		spec->gen.cap_sync_hook = stac_capture_led_hook;
+		snd_hda_gen_add_micmute_led(codec, stac_capture_led_update);
 	}
 }
 

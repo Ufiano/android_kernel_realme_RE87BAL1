@@ -2,10 +2,12 @@
 /plugin/;
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/arm-gic.h>
 #include <dt-bindings/clock/sprd,ums9230-clk.h>
 #include <dt-bindings/mfd/sprd,sc2730-regs.h>
 #include <dt-bindings/mfd/sprd,sc2730-mask.h>
 #include <dt-bindings/usb/pd.h>
+/*bsp.zhoulingyun 2022.04.04 modify for bring up lcd tm*/
 #include "lcd/lcd_NT36672C_csot_mipi_hd.dtsi"
 #include "lcd/lcd_NT36672C_tm_mipi_hd.dtsi"
 #include "lcd/lcd_icnl9911C_boe_mipi_hd.dtsi"
@@ -19,9 +21,9 @@
 
 / {
 
-	model = "Spreadtrum UMS9230 NICKY Board";
+	model = "Spreadtrum UMS9230 4H10 Board";
 
-	compatible = "sprd,ums9230-nicky";
+	compatible = "sprd,ums9230-4h10";
 
 	sprd,sc-id = "ums9230 nicky 1000";
 	sprd,dtsi_no = "136986"; /* 2171A */
@@ -30,7 +32,10 @@
 	fragment {
 		target-path = "/";
 		__overlay__ {
-			/*pwm_backlight: sprd_backlight {
+			#address-cells = <2>;
+			#size-cells = <2>;
+/*
+			pwm_backlight: sprd_backlight {
 				compatible = "sprd,sharkl6-backlight";
 				pwms = <&pwms 2 40000>;
 				pwm-names = "backlight";
@@ -65,8 +70,8 @@
 					803 810 817 825 832 840 845 850 855 861
 					866 872 878 884 890 896 903 911 918 924
 				>;
-			};*/
-
+			};
+*/
 			fingerprint@0 {
 				compatible = "nico,fingerprint";
 				irq-gpios = <&eic_async 29 0>;
@@ -80,7 +85,6 @@
 				anc,gpio_rst = <&ap_gpio 164 0>;
 				anc,gpio_pwr = <&ap_gpio 122 0 >;
 			};
-	  
 			nico_fp_common {
 				compatible = "nico,fp_common";
 				fp-gpio = <&ap_gpio 113 0>;
@@ -131,8 +135,7 @@
 
 				cm-fullbatt-vchkdrop-ms = <30000>;
 				cm-fullbatt-vchkdrop-volt = <60000>;
-				cm-fullbatt-voltage = <4400000>;
-				cm-fullbatt-current = <260000>;
+
 				cm-fullbatt-capacity = <100>;
 				/*Charge pump target charge current*/
 				cm-cp-taper-current = <1000000>;
@@ -178,13 +181,18 @@
 
 				monitored-battery = <&bat &bat1>;
 				cm-capacity-track;
-
+				io-channels = <&pmic_adc 4>, <&pmic_adc 6>, <&pmic_adc 3>;
+				io-channel-names = "usb-temp-1", "usb-temp-2", "bat-id-vol";
+				cm-charge-gpio = <&ap_gpio 174 0>;
 				//cm-ir-cv-offset-microvolt = <100000>;
 				//cm-ir-rc = <20>;
 				//cm-ir-us-upper-limit-microvolt = <4435000>;
-				io-channels = <&pmic_adc 4>, <&pmic_adc 6>;
-				io-channel-names = "usb-temp-1", "usb-temp-2";
-				cm-charge-gpio = <&ap_gpio 174 0>;
+				pinctrl-names = "gpio_70_f0", "gpio_71_f0", "gpio_70_f3", "gpio_71_f3";
+				pinctrl-0 = <&gpio_70_f0>;
+				pinctrl-1 = <&gpio_71_f0>;
+				pinctrl-2 = <&gpio_70_f3>;
+				pinctrl-3 = <&gpio_71_f3>;
+
 				regulator@0 {
 					cm-regulator-name = "vddgen0";
 					cable@0 {
@@ -270,7 +278,7 @@
 			};
 
 			sprd_marlin3: sprd-marlin3 {
-				compatible = "sprd,marlin3";
+				compatible = "unisoc,marlin3lite_sdio";
 				m2-wakeup-ap-gpios = <&ap_gpio 53 GPIO_ACTIVE_LOW>;
 				reset-gpios = <&ap_gpio 177 GPIO_ACTIVE_LOW>;
 				enable-gpios = <&ap_gpio 116 GPIO_ACTIVE_LOW>;
@@ -278,20 +286,16 @@
 				avdd12-supply = <&vddwcn>;
 				avdd33-supply = <&vddwifipa>;
 				dcxo18-supply = <&vddsim2>;
-                                xtal-26m-clk-type = "TSX";
-
+				xtal-26m-clk-type = "TSX";
 				clock-names = "clk_32k","source","enable";
 				clocks = <&aon_clk CLK_AUX2>,
 					 <&ext_32k>,
 					 <&aonapb_gate CLK_AUX2_EB>;
 
-				reg = <0 0x87000000 0 0x00100000>,
-					<0 0x87100000 0 0xA0000>;
-				reg-names = "btwf_mem", "gnss_mem";
-
+				extcon = <&sdio1>;
 				sdhci-name = <&sdio1>;
 				sprd,btwf-file-name = "/dev/block/by-name/wcnmodem";
-				sprd,gnss-file-name = "/dev/block/by-name/gnssmodem";
+				sprd,gnss-file-name = "/vendor/firmware/gnssmodem.bin";
 				adma-tx;
 				adma-rx;
 
@@ -302,25 +306,33 @@
 				//avdd12-parent-bound-chip = <REG_ANA_SLP_DCDC_PD_CTRL MASK_ANA_SLP_DCDCGEN1_PD_EN 0x0 MASK_ANA_SLP_DCDCGEN1_PD_EN>;
 				avdd12-bound-wbreq = <REG_ANA_LDO_XTL_EN10 MASK_ANA_LDO_VDDWCN_EXT_XTL3_EN 0x0 MASK_ANA_LDO_VDDWCN_EXT_XTL3_EN>;
 				avdd33-bound-wbreq = <REG_ANA_LDO_XTL_EN11 MASK_ANA_LDO_VDDWIFIPA_EXT_XTL3_EN 0x0 MASK_ANA_LDO_VDDWIFIPA_EXT_XTL3_EN>;
-			};
 
-			sprd-mtty {
-				compatible = "sprd,mtty";
-				sprd,name = "ttyBT";
-			};
+				sprd-mtty {
+					compatible = "sprd,mtty";
+					sprd,name = "ttyBT";
+				};
 
-			sprd-fm {
-				compatible = "sprd,marlin3-fm";
-				sprd,name = "sprd-fm";
-			};
+				sprd-fm {
+					compatible = "sprd,marlin3-fm";
+					sprd,name = "sprd-fm";
+				};
 
-			gnss_common_ctl {
-				compatible = "sprd,gnss_common_ctl";
-				sprd,name = "gnss_common_ctl";
-			};
+				wlan {
+					compatible = "sprd,sc2355-sdio-wifi";
+				};
 
-			sprd-wlan{
-				compatible = "sprd,sc2355-wifi";
+				gnss {
+					compatible = "sprd,gnss";
+				};
+
+				flash-pwm {
+					compatible = "sprd,flash-pwm-ocp8135b";
+					flash-ic = <8135>;
+					pwms = <&pwms 0 50000>;
+					flash-en-gpios = <&ap_gpio 139 0>;
+					status = "okay";
+				};
+
 			};
 
 			/*Used to show hardware information for oplus factory mode*/
@@ -330,45 +342,28 @@
 				status = "okay";
 			};
 
-			flash-pwm {
-				compatible = "sprd,flash-pwm-ocp8135b";
-				flash-ic = <8135>;
-				pwms = <&pwms 0 50000>;
-				flash-en-gpios = <&ap_gpio 139 0>;
-				status = "okay";
-			};
-
 			/*Used to show hardware information for hq factory mode*/
 			hwinfo:HardwareInfo {
 				compatible = "huaqin,hardware_info";
 				sdcard-gpio = <&eic_sync 35 0>;
 				nicky-gpio  = <&ap_gpio 156 0>;
 				status = "okay";
+
 			};
 
-			/*Used to check the RF antenna*/
 			op_rf_cable {
 				compatible = "op,rf_cable";
 				status = "okay";
 				rf,cable0-gpio = <&ap_gpio 145 0>;
 			};
+
+			sprd_uid {
+				compatible = "sprd-uid";
+				nvmem-cells = <&uid_start>, <&uid_end>;
+				nvmem-cell-names = "uid_start", "uid_end";
+			};
 		};
 	};
-};
-
-
-
-&sdio1 {
-	sprd,sdr104-dly = <0x7f 0x7f 0x7f 0x7f>;
-	sprd,sdr50-dly = <0x7f 0x7f 0x8f 0x8f>;
-	sd-uhs-sdr104;
-	sd-uhs-sdr50;
-	bus-width = <4>;
-	sprd,name = "sdio_wifi";
-	sprd,sdio-adma;
-	no-sd;
-	no-mmc;
-	status = "okay";
 };
 
 &chosen {
@@ -376,28 +371,18 @@
 };
 
 &reserved_memory {
-	wcn_reserved: wcn-mem@87000000 {
-		reg = <0x0 0x87000000 0x0 0x001A0000>;
-	};
-
+	#address-cells = <2>;
+	#size-cells = <2>;
 	logo_reserved: logobuffer@9e000000{
 		reg = <0x0 0x9e000000 0x0 0x00ab0000>;
 	};
 
-	widevine_reserved: widevine@a3800000 {
-		reg = <0x0 0xa3800000 0x0 0x0b400000>;
+	widevine_reserved: widevine@e3800000 {
+		reg = <0x0 0xe3800000 0x0 0x0b400000>;
 	};
 
-	fd_reserved: faceid-mem@fc3a0000 {
-		reg = <0x0 0xfc3a0000 0x0 0x00500000>;
-	};
-
-	wb_reserved: writeback-mem@fc8a0000 {
-		reg = <0x0 0xfc8a0000 0x0 0x00ae0000>;
-	};
-
-	fb_reserved: framebuffer-mem@fd380000 {
-		reg = <0x0 0xfd380000 0x0 0x02c00000>;
+	fd_reserved: faceid-mem@ffa70000 {
+		reg = <0x0 0xffa70000 0x0 0x00500000>;
 	};
 };
 
@@ -426,6 +411,8 @@
 &i2c0 {
 	status = "okay";
 	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	sensor_main: sensor-main@1a {
 		compatible = "sprd,sensor-main";
@@ -444,6 +431,7 @@
 		dvdd-gpios = <&ap_gpio 82 0>;
 		sprd,phyid = <2>;
 		csi = <&csi0>;
+		power-domains = <&mm_domain>;
 	};
 
 	sensor_main2: sensor-main2@6e {//macro
@@ -461,12 +449,15 @@
 		reset-gpios = <&ap_gpio 45 0>;
 		sprd,phyid = <4>;
 		csi = <&csi1>;
+		power-domains = <&mm_domain>;
 		};
 };
 
 &i2c1 {
 	status = "okay";
 	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	sensor_sub: sensor-sub@40 {
 		compatible = "sprd,sensor-sub";
@@ -488,6 +479,7 @@
 	/*	mipi-switch-mode-gpios = <&ap_gpio 8 0>;*/
 		sprd,phyid = <0>;
 		csi = <&csi0>;
+		power-domains = <&mm_domain>;
 	};
 
 		sensor_sub2: sensor-sub2@42 {//vga
@@ -505,13 +497,16 @@
 		reset-gpios = <&ap_gpio 40 0>;
 		sprd,phyid = <3>;
 		csi = <&csi1>;
+		power-domains = <&mm_domain>;
 	};
 };
 
 &i2c2 {
 	status = "okay";
 	clock-frequency = <400000>;
-
+	#address-cells = <1>;
+	#size-cells = <0>;
+	
 	sgm4154x_chg: sgm4154x_charger@3B {
 		compatible = "sgm,sgm4154x_chg";
 		reg = <0x3B>;
@@ -532,7 +527,7 @@
 		enable-gpio = <&ap_gpio 114 GPIO_ACTIVE_HIGH>;
 		role-slave;
 	};
-        pn557: pn557@28{
+        pn557: pn557@28 {
                 compatible = "nxp,pn557";
                 reg = <0x28>;
                 clock-names = "pn557_clk","source","enable";
@@ -544,17 +539,18 @@
         };
 };
 
-
 &i2c5 {
 	status = "okay";
 	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
+
 
 	hl1506_cp_converter: charger@1b {
 		compatible = "halo,hl1506_cp_converter";
 		reg = <0x1b>;
 		chg_pump_en_gpio = <&ap_gpio 147 GPIO_ACTIVE_HIGH>;
 	};
-
 /*
 	nu1619_rx: charger@61 {
 		compatible = "nuvolta,wl_charger_nu1619";
@@ -567,13 +563,13 @@
 */
 };
 
-&aon_i2c0 {
-	status = "okay";
-	clock-frequency = <1000000>;
-};
+
 
 &spi3 {
 	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
 
 	touchscreen@0 {
 			compatible = "oplus,touchscreen";
@@ -585,8 +581,8 @@
 			touch,panel-coords = <0 720 0 1600>;
 			chipone,x-res = <720>;
 			chipone,y-res = <1600>;
-			
-			chipone,test-reset-pin; 
+
+			chipone,test-reset-pin;
             chipone,test-rawdata;
             chipone,test-rawdata-frames = <1>;
             chipone,rawdata-min = <1500>;//base 2500*40%
@@ -602,10 +598,8 @@
             chipone,compensate-cap-min = <1>;
             chipone,compensate-cap-max = <126>;
 			himax,display-coords = <0 720 0 1600>;
-			
-			
+
 		//for novatek
-			
 		//novatek,pen-support;
 		//novatek,stylus-resol-double;
 
@@ -2546,39 +2540,13 @@
 				(-75) (-75) (-75) (-75) (-75) (-75) (-75) (-75) (-75) (-75) (-75) (-75) (-75) (-75) (-75) (-75)
 				>;
 		};
-
 	};
 };
 
-&dvfs_dcdc_cpu0_supply {
+&dvfs_dcdc_cpu0_cfg {
 	pmic-type-num = <0>;
 	slew-rate = <9375>; /* 9375uV/us */
-	top-dvfs-adi-state = <0x70 0 0xf>;
-	voltage-grade-num = <8>;
-	voltage-grade = <0 0xf0 0xf4 0 0x1ff>,
-		<1 0xf0 0xf4 9 0x1ff>,
-		<2 0x100 0xf4 18 0x1ff>,
-		<3 0x110 0xf8 0 0x1ff>,
-		<4 0x120 0xf8 9 0x1ff>,
-		<5 0x130 0xf8 18 0x1ff>,
-		<6 0x140 0xfc 0 0x1ff>,
-		<7 0x140 0xfc 9 0x1ff>;
-	voltage-up-delay = <50 0x58 0 0xffff 0x600>,
-		<100 0x58 16 0xffff 0xa00>,
-		<150 0x54 0 0xffff 0xf00>,
-		<200 0x54 16 0xffff 0x1400>,
-		<250 0x50 0 0xffff 0x1900>,
-		<300 0x50 16 0xffff 0x1e00>,
-		<350 0x110 0 0xffff 0x2300>;
-	voltage-down-delay = <50 0x64 0 0xffff 0x600>,
-		<100 0x64 16 0xffff 0xa00>,
-		<150 0x60 0 0xffff 0xf00>,
-		<200 0x60 16 0xffff 0x1400>,
-		<250 0x5c 0 0xffff 0x1900>,
-		<300 0x5c 16 0xffff 0x1e00>,
-		<350 0x114 0 0xffff 0x2300>;
 	tuning-latency-us = <0>;
-	chnl-in-i2c = <0>;
 };
 
 &pmic_typec {
@@ -2587,7 +2555,7 @@
 	cc-to-vbus = "true";
 };
 
-&dvfs_dcdc_cpu1_supply {
+&dvfs_dcdc_cpu1_cfg {
 	pmic-type-num = <0>;
 	slew-rate = <9375>; /* 9375uV/us */
 	supply-type-sel = <0x120 0 0>;
@@ -2619,6 +2587,13 @@
 	chnl-in-i2c = <0>;
 };
 
+&dvfs_dcdc_cpu1_cfg1 {
+	third-pmic-used;
+	pmic-type-num = <0>;
+	slew-rate = <9375>; /* 9375uV/us */
+	tuning-latency-us = <0>;
+};
+
 &hsphy {
 	vdd-supply = <&vddusb33>;
 	extcon = <&extcon_gpio>;
@@ -2644,23 +2619,16 @@
 	cd-gpios = <&eic_sync 35 GPIO_ACTIVE_HIGH>;
 };
 
-&ion {
-	heap@1 {
-		reg = <1>;
-		label = "carveout_mm";
-		type = <2>;
-		memory-region = <&widevine_reserved>;
-	};
-
-	heap@3 {
-		reg = <3>;
-		label = "carveout_fb";
-		type = <2>;
-		memory-region = <&fb_reserved>;
-	};
-};
-
-&ufs {
+&sdio1 {
+	sprd,phy-delay-sd-uhs-sdr104 = <0x7f 0x7f 0x7f 0x7f>;
+	sprd,phy-delay-sd-uhs-sdr50 = <0x7f 0x7f 0x8f 0x8f>;
+	sd-uhs-sdr104;
+	sd-uhs-sdr50;
+	bus-width = <4>;
+	sprd,name = "sdio_wifi";
+	sprd,sdio-adma;
+	no-sd;
+	no-mmc;
 	status = "okay";
 };
 
@@ -2674,7 +2642,9 @@
 
 &i2c4 {
     status = "okay";
-    clock-frequency = <400000>;
+	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 
     /* add your dts node */
     lcd_bias_voltage_adjust@3e {
@@ -2682,6 +2652,12 @@
         reg = <0x3e>;
     };
 };
+
+&aon_i2c0 {
+	status = "okay";
+	clock-frequency = <1000000>;
+};
+
 &sprd_headset {
     status = "okay";
 };
@@ -2707,12 +2683,11 @@
 &pmic_fgu {
 	monitored-battery = <&bat &bat1>;
 	sprd,comp-resistance-mohm = <8>;
-	sprd,calib-resistance-real = <4850>;
-	sprd,calib-resistance-spec = <20000>;
-	first-calib-voltage = <3580000>;
-	first-calib-capacity = <50>;
-	io-channels = <&pmic_adc 0>, <&pmic_adc 14>, <&pmic_adc 3>;
-	io-channel-names = "bat-temp", "charge-vol", "bat-id-vol";
+	sprd,calib-resistance-micro-ohms = <4850>;
+
+	phys = <&hsphy>;
+	io-channels = <&pmic_adc 0>, <&pmic_adc 14>;
+	io-channel-names = "bat-temp", "charge-vol";
 };
 
 &panel {
@@ -2723,24 +2698,7 @@
 
 &dpu {
 	sprd,logo-memory = <&logo_reserved>;
-	sprd,wb-memory = <&wb_reserved>;
-
-};
-
-&lcd_g40396_truly_mipi_fhd {
-	display-timings {
-		g40396_truly_timing1: timing1 {
-			clock-frequency = <192000000>;
-			hactive = <720>;
-			vactive = <1600>;
-			hback-porch = <75>;
-			hfront-porch = <75>;
-			vback-porch = <32>;
-			vfront-porch = <8>;
-			hsync-len = <75>;
-			vsync-len = <8>;
-		};
-	};
+//	sprd,backlight = <&pwm_backlight>;
 };
 
 &lcd_NT36672C_tm_mipi_hd {
@@ -2820,6 +2778,7 @@
 };
 
 &pmic_fchg {
+	status = "okay";
 	sprd,input-voltage-microvolt = <5000000>;
 	sprd,pd-fixed-max-microwatt = <18000000>;
 	
@@ -2843,8 +2802,8 @@
 
 &ddr_dfs {
 	  sprd-scene = "boost", "lcdon", "lcdoff", "camlow",
-			"camhigh", "camveryhigh", "faceid";
-	  sprd-freq = <1333 768 256 1333 1333 0xbacd 1333>;
+			"camhigh", "camveryhigh", "faceid", "top";
+	  sprd-freq = <1333 768 256 1333 1333 0xbacd 1333 0xbacd>;
 };
 
 &pin_controller {
@@ -2897,9 +2856,35 @@
 		pins = "QOGIRL6_BT_RFCTL2";
 		function = "func4";
 	};
+	gpio_70_f0:TXD1new {
+                pins = "QOGIRL6_U1TXD";
+                function = "func1";
+        };
+        gpio_71_f0:RXD1new {
+                pins = "QOGIRL6_U1RXD";
+                function = "func1";
+        };
+        gpio_70_f3:gpi70 {
+                pins = "QOGIRL6_U1TXD";
+                function = "func4";
+        };
+        gpio_71_f3:gpio71 {
+                pins = "QOGIRL6_U1RXD";
+                function = "func4";
+         };
 };
 
 &ion {
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	heap@1 {
+		reg = <1>;
+		label = "carveout_mm";
+		type = <2>;
+		memory-region = <&widevine_reserved>;
+	};
+
 	heap@4 {
 		reg = <4>;
 		label = "carveout_fd";
@@ -2909,10 +2894,10 @@
 };
 
 &adi_bus {
-	sprd,hw-channels = <2 0x18cc>, <3 0x18cc>, <13 0x1874>, <15 0x1874>,
+	sprd,hw-channels0 = <2 0x18cc>, <3 0x18cc>, <13 0x1874>, <15 0x1874>,
 			<17 0x1844>,<19 0x1854>, <21 0x1864>, <30 0x1820>,
 			<35 0x19b8>, <39 0x19ac>, <32 0x197c>, <33 0x1988>;
-	sprd,hw-channels_1 = <2 0x18cc>, <3 0x18cc>, <13 0x1854>, <15 0x1874>,
+	sprd,hw-channels1 = <2 0x18cc>, <3 0x18cc>, <13 0x1854>, <15 0x1874>,
 			<17 0x1844>,<19 0x1844>, <21 0x1864>, <30 0x1820>,
 			<35 0x19b8>, <39 0x19ac>, <32 0x197c>, <33 0x1988>;
 };

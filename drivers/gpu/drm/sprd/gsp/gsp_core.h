@@ -1,15 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
+
 #ifndef _GSP_CORE_H
 #define _GSP_CORE_H
 
@@ -82,10 +75,35 @@ enum gsp_core_suspend_state {
 
 /**
  * struct gsp_core - gsp core
+ * @name:		core name
+ * @id:			core id 0-1
+ * @gsp_capability:	core capability
+ * @list:		linked with parent header
  * @sync_wait:		waitqueue header for sync mechanism
- * @wq:			cache kcfg for async mechanism
+ * @wq:			cache kcfg for async mechanism,
+ *			work queue which manages empty list,fill list,
+ *			sep_list to ensure gsp_kcfg can be passed right
  * @parent:		be part of struct gsp_dev
  * @gsp_core_ops:	indicate gsp core operations
+ * @node:		gsp node info
+ * @dev:		struct gsp dev
+ * @irq:		gsp interrupt number
+ * @kworker:		kthread_worker
+ * @trigger:		kthread_work-function
+ * @work_thread:	task thread
+ * @base:		register base address
+ * @current_kcfg:	indicate the kcfg handled by core presently
+ * @weight:		to compare which core weight is lighter
+ * @state:		gsp core state
+ * @suspend_state:	gsp suspend flags
+ * @suspend_done:	gsp complete flags
+ * @timeline:		gsp time line for sync
+ * @rt:			to indicate whether core kthread priority is real-time
+ * @cfg_size:		size of gsp_rxp0_cfg
+ * @coef_init:		coef related information
+ * @kcfgs:		used to debug and recover
+ * @need_iommu:		there must be iommu for gsp core at 64-bit soc
+ * @timer:		to determine whether reset gsp if encounter hung
  */
 struct gsp_core {
 	char name[32];
@@ -95,18 +113,14 @@ struct gsp_core {
 	struct gsp_capability *capa;
 
 	struct gsp_dev *parent;
-	/* linked with parent header */
+
 	struct list_head list;
 
 	struct device_node *node;
 	struct device *dev;
 
-	uint32_t irq;
+	u32 irq;
 
-	/* work queue which manages empty list,
-	 * fill list,sep_list to ensure gsp_kcfg
-	 * can be passed right
-	 */
 	struct gsp_workqueue *wq;
 
 	struct kthread_worker kworker;
@@ -118,11 +132,9 @@ struct gsp_core {
 
 	void __iomem *base;
 
-	/* indicate the kcfg handled by core presently */
 	struct gsp_kcfg *current_kcfg;
 	struct gsp_core_ops *ops;
 
-	/* to compare which core weight is lighter */
 	int weight;
 
 	atomic_t state;
@@ -134,19 +146,15 @@ struct gsp_core {
 	struct gsp_sync_timeline *timeline;
 
 	size_t cfg_size;
-	/* to indicate whether core kthread priority is real-time */
 	bool rt;
 
-	/* used to debug and recover */
 	struct list_head kcfgs;
 
-	/* coef related information */
 	int force_calc;
 	int coef_init;
 
-	/* there must be iommu for gsp core at 64-bit soc */
 	bool need_iommu;
-	/* to determine whether reset gsp if encounter hung */
+
 	struct timer_list timer;
 };
 
@@ -155,6 +163,15 @@ struct gsp_core {
 
 /**
  * struct gsp_core_ops - gsp core operation
+ * @alloc:	allocate gsp core related memory
+ * @copy:	use user cfg set gsp core cfg
+ * @trigger:	gsp core trigger,set register value
+ * @release:	gsp release，related parameters and memory release
+ * @enable:	gsp enable
+ * @disable:	gsp disable
+ * @intercept:	get gsp dst sign_fd
+ * @dump:	print the value of the Gsp register
+ * @reset:	gsp reset
  * @reg_set:	base fence class
  * @map:	iommu map dma-buf address
  * @init:	initialize specific gsp core
@@ -178,14 +195,12 @@ struct gsp_core_ops {
 	void (*reset)(struct gsp_core *core);
 };
 
-#define CORE_MAX_KCFG_NUM(core) \
-	((core)->kcfg_num)
+#define CORE_MAX_KCFG_NUM(core)	((core)->kcfg_num)
 
 struct device *gsp_core_to_device(struct gsp_core *core);
 int gsp_core_to_id(struct gsp_core *core);
 struct gsp_dev *gsp_core_to_parent(struct gsp_core *core);
-struct gsp_workqueue *
-gsp_core_to_workqueue(struct gsp_core *core);
+struct gsp_workqueue *gsp_core_to_workqueue(struct gsp_core *core);
 
 struct gsp_core *gsp_core_chosen(struct gsp_dev *gsp);
 
@@ -200,14 +215,13 @@ int gsp_core_is_suspend(struct gsp_core *core);
 void gsp_core_work(struct gsp_core *core);
 
 int gsp_core_alloc(struct gsp_core **core,
-		   struct gsp_core_ops *ops,
-		   struct device_node *node);
+		struct gsp_core_ops *ops,
+		struct device_node *node);
 void gsp_core_free(struct gsp_core *core);
 int gsp_core_init(struct gsp_core *core);
 void gsp_core_deinit(struct gsp_core *core);
 
-void gsp_core_state_set(struct gsp_core *core,
-			 enum gsp_core_state st);
+void gsp_core_state_set(struct gsp_core *core, enum gsp_core_state st);
 enum gsp_core_state gsp_core_state_get(struct gsp_core *core);
 
 struct gsp_core *gsp_core_select(struct gsp_dev *gsp);
@@ -229,10 +243,10 @@ int gsp_core_get_kcfg_num(struct gsp_core *core);
 
 void gsp_core_dump(struct gsp_core *core);
 void gsp_core_reset(struct gsp_core *core);
-void gsp_core_hang_handler(unsigned long data);
+void gsp_core_hang_handler(struct timer_list *time);
 
 enum gsp_core_suspend_state gsp_core_suspend_state_get(struct gsp_core *core);
 void gsp_core_suspend_state_set(struct gsp_core *core,
-			 enum gsp_core_suspend_state value);
+				enum gsp_core_suspend_state value);
 
 #endif

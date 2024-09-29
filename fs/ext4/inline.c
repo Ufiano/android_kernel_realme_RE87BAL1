@@ -1,18 +1,12 @@
+// SPDX-License-Identifier: LGPL-2.1
 /*
  * Copyright (c) 2012 Taobao.
  * Written by Tao Ma <boyu.mt@taobao.com>
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of version 2.1 of the GNU Lesser General Public License
- * as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
+#include <linux/iomap.h>
 #include <linux/fiemap.h>
+#include <linux/iversion.h>
 
 #include "ext4_jbd2.h"
 #include "ext4.h"
@@ -770,6 +764,12 @@ int ext4_write_inline_data_end(struct inode *inode, loff_t pos, unsigned len,
 	ext4_write_lock_xattr(inode, &no_expand);
 	BUG_ON(!ext4_has_inline_data(inode));
 
+	/*
+	 * ei->i_inline_off may have changed since ext4_write_begin()
+	 * called ext4_try_to_write_inline_data()
+	 */
+	(void) ext4_find_inline_data_nolock(inode);
+
 	kaddr = kmap_atomic(page);
 	ext4_write_inline_data(inode, &iloc, kaddr, pos, len);
 	kunmap_atomic(kaddr);
@@ -1068,7 +1068,7 @@ static int ext4_add_dirent_to_inline(handle_t *handle,
 	 */
 	dir->i_mtime = dir->i_ctime = current_time(dir);
 	ext4_update_dx_flag(dir);
-	dir->i_version++;
+	inode_inc_iversion(dir);
 	return 1;
 }
 
@@ -1152,7 +1152,6 @@ static int ext4_finish_convert_inline_dir(handle_t *handle,
 {
 	int err, csum_size = 0, header_size = 0;
 	struct ext4_dir_entry_2 *de;
-	struct ext4_dir_entry_tail *t;
 	void *target = dir_block->b_data;
 
 	/*
@@ -1178,13 +1177,11 @@ static int ext4_finish_convert_inline_dir(handle_t *handle,
 			inline_size - EXT4_INLINE_DOTDOT_SIZE + header_size,
 			inode->i_sb->s_blocksize - csum_size);
 
-	if (csum_size) {
-		t = EXT4_DIRENT_TAIL(dir_block->b_data,
-				     inode->i_sb->s_blocksize);
-		initialize_dirent_tail(t, inode->i_sb->s_blocksize);
-	}
+	if (csum_size)
+		ext4_initialize_dirent_tail(dir_block,
+					    inode->i_sb->s_blocksize);
 	set_buffer_uptodate(dir_block);
-	err = ext4_handle_dirty_dirent_node(handle, inode, dir_block);
+	err = ext4_handle_dirty_dirblock(handle, inode, dir_block);
 	if (err)
 		return err;
 	set_buffer_verified(dir_block);
@@ -1347,11 +1344,11 @@ out:
  * inlined dir.  It returns the number directory entries loaded
  * into the tree.  If there is an error it is returned in err.
  */
-int htree_inlinedir_to_tree(struct file *dir_file,
-			    struct inode *dir, ext4_lblk_t block,
-			    struct dx_hash_info *hinfo,
-			    __u32 start_hash, __u32 start_minor_hash,
-			    int *has_inline_data)
+int ext4_inlinedir_to_tree(struct file *dir_file,
+			   struct inode *dir, ext4_lblk_t block,
+			   struct dx_hash_info *hinfo,
+			   __u32 start_hash, __u32 start_minor_hash,
+			   int *has_inline_data)
 {
 	int err = 0, count = 0;
 	unsigned int parent_ino;
@@ -1525,7 +1522,7 @@ int ext4_read_inline_dir(struct file *file,
 	 * dirent right now.  Scan from the start of the inline
 	 * dir to make sure.
 	 */
-	if (file->f_version != inode->i_version) {
+	if (!inode_eq_iversion(inode, file->f_version)) {
 		for (i = 0; i < extra_size && i < offset;) {
 			/*
 			 * "." is with offset 0 and
@@ -1557,7 +1554,7 @@ int ext4_read_inline_dir(struct file *file,
 		}
 		offset = i;
 		ctx->pos = offset;
-		file->f_version = inode->i_version;
+		file->f_version = inode_query_iversion(inode);
 	}
 
 	while (ctx->pos < extra_size) {
@@ -1851,6 +1848,38 @@ int ext4_destroy_inline_data(handle_t *handle, struct inode *inode)
 	return ret;
 }
 
+int ext4_inline_data_iomap(struct inode *inode, struct iomap *iomap)
+{
+	__u64 addr;
+	int error = -EAGAIN;
+	struct ext4_iloc iloc;
+
+	down_read(&EXT4_I(inode)->xattr_sem);
+	if (!ext4_has_inline_data(inode))
+		goto out;
+
+	error = ext4_get_inode_loc(inode, &iloc);
+	if (error)
+		goto out;
+
+	addr = (__u64)iloc.bh->b_blocknr << inode->i_sb->s_blocksize_bits;
+	addr += (char *)ext4_raw_inode(&iloc) - iloc.bh->b_data;
+	addr += offsetof(struct ext4_inode, i_block);
+
+	brelse(iloc.bh);
+
+	iomap->addr = addr;
+	iomap->offset = 0;
+	iomap->length = min_t(loff_t, ext4_get_inline_size(inode),
+			      i_size_read(inode));
+	iomap->type = IOMAP_INLINE;
+	iomap->flags = 0;
+
+out:
+	up_read(&EXT4_I(inode)->xattr_sem);
+	return error;
+}
+
 int ext4_inline_data_fiemap(struct inode *inode,
 			    struct fiemap_extent_info *fieinfo,
 			    int *has_inline, __u64 start, __u64 len)
@@ -1914,6 +1943,7 @@ int ext4_inline_data_truncate(struct inode *inode, int *has_inline)
 
 	ext4_write_lock_xattr(inode, &no_expand);
 	if (!ext4_has_inline_data(inode)) {
+		ext4_write_unlock_xattr(inode, &no_expand);
 		*has_inline = 0;
 		ext4_journal_stop(handle);
 		return 0;

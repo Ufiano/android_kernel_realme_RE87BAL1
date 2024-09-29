@@ -114,18 +114,22 @@ EXPORT_SYMBOL_GPL(xenbus_strstate);
  */
 int xenbus_watch_path(struct xenbus_device *dev, const char *path,
 		      struct xenbus_watch *watch,
+		      bool (*will_handle)(struct xenbus_watch *,
+					  const char *, const char *),
 		      void (*callback)(struct xenbus_watch *,
 				       const char *, const char *))
 {
 	int err;
 
 	watch->node = path;
+	watch->will_handle = will_handle;
 	watch->callback = callback;
 
 	err = register_xenbus_watch(watch);
 
 	if (err) {
 		watch->node = NULL;
+		watch->will_handle = NULL;
 		watch->callback = NULL;
 		xenbus_dev_fatal(dev, err, "adding watch on %s", path);
 	}
@@ -152,6 +156,8 @@ EXPORT_SYMBOL_GPL(xenbus_watch_path);
  */
 int xenbus_watch_pathfmt(struct xenbus_device *dev,
 			 struct xenbus_watch *watch,
+			 bool (*will_handle)(struct xenbus_watch *,
+					const char *, const char *),
 			 void (*callback)(struct xenbus_watch *,
 					  const char *, const char *),
 			 const char *pathfmt, ...)
@@ -168,7 +174,7 @@ int xenbus_watch_pathfmt(struct xenbus_device *dev,
 		xenbus_dev_fatal(dev, -ENOMEM, "allocating path for watch");
 		return -ENOMEM;
 	}
-	err = xenbus_watch_path(dev, path, watch, callback);
+	err = xenbus_watch_path(dev, path, watch, will_handle, callback);
 
 	if (err)
 		kfree(path);
@@ -278,10 +284,8 @@ static void xenbus_va_dev_error(struct xenbus_device *dev, int err,
 	dev_err(&dev->dev, "%s\n", printf_buffer);
 
 	path_buffer = kasprintf(GFP_KERNEL, "error/%s", dev->nodename);
-	if (!path_buffer ||
-	    xenbus_write(XBT_NIL, path_buffer, "error", printf_buffer))
-		dev_err(&dev->dev, "failed to write error node for %s (%s)\n",
-			dev->nodename, printf_buffer);
+	if (path_buffer)
+		xenbus_write(XBT_NIL, path_buffer, "error", printf_buffer);
 
 	kfree(printf_buffer);
 	kfree(path_buffer);

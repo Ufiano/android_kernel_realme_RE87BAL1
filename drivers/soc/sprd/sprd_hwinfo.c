@@ -61,7 +61,6 @@ void create_entry(const char *name, struct proc_dir_entry *parent,
 	struct proc_dir_entry *ent;
 
 	ent = proc_create(name, 0444, parent, proc_fops);
-
 	if (ent == NULL)
 		pr_err("Unable to create /proc/oppoVersion/%s\n", name);
 }
@@ -71,7 +70,6 @@ static int create_prjinfo_entries(void)
 	struct proc_dir_entry *oplus_ver_dir;
 
 	oplus_ver_dir = proc_mkdir("oppoVersion", NULL);
-
 	if (oplus_ver_dir == NULL) {
 		pr_err("Unable to create /proc/oppoVersion directory\n");
 		return -ENOMEM;

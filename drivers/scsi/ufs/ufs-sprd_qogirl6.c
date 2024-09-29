@@ -1,4 +1,4 @@
-/*
+/* SPDX-License-Identifier: GPL-2.0
  * Copyright (C) 2020 Unisoc Communications Inc.
  *
  * This software is licensed under the terms of the GNU General Public
@@ -11,6 +11,7 @@
  * GNU General Public License for more details.
  */
 
+#include <asm/unaligned.h>
 #include <linux/delay.h>
 #include <linux/mfd/syscon.h>
 #include <linux/of.h>
@@ -19,8 +20,10 @@
 #include <linux/time.h>
 #include <linux/sprd_soc_id.h>
 #include <dt-bindings/soc/sprd,qogirl6-regs.h>
+#include <linux/rpmb.h>
 
 #include "ufshcd.h"
+#include "ufs.h"
 #include "ufshcd-pltfrm.h"
 #include "ufshci.h"
 #include "ufs-sprd_qogirl6.h"
@@ -31,176 +34,120 @@
 int syscon_get_args(struct device *dev, struct ufs_sprd_host *host)
 {
 	u32 args[2];
-	int ret;
 	struct device_node *np = dev->of_node;
 	struct platform_device *pdev = to_platform_device(dev);
 
 	host->aon_apb_ufs_en.regmap =
-			syscon_regmap_lookup_by_name(np, "aon_apb_ufs_en");
+			syscon_regmap_lookup_by_phandle_args(np, "aon_apb_ufs_en", 2, args);
 	if (IS_ERR(host->aon_apb_ufs_en.regmap)) {
 		pr_warn("failed to get apb ufs aon_apb_ufs_en\n");
 		return PTR_ERR(host->aon_apb_ufs_en.regmap);
+	} else {
+		host->aon_apb_ufs_en.reg = args[0];
+		host->aon_apb_ufs_en.mask = args[1];
 	}
 
 	pr_info("fangkuiufs host->aon_apb_ufs_en.regmap = %p",
 		host->aon_apb_ufs_en.regmap);
-	ret = syscon_get_args_by_name(np, "aon_apb_ufs_en", 2, args);
-	if (ret == 2) {
-		host->aon_apb_ufs_en.reg = args[0];
-		host->aon_apb_ufs_en.mask = args[1];
-	} else {
-		pr_err("failed to parse aon aph ufs en reg\n");
-	}
 
 	host->ap_ahb_ufs_clk.regmap =
-			syscon_regmap_lookup_by_name(np, "ap_ahb_ufs_clk");
+			syscon_regmap_lookup_by_phandle_args(np, "ap_ahb_ufs_clk", 2, args);
 	if (IS_ERR(host->ap_ahb_ufs_clk.regmap)) {
 		pr_err("failed to get apb ufs ap_ahb_ufs_clk\n");
 		return PTR_ERR(host->ap_ahb_ufs_clk.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "ap_ahb_ufs_clk", 2, args);
-	if (ret == 2) {
+	} else {
 		host->ap_ahb_ufs_clk.reg = args[0];
 		host->ap_ahb_ufs_clk.mask = args[1];
-	} else {
-		pr_err("failed to parse ap_ahb_ufs_clk\n");
 	}
 
 	host->ap_apb_ufs_en.regmap =
-			syscon_regmap_lookup_by_name(np, "ap_apb_ufs_en");
+			syscon_regmap_lookup_by_phandle_args(np, "ap_apb_ufs_en", 2, args);
 	if (IS_ERR(host->ap_apb_ufs_en.regmap)) {
 		pr_err("failed to get apb ufs ap_apb_ufs_en\n");
 		return PTR_ERR(host->ap_apb_ufs_en.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "ap_apb_ufs_en", 2, args);
-	if (ret == 2) {
+	} else {
 		host->ap_apb_ufs_en.reg = args[0];
 		host->ap_apb_ufs_en.mask = args[1];
-	} else {
-		pr_err("failed to parse ap_apb_ufs_en\n");
 	}
 
 	host->ap_apb_ufs_rst.regmap =
-			syscon_regmap_lookup_by_name(np, "ap_apb_ufs_rst");
+			syscon_regmap_lookup_by_phandle_args(np, "ap_apb_ufs_rst", 2, args);
 	if (IS_ERR(host->ap_apb_ufs_rst.regmap)) {
 		pr_err("failed to get ap_apb_ufs_rst\n");
 		return PTR_ERR(host->ap_apb_ufs_rst.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "ap_apb_ufs_rst", 2, args);
-	if (ret == 2) {
+	} else {
 		host->ap_apb_ufs_rst.reg = args[0];
 		host->ap_apb_ufs_rst.mask = args[1];
-	} else {
-		pr_err("failed to parse ap_apb_ufs_rst\n");
 	}
 
 	host->ufs_refclk_on.regmap =
-			syscon_regmap_lookup_by_name(np, "ufs_refclk_on");
+			syscon_regmap_lookup_by_phandle_args(np, "ufs_refclk_on", 2, args);
 	if (IS_ERR(host->ufs_refclk_on.regmap)) {
 		pr_warn("failed to get ufs_refclk_on\n");
 		return PTR_ERR(host->ufs_refclk_on.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "ufs_refclk_on", 2, args);
-	if (ret == 2) {
+	} else {
 		host->ufs_refclk_on.reg = args[0];
 		host->ufs_refclk_on.mask = args[1];
-	} else {
-		pr_err("failed to parse ufs_refclk_on\n");
 	}
 
 	host->ahb_ufs_lp.regmap =
-			syscon_regmap_lookup_by_name(np, "ahb_ufs_lp");
+			syscon_regmap_lookup_by_phandle_args(np, "ahb_ufs_lp", 2, args);
 	if (IS_ERR(host->ahb_ufs_lp.regmap)) {
 		pr_warn("failed to get ahb_ufs_lp\n");
 		return PTR_ERR(host->ahb_ufs_lp.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "ahb_ufs_lp", 2, args);
-	if (ret == 2) {
+	} else {
 		host->ahb_ufs_lp.reg = args[0];
 		host->ahb_ufs_lp.mask = args[1];
-	} else {
-		pr_err("failed to parse ahb_ufs_lp\n");
 	}
 
 	host->ahb_ufs_force_isol.regmap =
-			syscon_regmap_lookup_by_name(np, "ahb_ufs_force_isol");
+			syscon_regmap_lookup_by_phandle_args(np, "ahb_ufs_force_isol", 2, args);
 	if (IS_ERR(host->ahb_ufs_force_isol.regmap)) {
 		pr_err("failed to get ahb_ufs_force_isol 1\n");
 		return PTR_ERR(host->ahb_ufs_force_isol.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "ahb_ufs_force_isol", 2, args);
-	if (ret == 2) {
+	} else {
 		host->ahb_ufs_force_isol.reg = args[0];
 		host->ahb_ufs_force_isol.mask = args[1];
-	} else {
-		pr_err("failed to parse ahb_ufs_force_isol\n");
 	}
 
 	host->ahb_ufs_cb.regmap =
-			syscon_regmap_lookup_by_name(np, "ahb_ufs_cb");
+			syscon_regmap_lookup_by_phandle_args(np, "ahb_ufs_cb", 2, args);
 	if (IS_ERR(host->ahb_ufs_cb.regmap)) {
 		pr_err("failed to get ahb_ufs_cb\n");
 		return PTR_ERR(host->ahb_ufs_cb.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "ahb_ufs_cb", 2, args);
-	if (ret == 2) {
+	} else {
 		host->ahb_ufs_cb.reg = args[0];
 		host->ahb_ufs_cb.mask = args[1];
-	} else {
-		pr_err("failed to parse ahb_ufs_cb\n");
 	}
-
 	host->ahb_ufs_ies_en.regmap =
-			syscon_regmap_lookup_by_name(np, "ahb_ufs_ies_en");
+			syscon_regmap_lookup_by_phandle_args(np, "ahb_ufs_ies_en", 2, args);
 	if (IS_ERR(host->ahb_ufs_ies_en.regmap)) {
 		pr_err("failed to get ahb_ufs_ies_en\n");
 		return PTR_ERR(host->ahb_ufs_ies_en.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "ahb_ufs_ies_en", 2, args);
-	if (ret == 2) {
+	} else {
 		host->ahb_ufs_ies_en.reg = args[0];
 		host->ahb_ufs_ies_en.mask = args[1];
-	} else {
-		pr_err("failed to parse ahb_ufs_ies_en\n");
 	}
 
 	host->ahb_ufs_cg_pclkreq.regmap =
-			syscon_regmap_lookup_by_name(np, "ahb_ufs_cg_pclkreq");
+			syscon_regmap_lookup_by_phandle_args(np, "ahb_ufs_cg_pclkreq", 2, args);
 	if (IS_ERR(host->ahb_ufs_cg_pclkreq.regmap)) {
 		pr_err("failed to get ahb_ufs_cg_pclkreq\n");
 		return PTR_ERR(host->ahb_ufs_cg_pclkreq.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "ahb_ufs_cg_pclkreq", 2, args);
-	if (ret == 2) {
+	} else {
 		host->ahb_ufs_cg_pclkreq.reg = args[0];
 		host->ahb_ufs_cg_pclkreq.mask = args[1];
-	} else {
-		pr_err("failed to parse ahb_ufs_cg_pclkreq\n");
 	}
-
 	host->ap_apb_ufs_glb_rst.regmap =
-			syscon_regmap_lookup_by_name(np, "ap_apb_ufs_glb_rst");
+			syscon_regmap_lookup_by_phandle_args(np, "ap_apb_ufs_glb_rst", 2, args);
 	if (IS_ERR(host->ap_apb_ufs_glb_rst.regmap)) {
 		pr_err("failed to get ap_apb_ufs_glb_rst\n");
 		return PTR_ERR(host->ap_apb_ufs_glb_rst.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "ap_apb_ufs_glb_rst", 2, args);
-	if (ret == 2) {
+	} else {
 		host->ap_apb_ufs_glb_rst.reg = args[0];
 		host->ap_apb_ufs_glb_rst.mask = args[1];
-	} else {
-		pr_err("failed to parse ap_apb_ufs_glb_rst\n");
 	}
+
 
 	host->pclk = devm_clk_get(&pdev->dev, "ufs_pclk");
 	if (IS_ERR(host->pclk)) {
@@ -262,16 +209,6 @@ static inline void ufs_sprd_rmwl(void __iomem *base, u32 mask, u32 val, u32 reg)
 	tmp |= (val & mask);
 	writel(tmp, (base) + (reg));
 }
-static void ufs_remap_and(struct syscon_ufs *sysconufs)
-{
-	unsigned int value = 0;
-
-	regmap_read(sysconufs->regmap,
-		    sysconufs->reg, &value);
-	value =	value & (~(sysconufs->mask));
-	regmap_write(sysconufs->regmap,
-		     sysconufs->reg, value);
-}
 static void ufs_remap_or(struct syscon_ufs *sysconufs)
 {
 	unsigned int value = 0;
@@ -284,20 +221,25 @@ static void ufs_remap_or(struct syscon_ufs *sysconufs)
 }
 void ufs_sprd_reset_pre(struct ufs_sprd_host *host)
 {
-	u32 is_AB = 0;
-
-	sprd_get_soc_id(AON_VER_ID, &is_AB, 1);
-
 	ufs_remap_or(&(host->ap_ahb_ufs_clk));
 	regmap_update_bits(host->aon_apb_ufs_en.regmap,
 			   host->aon_apb_ufs_en.reg,
 			   host->aon_apb_ufs_en.mask,
 			   host->aon_apb_ufs_en.mask);
-	ufs_remap_or(&(host->ahb_ufs_lp));
-	ufs_remap_and(&(host->ahb_ufs_force_isol));
+	regmap_update_bits(host->ahb_ufs_lp.regmap,
+			   host->ahb_ufs_lp.reg,
+			   host->ahb_ufs_lp.mask,
+			   host->ahb_ufs_lp.mask);
+	regmap_update_bits(host->ahb_ufs_force_isol.regmap,
+			   host->ahb_ufs_force_isol.reg,
+			   host->ahb_ufs_force_isol.mask,
+			   0);
 
-	if (is_AB) //AB is 1,AA is 0
-		ufs_remap_or(&(host->ahb_ufs_ies_en));
+	if (readl(host->aon_apb_reg + REG_AON_APB_AON_VER_ID))
+		regmap_update_bits(host->ahb_ufs_ies_en.regmap,
+				  host->ahb_ufs_ies_en.reg,
+				  host->ahb_ufs_ies_en.mask,
+				  host->ahb_ufs_ies_en.mask);
 }
 
 void ufs_sprd_reset(struct ufs_sprd_host *host)
@@ -309,14 +251,25 @@ void ufs_sprd_reset(struct ufs_sprd_host *host)
 	dev_info(host->hba->dev, "ufs hardware reset!\n");
 	/* TODO: HW reset will be simple in next version. */
 
-	ufs_remap_and(&(host->ap_apb_ufs_en));
-	ufs_remap_or(&(host->ap_apb_ufs_glb_rst));
+	regmap_update_bits(host->ap_apb_ufs_en.regmap,
+			   host->ap_apb_ufs_en.reg,
+			   host->ap_apb_ufs_en.mask,
+			   0);
+	regmap_update_bits(host->ap_apb_ufs_glb_rst.regmap,
+			   host->ap_apb_ufs_glb_rst.reg,
+			   host->ap_apb_ufs_glb_rst.mask,
+			   host->ap_apb_ufs_glb_rst.mask);
 	udelay(10);
-	ufs_remap_and(&(host->ap_apb_ufs_glb_rst));
+	regmap_update_bits(host->ap_apb_ufs_glb_rst.regmap,
+			   host->ap_apb_ufs_glb_rst.reg,
+			   host->ap_apb_ufs_glb_rst.mask,
+			   0);
 
 	/* Configs need strict squence. */
-	ufs_remap_or(&(host->ap_apb_ufs_en));
-
+	regmap_update_bits(host->ap_apb_ufs_en.regmap,
+			   host->ap_apb_ufs_en.reg,
+			   host->ap_apb_ufs_en.mask,
+			   host->ap_apb_ufs_en.mask);
 	/* ahb enable */
 	ufs_remap_or(&(host->ap_ahb_ufs_clk));
 
@@ -326,7 +279,10 @@ void ufs_sprd_reset(struct ufs_sprd_host *host)
 			   host->aon_apb_ufs_en.mask);
 
 	/* cbline reset */
-	ufs_remap_or(&(host->ahb_ufs_cb));
+	regmap_update_bits(host->ahb_ufs_cb.regmap,
+			   host->ahb_ufs_cb.reg,
+			   host->ahb_ufs_cb.mask,
+			   host->ahb_ufs_cb.mask);
 
 	/* apb reset */
 	ufs_sprd_rmwl(host->ufs_analog_reg, MPHY_2T2R_APB_RESETN,
@@ -372,18 +328,39 @@ void ufs_sprd_reset(struct ufs_sprd_host *host)
 	ufs_sprd_rmwl(host->ufs_analog_reg, MPHY_RX_STEP4_CYCLE_G3_MASK,
 			MPHY_RX_STEP4_CYCLE_G3_VAL, MPHY_DIG_CFG60_LANE1);
 
-
 	/* cbline reset */
-	ufs_remap_and(&(host->ahb_ufs_cb));
+	regmap_update_bits(host->ahb_ufs_cb.regmap,
+			  host->ahb_ufs_cb.reg,
+			  host->ahb_ufs_cb.mask,
+			  0);
 
 	/* enable refclk */
-	ufs_remap_or(&(host->ufs_refclk_on));
-	ufs_remap_or(&(host->ahb_ufs_lp));
-	ufs_remap_and(&(host->ahb_ufs_force_isol));
-	ufs_remap_or(&(host->ap_apb_ufs_rst));
-	ufs_remap_and(&(host->ap_apb_ufs_rst));
+	regmap_update_bits(host->ufs_refclk_on.regmap,
+			  host->ufs_refclk_on.reg,
+			  host->ufs_refclk_on.mask,
+			  host->ufs_refclk_on.mask);
+	regmap_update_bits(host->ahb_ufs_lp.regmap,
+			  host->ahb_ufs_lp.reg,
+			  host->ahb_ufs_lp.mask,
+			  host->ahb_ufs_lp.mask);
+	regmap_update_bits(host->ahb_ufs_force_isol.regmap,
+			  host->ahb_ufs_force_isol.reg,
+			  host->ahb_ufs_force_isol.mask,
+			  0);
+	regmap_update_bits(host->ap_apb_ufs_rst.regmap,
+			  host->ap_apb_ufs_rst.reg,
+			  host->ap_apb_ufs_rst.mask,
+			  host->ap_apb_ufs_rst.mask);
+	udelay(10);
+	regmap_update_bits(host->ap_apb_ufs_rst.regmap,
+			  host->ap_apb_ufs_rst.reg,
+			  host->ap_apb_ufs_rst.mask,
+			  0);
 
-	ufs_remap_or(&(host->ahb_ufs_ies_en));
+	regmap_update_bits(host->ahb_ufs_ies_en.regmap,
+			  host->ahb_ufs_ies_en.reg,
+			  host->ahb_ufs_ies_en.mask,
+			  host->ahb_ufs_ies_en.mask);
 	ufs_remap_or(&(host->ahb_ufs_cg_pclkreq));
 
 	ufs_sprd_rmwl(host->ufs_analog_reg, MPHY_ANR_MPHY_CTRL2_REFCLKON_MASK,
@@ -394,6 +371,7 @@ void ufs_sprd_reset(struct ufs_sprd_host *host)
 	udelay(1);
 	ufs_sprd_rmwl(host->ufs_analog_reg, MPHY_APB_REFCLK_AUTOH8_EN_MASK,
 			MPHY_APB_REFCLK_AUTOH8_EN_VAL, MPHY_DIG_CFG14_LANE0);
+
 	udelay(1);
 	if (aon_ver_id == AON_VER_UFS) {
 		ufs_sprd_rmwl(host->ufs_analog_reg, MPHY_APB_PLLTIMER_MASK,
@@ -425,60 +403,6 @@ out:
 	return ret;
 }
 
-static int __sprd_ufs_pwrchange(struct ufs_hba *hba,
-				struct ufs_pa_layer_attr *pwr_mode)
-{
-	int ret;
-
-	/*
-	 * Configure attributes for power mode change with below.
-	 * - PA_RXGEAR, PA_ACTIVERXDATALANES, PA_RXTERMINATION,
-	 * - PA_TXGEAR, PA_ACTIVETXDATALANES, PA_TXTERMINATION,
-	 * - PA_HSSERIES
-	 */
-	ufshcd_dme_set(hba, UIC_ARG_MIB(PA_RXGEAR), pwr_mode->gear_rx);
-	ufshcd_dme_set(hba, UIC_ARG_MIB(PA_ACTIVERXDATALANES),
-			pwr_mode->lane_rx);
-	if (pwr_mode->pwr_rx == FASTAUTO_MODE ||
-			pwr_mode->pwr_rx == FAST_MODE)
-		ufshcd_dme_set(hba, UIC_ARG_MIB(PA_RXTERMINATION), TRUE);
-	else
-		ufshcd_dme_set(hba, UIC_ARG_MIB(PA_RXTERMINATION), FALSE);
-
-	ufshcd_dme_set(hba, UIC_ARG_MIB(PA_TXGEAR), pwr_mode->gear_tx);
-	ufshcd_dme_set(hba, UIC_ARG_MIB(PA_ACTIVETXDATALANES),
-			pwr_mode->lane_tx);
-
-	if (pwr_mode->pwr_tx == FASTAUTO_MODE ||
-			pwr_mode->pwr_tx == FAST_MODE)
-		ufshcd_dme_set(hba, UIC_ARG_MIB(PA_TXTERMINATION), TRUE);
-	else
-		ufshcd_dme_set(hba, UIC_ARG_MIB(PA_TXTERMINATION), FALSE);
-
-	if (pwr_mode->pwr_rx == FASTAUTO_MODE ||
-	    pwr_mode->pwr_tx == FASTAUTO_MODE ||
-	    pwr_mode->pwr_rx == FAST_MODE ||
-	    pwr_mode->pwr_tx == FAST_MODE)
-		ufshcd_dme_set(hba, UIC_ARG_MIB(PA_HSSERIES),
-						pwr_mode->hs_rate);
-
-	ret = ufshcd_uic_change_pwr_mode(hba, pwr_mode->pwr_rx << 4
-			| pwr_mode->pwr_tx);
-
-	if (ret) {
-		dev_err(hba->dev,
-			"%s: power mode change failed %d\n", __func__, ret);
-	} else {
-		ufshcd_vops_pwr_change_notify(hba, POST_CHANGE, NULL,
-								pwr_mode);
-
-		memcpy(&hba->pwr_info, pwr_mode,
-			sizeof(struct ufs_pa_layer_attr));
-	}
-
-	return ret;
-}
-
 static int sprd_ufs_pwrchange(struct ufs_hba *hba)
 {
 	int ret;
@@ -492,11 +416,11 @@ static int sprd_ufs_pwrchange(struct ufs_hba *hba)
 	pwr_info.pwr_tx = SLOW_MODE;
 	pwr_info.hs_rate = 0;
 
-	ret = __sprd_ufs_pwrchange(hba, &(pwr_info));
+	ret = ufshcd_config_pwr_mode(hba, &(pwr_info));
 	if (ret)
 		goto out;
 	if (hba->max_pwr_info.is_valid == true)
-		ret = __sprd_ufs_pwrchange(hba, &(hba->max_pwr_info.info));
+		ret = ufshcd_config_pwr_mode(hba, &(hba->max_pwr_info.info));
 
 out:
 	return ret;
@@ -525,8 +449,8 @@ static int ufs_sprd_init(struct ufs_hba *hba)
 
 	hba->quirks |= UFSHCD_QUIRK_BROKEN_UFS_HCI_VERSION |
 		       UFSHCD_QUIRK_DELAY_BEFORE_DME_CMDS;
-	hba->caps |= UFSHCD_CAP_CLK_GATING | UFSHCD_CAP_WB_EN |
-			UFSHCD_CAP_HIBERN8_WITH_CLK_GATING;
+	hba->caps |= UFSHCD_CAP_CLK_GATING | UFSHCD_CAP_CRYPTO |
+		     UFSHCD_CAP_WB_EN | UFSHCD_CAP_HIBERN8_WITH_CLK_GATING;
 
 	res = platform_get_resource_byname(pdev,
 					IORESOURCE_MEM, "ufs_analog_reg");
@@ -540,6 +464,21 @@ static int ufs_sprd_init(struct ufs_hba *hba)
 		dev_err(dev, "%s: could not map ufs_analog_reg, err %ld\n",
 			__func__, PTR_ERR(host->ufs_analog_reg));
 		host->ufs_analog_reg = NULL;
+		return -ENODEV;
+	}
+
+	res = platform_get_resource_byname(pdev,
+			IORESOURCE_MEM, "aon_apb_reg");
+	if (!res) {
+		dev_err(dev, "Missing aon_apb_reg register resource\n");
+		return -ENODEV;
+	}
+	host->aon_apb_reg = devm_ioremap_nocache(dev, res->start,
+			resource_size(res));
+	if (IS_ERR(host->aon_apb_reg)) {
+		dev_err(dev, "%s: could not map aon_apb_reg, err %ld\n",
+				__func__, PTR_ERR(host->aon_apb_reg));
+		host->aon_apb_reg = NULL;
 		return -ENODEV;
 	}
 
@@ -564,6 +503,7 @@ static void ufs_sprd_exit(struct ufs_hba *hba)
 	struct ufs_sprd_host *host = ufshcd_get_variant(hba);
 
 	devm_kfree(dev, host);
+	hba->priv = NULL;
 }
 
 static u32 ufs_sprd_get_ufs_hci_version(struct ufs_hba *hba)
@@ -575,11 +515,19 @@ static int ufs_sprd_hce_enable_notify(struct ufs_hba *hba,
 				      enum ufs_notify_change_status status)
 {
 	int err = 0;
+	unsigned long flags;
 
 	switch (status) {
 	case PRE_CHANGE:
 		/* Do hardware reset before host controller enable. */
 		ufs_sprd_hw_init(hba);
+
+		spin_lock_irqsave(hba->host->host_lock, flags);
+		ufshcd_writel(hba, 0, REG_AUTO_HIBERNATE_IDLE_TIMER);
+		spin_unlock_irqrestore(hba->host->host_lock, flags);
+		hba->capabilities &= ~MASK_AUTO_HIBERN8_SUPPORT;
+		hba->ahit = 0;
+
 		ufshcd_writel(hba, CONTROLLER_ENABLE, REG_CONTROLLER_ENABLE);
 		break;
 	case POST_CHANGE:
@@ -693,6 +641,7 @@ static int ufs_sprd_link_startup_notify(struct ufs_hba *hba,
 
 		break;
 	case POST_CHANGE:
+		hba->clk_gating.delay_ms = 10;
 		break;
 	default:
 		err = -EINVAL;
@@ -717,17 +666,11 @@ static int ufs_sprd_pwr_change_notify(struct ufs_hba *hba,
 
 	switch (status) {
 	case PRE_CHANGE:
-		dev_req_params->gear_rx = UFS_HS_G3;
-		dev_req_params->gear_tx = UFS_HS_G3;
-		dev_req_params->lane_rx = 2;
-		dev_req_params->lane_tx = 2;
-		dev_req_params->pwr_rx = FAST_MODE;
-		dev_req_params->pwr_tx = FAST_MODE;
-		dev_req_params->hs_rate = PA_HS_MODE_B;
+		err = -EPERM;
 		break;
 	case POST_CHANGE:
 		/* Set auto h8 ilde time to 10ms */
-		ufshcd_auto_hibern8_enable(hba);
+		//ufshcd_auto_hibern8_enable(hba);
 		break;
 	default:
 		err = -EINVAL;
@@ -755,24 +698,25 @@ void ufs_set_hstxsclk(struct ufs_hba *hba)
 	}
 
 }
+
 static void ufs_sprd_hibern8_notify(struct ufs_hba *hba,
 				enum uic_cmd_dme cmd,
 				enum ufs_notify_change_status status)
 {
 	int ret;
+	unsigned long flags;
 	u32 aon_ver_id = 0;
-
 
 	switch (status) {
 	case PRE_CHANGE:
 		if (cmd == UIC_CMD_DME_HIBER_ENTER) {
-			/* Set auto h8 ilde time to 0ms */
-			ufshcd_auto_hibern8_disable(hba);
+			spin_lock_irqsave(hba->host->host_lock, flags);
+			ufshcd_writel(hba, 0, REG_AUTO_HIBERNATE_IDLE_TIMER);
+			spin_unlock_irqrestore(hba->host->host_lock, flags);
 		}
 		break;
 	case POST_CHANGE:
 		if (cmd == UIC_CMD_DME_HIBER_EXIT) {
-
 			hba->caps &= ~UFSHCD_CAP_CLK_GATING;
 
 			ret = is_ufs_sprd_host_in_pwm(hba);
@@ -795,7 +739,7 @@ static void ufs_sprd_hibern8_notify(struct ufs_hba *hba,
 
 			hba->caps |= UFSHCD_CAP_CLK_GATING;
 			/* Set auto h8 ilde time to 10ms */
-			ufshcd_auto_hibern8_enable(hba);
+			//ufshcd_auto_hibern8_enable(hba);
 		}
 		break;
 	default:
@@ -808,14 +752,284 @@ static int ufs_sprd_suspend(struct ufs_hba *hba, enum ufs_pm_op pm_op)
 	hba->rpm_lvl = UFS_PM_LVL_1;
 	hba->spm_lvl = UFS_PM_LVL_5;
 	hba->uic_link_state = UIC_LINK_OFF_STATE;
+	mdelay(30);
 	return 0;
 }
 
 static int ufs_sprd_resume(struct ufs_hba *hba, enum ufs_pm_op pm_op)
 {
+	udelay(100);
 	return 0;
 }
 
+static void ufs_sprd_device_reset(struct ufs_hba *hba)
+{
+	return;
+}
+
+static inline u16 ufs_sprd_wlun_to_scsi_lun(u8 upiu_wlun_id)
+{
+	return (upiu_wlun_id & ~UFS_UPIU_WLUN_ID) | SCSI_W_LUN_BASE;
+}
+
+static int ufs_sprd_get_sdev(struct ufs_hba *hba, uint channel,
+			     uint id, u64 lun)
+{
+	struct scsi_device *sdev_rpmb;
+	struct ufs_sprd_host *host = ufshcd_get_variant(hba);
+	int ret = 0;
+
+	sdev_rpmb = __scsi_add_device(hba->host, channel, id, lun, NULL);
+	if (IS_ERR(sdev_rpmb)) {
+		ret = PTR_ERR(sdev_rpmb);
+		return ret;
+	}
+	host->sdev_ufs_rpmb = sdev_rpmb;
+
+	return ret;
+}
+
+static inline int ufs_sprd_read_geometry_desc_param(struct ufs_hba *hba,
+			enum geometry_desc_param param_offset,
+			u8 *param_read_buf, u32 param_size)
+{
+	return ufshcd_read_desc_param(hba, QUERY_DESC_IDN_GEOMETRY, 0,
+				      param_offset, param_read_buf, param_size);
+}
+
+#define SEC_PROTOCOL_UFS  0xEC
+#define SEC_SPECIFIC_UFS_RPMB 0x0001
+#define SEC_PROTOCOL_CMD_SIZE 12
+#define SEC_PROTOCOL_RETRIES 3
+#define SEC_PROTOCOL_RETRIES_ON_RESET 10
+#define SEC_PROTOCOL_TIMEOUT msecs_to_jiffies(1000)
+
+static int ufs_sprd_rpmb_security_out(struct scsi_device *sdev,
+				      struct rpmb_frame *frames, u32 cnt)
+{
+	struct scsi_sense_hdr sshdr;
+	u32 trans_len = cnt * sizeof(struct rpmb_frame);
+	int reset_retries = SEC_PROTOCOL_RETRIES_ON_RESET;
+	int ret;
+	u8 cmd[SEC_PROTOCOL_CMD_SIZE];
+	char *sense = NULL;
+
+	sense = kzalloc(SCSI_SENSE_BUFFERSIZE, GFP_NOIO);
+	if (!sense) {
+		pr_err("%s sense alloc failed\n", __func__);
+		return -1;
+	}
+
+	memset(cmd, 0, SEC_PROTOCOL_CMD_SIZE);
+	cmd[0] = SECURITY_PROTOCOL_OUT;
+	cmd[1] = SEC_PROTOCOL_UFS;
+	put_unaligned_be16(SEC_SPECIFIC_UFS_RPMB, cmd + 2);
+	cmd[4] = 0;
+	put_unaligned_be32(trans_len, cmd + 6);
+
+	ret = scsi_test_unit_ready(sdev, SEC_PROTOCOL_TIMEOUT,
+				   SEC_PROTOCOL_RETRIES, &sshdr);
+	if (ret)
+		dev_err(&sdev->sdev_gendev,
+			"%s: rpmb scsi_test_unit_ready, ret=%d\n",
+			__func__, ret);
+
+retry:
+	ret = __scsi_execute(sdev, cmd, DMA_TO_DEVICE, frames, trans_len,
+			     sense, &sshdr, SEC_PROTOCOL_TIMEOUT,
+			     SEC_PROTOCOL_RETRIES, 0, 0, NULL);
+
+	if (ret && scsi_sense_valid(&sshdr) &&
+	    sshdr.sense_key == UNIT_ATTENTION &&
+	    sshdr.asc == 0x29 && sshdr.ascq == 0x00)
+		/*
+		 * Device reset might occur several times,
+		 * give it one more chance
+		 */
+		if (--reset_retries > 0)
+			goto retry;
+
+	if (ret)
+		dev_err(&sdev->sdev_gendev, "%s: failed with err %0x\n",
+			__func__, ret);
+
+	if (driver_byte(ret) & DRIVER_SENSE)
+		scsi_print_sense_hdr(sdev, "rpmb: security out", &sshdr);
+
+	kfree(sense);
+	return ret;
+}
+
+static int ufs_sprd_rpmb_security_in(struct scsi_device *sdev,
+				      struct rpmb_frame *frames, u32 cnt)
+{
+	struct scsi_sense_hdr sshdr;
+	u32 alloc_len = cnt * sizeof(struct rpmb_frame);
+	int reset_retries = SEC_PROTOCOL_RETRIES_ON_RESET;
+	int ret;
+	u8 cmd[SEC_PROTOCOL_CMD_SIZE];
+	char *sense = NULL;
+
+	sense = kzalloc(SCSI_SENSE_BUFFERSIZE, GFP_NOIO);
+	if (!sense) {
+		pr_err("%s sense alloc failed\n", __func__);
+		return -1;
+	}
+	memset(cmd, 0, SEC_PROTOCOL_CMD_SIZE);
+	cmd[0] = SECURITY_PROTOCOL_IN;
+	cmd[1] = SEC_PROTOCOL_UFS;
+	put_unaligned_be16(SEC_SPECIFIC_UFS_RPMB, cmd + 2);
+	cmd[4] = 0;
+	put_unaligned_be32(alloc_len, cmd + 6);
+
+	ret = scsi_test_unit_ready(sdev, SEC_PROTOCOL_TIMEOUT,
+				   SEC_PROTOCOL_RETRIES, &sshdr);
+	if (ret)
+		dev_err(&sdev->sdev_gendev,
+			"%s: rpmb scsi_test_unit_ready, ret=%d\n",
+			__func__, ret);
+
+retry:
+	ret = __scsi_execute(sdev, cmd, DMA_FROM_DEVICE, frames, alloc_len,
+			     sense, &sshdr, SEC_PROTOCOL_TIMEOUT,
+			     SEC_PROTOCOL_RETRIES, 0, 0, NULL);
+
+	if (ret && scsi_sense_valid(&sshdr) &&
+	    sshdr.sense_key == UNIT_ATTENTION &&
+	    sshdr.asc == 0x29 && sshdr.ascq == 0x00)
+		/*
+		 * Device reset might occur several times,
+		 * give it one more chance
+		 */
+		if (--reset_retries > 0)
+			goto retry;
+
+	if (ret)
+		dev_err(&sdev->sdev_gendev, "%s: failed with err %0x\n",
+			__func__, ret);
+
+	if (driver_byte(ret) & DRIVER_SENSE)
+		scsi_print_sense_hdr(sdev, "rpmb: security in", &sshdr);
+
+	kfree(sense);
+	return ret;
+}
+
+static int ufs_rpmb_cmd_seq(struct device *dev,
+			    struct rpmb_cmd *cmds, u32 ncmds)
+{
+	unsigned long flags;
+	struct ufs_hba *hba = dev_get_drvdata(dev);
+	struct ufs_sprd_host *host = ufshcd_get_variant(hba);
+	struct scsi_device *sdev;
+	struct rpmb_cmd *cmd;
+	int i;
+	int ret;
+
+	spin_lock_irqsave(hba->host->host_lock, flags);
+	sdev = host->sdev_ufs_rpmb;
+	if (sdev) {
+		ret = scsi_device_get(sdev);
+		if (!ret && !scsi_device_online(sdev)) {
+			ret = -ENODEV;
+			scsi_device_put(sdev);
+		}
+	} else {
+		ret = -ENODEV;
+	}
+	spin_unlock_irqrestore(hba->host->host_lock, flags);
+	if (ret)
+		return ret;
+
+	for (ret = 0, i = 0; i < ncmds && !ret; i++) {
+		cmd = &cmds[i];
+		if (cmd->flags & RPMB_F_WRITE)
+			ret = ufs_sprd_rpmb_security_out(sdev, cmd->frames,
+							 cmd->nframes);
+		else
+			ret = ufs_sprd_rpmb_security_in(sdev, cmd->frames,
+							cmd->nframes);
+	}
+	scsi_device_put(sdev);
+
+	return ret;
+}
+
+static struct rpmb_ops ufshcd_rpmb_dev_ops = {
+	.cmd_seq = ufs_rpmb_cmd_seq,
+	.type = RPMB_TYPE_UFS,
+};
+
+static inline void ufs_sprd_rpmb_add(struct ufs_hba *hba)
+{
+	struct rpmb_dev *rdev;
+	struct ufs_sprd_host *host = ufshcd_get_variant(hba);
+	u8 rw_size;
+	int ret;
+
+	ret = ufs_sprd_get_sdev(hba, 0, 0,
+			ufs_sprd_wlun_to_scsi_lun(UFS_UPIU_RPMB_WLUN));
+	if (ret) {
+		dev_warn(hba->dev, "Cannot get rpmb dev!\n");
+		return;
+	}
+
+	ret = ufs_sprd_read_geometry_desc_param(hba, GEOMETRY_DESC_PARAM_RPMB_RW_SIZE,
+					&rw_size, sizeof(rw_size));
+	if (ret) {
+		dev_warn(hba->dev, "%s: cannot get rpmb rw limit %d\n",
+			dev_name(hba->dev), ret);
+		rw_size = 1;
+	}
+
+	ufshcd_rpmb_dev_ops.reliable_wr_cnt = rw_size;
+
+	ret = scsi_device_get(host->sdev_ufs_rpmb);
+	rdev = rpmb_dev_register(hba->dev, &ufshcd_rpmb_dev_ops);
+	if (IS_ERR(rdev)) {
+		dev_warn(hba->dev, "%s: cannot register to rpmb %ld\n",
+			 dev_name(hba->dev), PTR_ERR(rdev));
+		goto out_put_dev;
+	}
+
+	scsi_device_put(host->sdev_ufs_rpmb);
+	return;
+
+out_put_dev:
+	scsi_device_put(host->sdev_ufs_rpmb);
+	host->sdev_ufs_rpmb = NULL;
+}
+
+static inline void ufs_sprd_rpmb_remove(struct ufs_hba *hba)
+{
+	struct ufs_sprd_host *host = ufshcd_get_variant(hba);
+
+	if (!host || !host->sdev_ufs_rpmb)
+		return;
+
+	rpmb_dev_unregister(hba->dev);
+	scsi_device_put(host->sdev_ufs_rpmb);
+	host->sdev_ufs_rpmb = NULL;
+}
+void ufs_sprd_setup_xfer_req(struct ufs_hba *hba, int task_tag, bool scsi_cmd)
+{
+	struct ufshcd_lrb *lrbp;
+	struct utp_transfer_req_desc *req_desc;
+	u32 data_direction;
+	u32 dword_0, crypto;
+
+	lrbp = &hba->lrb[task_tag];
+	req_desc = lrbp->utr_descriptor_ptr;
+	dword_0 = le32_to_cpu(req_desc->header.dword_0);
+	data_direction = dword_0 & (UTP_DEVICE_TO_HOST | UTP_HOST_TO_DEVICE);
+	crypto = dword_0 & UTP_REQ_DESC_CRYPTO_ENABLE_CMD;
+	if (!data_direction && crypto) {
+		pr_err("ufs before dword_0 = %lx,%lx\n", dword_0, req_desc->header.dword_0);
+		dword_0 &= ~(UTP_REQ_DESC_CRYPTO_ENABLE_CMD);
+		req_desc->header.dword_0 = cpu_to_le32(dword_0);
+		pr_err("ufs after dword_0 = %lx,%lx\n", dword_0, req_desc->header.dword_0);
+	}
+}
 /*
  * struct ufs_hba_sprd_vops - UFS sprd specific variant operations
  *
@@ -831,9 +1045,11 @@ static struct ufs_hba_variant_ops ufs_hba_sprd_vops = {
 	.link_startup_notify = ufs_sprd_link_startup_notify,
 	.pwr_change_notify = ufs_sprd_pwr_change_notify,
 	.hibern8_notify = ufs_sprd_hibern8_notify,
+	.setup_xfer_req = ufs_sprd_setup_xfer_req,
 	.apply_dev_quirks = ufs_sprd_apply_dev_quirks,
 	.suspend = ufs_sprd_suspend,
 	.resume = ufs_sprd_resume,
+	.device_reset = ufs_sprd_device_reset,
 };
 
 /*
@@ -846,12 +1062,18 @@ static int ufs_sprd_probe(struct platform_device *pdev)
 {
 	int err;
 	struct device *dev = &pdev->dev;
+	struct ufs_hba *hba;
 
 	/* Perform generic probe */
 	err = ufshcd_pltfrm_init(pdev, &ufs_hba_sprd_vops);
-	if (err)
+	if (err) {
 		dev_err(dev, "ufshcd_pltfrm_init() failed %d\n", err);
+		goto out;
+	}
 
+	hba = platform_get_drvdata(pdev);
+	ufs_sprd_rpmb_add(hba);
+out:
 	return err;
 }
 /*
@@ -865,11 +1087,25 @@ static int ufs_sprd_remove(struct platform_device *pdev)
 	struct ufs_hba *hba =  platform_get_drvdata(pdev);
 
 	pm_runtime_get_sync(&(pdev)->dev);
+	ufs_sprd_rpmb_remove(hba);
 	ufshcd_remove(hba);
 	return 0;
 }
+/*
+ * ufs_sprd_shutdown - set driver_data of the device to NULL
+ * @pdev: pointer to platform device handle
+ *
+ * Always returns 0
+ */
+static void ufs_sprd_shutdown(struct platform_device *pdev)
+{
+	struct ufs_hba *hba =  platform_get_drvdata(pdev);
+
+	ufs_sprd_rpmb_remove(hba);
+	ufshcd_pltfrm_shutdown(pdev);
+}
 static const struct of_device_id ufs_sprd_of_match[] = {
-	{ .compatible = "sprd,ufshc"},
+	{.compatible = "sprd,ufshc"},
 	{},
 };
 
@@ -884,7 +1120,7 @@ static const struct dev_pm_ops ufs_sprd_pm_ops = {
 static struct platform_driver ufs_sprd_pltform = {
 	.probe = ufs_sprd_probe,
 	.remove = ufs_sprd_remove,
-	.shutdown = ufshcd_pltfrm_shutdown,
+	.shutdown = ufs_sprd_shutdown,
 	.driver = {
 		.name = "ufshcd-sprd",
 		.pm = &ufs_sprd_pm_ops,

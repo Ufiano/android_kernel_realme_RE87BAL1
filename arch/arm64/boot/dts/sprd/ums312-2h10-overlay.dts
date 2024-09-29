@@ -3,7 +3,7 @@
 
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/gpio/gpio.h>
-#include <dt-bindings/clock/sprd,sharkl5-clk.h>
+#include <dt-bindings/clock/sprd,ums312-clk.h>
 #include <dt-bindings/mfd/sprd,sc2730-regs.h>
 #include <dt-bindings/mfd/sprd,sc2730-mask.h>
 #include "lcd/lcd_r61350_truly_mipi_hd.dtsi"
@@ -121,9 +121,16 @@
 				compatible = "simple-battery";
 				charge-full-design-microamp-hours = <2780000>;
 				charge-term-current-microamp = <120000>;
-				constant_charge_voltage_max_microvolt = <4350000>;
+				constant-charge-voltage-max-microvolt = <4350000>;
 				factory-internal-resistance-micro-ohms = <320000>;
 				voltage-min-design-microvolt = <3450000>;
+				fullbatt-voltage = <4300000>;
+				fullbatt-current = <120000>;
+				fullbatt-track-end-vol = <4295000>;
+				fullbatt-track-end-cur = <130000>;
+				first-calib-voltage = <3600000>;
+				first-calib-capacity = <40>;
+
 				ocv-capacity-celsius = <20>;
 				ocv-capacity-table-0 = <4360000 100>, <4249000 95>, <4189000 90>,
 							<4133000 85>, <4081000 80>, <4034000 75>,
@@ -144,6 +151,16 @@
 				charge-dcp-current-microamp = <1150000 3000000>;
 				charge-cdp-current-microamp = <1150000 1150000>;
 				charge-unknown-current-microamp = <500000 500000>;
+
+				dcp-jeita-temp-table = <1000 1030 0 4350000>, <1150 1180 700000 4350000>,
+					<1450 1420 1150000 4350000>, <1600 1570 700000 4100000>;
+				sdp-jeita-temp-table = <1000 1030 0 4350000>, <1150 1180 500000 4350000>,
+					<1450 1420 500000 4350000>, <1600 1570 500000 4100000>;
+				cdp-jeita-temp-table = <1000 1030 0 4350000>, <1150 1180 700000 4350000>,
+					<1450 1420 1150000 4350000>, <1600 1570 700000 4100000>;
+				unknown-jeita-temp-table = <1000 1030 0 4350000>, <1150 1180 500000 4350000>,
+					<1450 1420 500000 4350000>, <1600 1570 500000 4100000>;
+				force-jeita-status = <2>;
 			};
 
 			charger-manager {
@@ -155,8 +172,6 @@
 
 				cm-fullbatt-vchkdrop-ms = <30000>;
 				cm-fullbatt-vchkdrop-volt = <12000>;
-				cm-fullbatt-voltage = <4300000>;
-				cm-fullbatt-current = <120000>;
 				cm-fullbatt-capacity = <100>;
 
 				cm-num-chargers = <1>;
@@ -189,17 +204,9 @@
 				/* drop voltage in microVolts to restart charging */
 				cm-charge-voltage-drop = <700000>;
 
-				cm-dcp-jeita-temp-table = <1000 1030 0 4350000>, <1150 1180 700000 4350000>,
-					<1450 1420 1150000 4350000>, <1600 1570 700000 4100000>;
-				cm-sdp-jeita-temp-table = <1000 1030 0 4350000>, <1150 1180 500000 4350000>,
-					<1450 1420 500000 4350000>, <1600 1570 500000 4100000>;
-				cm-cdp-jeita-temp-table = <1000 1030 0 4350000>, <1150 1180 700000 4350000>,
-					<1450 1420 1150000 4350000>, <1600 1570 700000 4100000>;
-				cm-unknown-jeita-temp-table = <1000 1030 0 4350000>, <1150 1180 500000 4350000>,
-					<1450 1420 500000 4350000>, <1600 1570 500000 4100000>;
-
 				monitored-battery = <&bat>;
-				cm-capacity-track;
+
+				cm-thermal-zone = "board-thmzone";
 
 				cm-cap-remap-table = <1 2 3>, <2 3 2>, <98 99 2>, <99 100 3>;
 
@@ -213,7 +220,7 @@
 			};
 
 			sprd_marlin3: sprd-marlin3 {
-				compatible = "sprd,marlin3";
+				compatible = "unisoc,marlin3lite_sdio";
 				m2-wakeup-ap-gpios = <&ap_gpio 32 GPIO_ACTIVE_LOW>;
 				reset-gpios = <&ap_gpio 97 GPIO_ACTIVE_LOW>;
 				enable-gpios = <&ap_gpio 143 GPIO_ACTIVE_LOW>;
@@ -240,6 +247,10 @@
 				avdd12-parent-bound-chip = <REG_ANA_SLP_DCDC_PD_CTRL MASK_ANA_SLP_DCDCGEN1_PD_EN 0x0 MASK_ANA_SLP_DCDCGEN1_PD_EN>;
 				avdd12-bound-wbreq = <REG_ANA_LDO_XTL_EN10 MASK_ANA_LDO_VDDWCN_EXT_XTL3_EN 0x0 MASK_ANA_LDO_VDDWCN_EXT_XTL3_EN>;
 				avdd33-bound-wbreq = <REG_ANA_LDO_XTL_EN11 MASK_ANA_LDO_VDDWIFIPA_EXT_XTL3_EN 0x0 MASK_ANA_LDO_VDDWIFIPA_EXT_XTL3_EN>;
+
+				wlan {
+					compatible = "sprd,sc2355-sdio-wifi";
+				};
 			};
 		};
 	};
@@ -264,31 +275,25 @@
 
 &usb {
 	extcon = <&extcon_gpio>, <&pmic_typec>;
-	vbus-supply = <&vddvbus>;
+	status = "okay";
 };
 
 &reserved_memory {
+	#address-cells = <2>;
+	#size-cells = <2>;
 
 	logo_reserved: logobuffer {
 		reg = <0x0 0x9e000000 0x0 0x00384000>;
 	};
 
-	fd_reserved: face-mem@fd1c0000{
-		reg = <0x0 0xfd1c0000 0x0 0x01e00000>;
+	fd_reserved: face-mem@be170000{
+		reg = <0x0 0xbe170000 0x0 0x01e00000>;
 	};
-
-
-	fb_reserved: framebuffer-mem@befc0000 {
-		reg = <0x0 0xbefc0000 0x0 0x00c70000>;
-	};
-
-	wb_reserved: writeback@bfc30000 {
-		reg = <0x0 0xbfc30000 0x0 0x00390000>;
-	};
-
 };
 
 &ion {
+	#address-cells = <1>;
+	#size-cells = <0>;
 	heap@4 {
 		reg = <4>;
 		label = "carveout_fd";
@@ -299,6 +304,8 @@
 
 &i2c0 {
 	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	sensor_main: sensor-main@20 {
 		compatible = "sprd,sensor-main";
@@ -325,6 +332,8 @@
 
 &i2c1 {
 	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	sensor_sub: sensor-sub@20 {
 		compatible = "sprd,sensor-sub";
@@ -373,9 +382,11 @@
 
 &i2c3 {
 	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	adaptive-touchscreen@38 {
-		compatible = "adaptive-touchscreen";
+		compatible = "focaltech,ft5436-touchscreen";
 		reg = <0x38>;
 		gpios = <&ap_gpio 145 GPIO_ACTIVE_HIGH
 			&ap_gpio 144 GPIO_ACTIVE_HIGH>;
@@ -393,6 +404,8 @@
 &i2c4 {
 	status = "okay";
 	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	flash_ic: flash-ic@63 {
 		compatible = "sprd,flash-ocp8137";
@@ -415,6 +428,8 @@
 &i2c5 {
 	status = "okay";
 	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
 
 	fan54015_chg: charger@6a {
 		compatible = "fairchild,fan54015_chg";
@@ -430,10 +445,11 @@
 
 &pmic_fgu {
 	monitored-battery = <&bat>;
-	sprd,calib-resistance-real = <10000>;
-	sprd,calib-resistance-spec = <20000>;
-	first-calib-voltage = <3600000>;
-	first-calib-capacity = <40>;
+	sprd,calib-resistance-micro-ohms = <10000>;
+	sprd,comp-resistance-mohm = <20>;
+
+	fgu-capacity-track;
+	phys = <&hsphy>;
 };
 
 &sdio0 {
@@ -457,8 +473,8 @@
 
 &adi_bus {
 	sprd,hw-channels = <2 0x18cc>, <3 0x18cc>, <15 0x1874>,
-			   <17 0x1844>, <19 0x1854>, <30 0x1820>, <35 0x19b8>,
-			   <39 0x19ac>;
+			   <17 0x1844>, <19 0x1854>, <30 0x1820>,
+			   <32 0x197c>, <33 0x1988>, <35 0x19b8>, <39 0x19ac>;
 };
 
 &pin_controller {
@@ -603,16 +619,11 @@
 	slew-rate = <9375>; /* 9375uV/us */
 };
 
-&ion {
-	heap@3 {
-		reg = <3>;
-		label = "carveout_fb";
-		type = <2>;
-		memory-region = <&fb_reserved>;
-	};
-};
-
 &dpu {
-	sprd,wb-memory = <&wb_reserved>;
 	sprd,logo-memory = <&logo_reserved>;
 };
+
+&vddemmccore {
+	regulator-always-on;
+};
+

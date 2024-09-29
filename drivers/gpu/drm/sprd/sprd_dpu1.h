@@ -1,85 +1,33 @@
-// SPDX-License-Identifier: GPL-2.0
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright (C) 2020 Unisoc Inc.
  */
 
-#ifndef __SPRD_DPU1_H__
-#define __SPRD_DPU1_H__
+#ifndef _SPRD_DPU1_H_
+#define _SPRD_DPU1_H_
 
+#include <linux/bug.h>
 #include <linux/delay.h>
-#include <linux/string.h>
-#include <linux/platform_device.h>
 #include <linux/device.h>
 #include <linux/kernel.h>
-#include <linux/bug.h>
+#include <linux/platform_device.h>
+#include <linux/string.h>
 #include <video/videomode.h>
 
-#include <drm/drmP.h>
-#include <drm/drm_crtc.h>
-#include <drm/drm_fourcc.h>
-#include <drm/drm_vblank.h>
 #include <uapi/drm/drm_mode.h>
+
+#include "sprd_crtc.h"
+#include "sprd_plane.h"
 #include "disp_lib.h"
+#include "disp_trusty.h"
 
 #define DRM_FORMAT_P010		fourcc_code('P', '0', '1', '0')
 
-#define DRM_MODE_BLEND_PREMULTI		2
-#define DRM_MODE_BLEND_COVERAGE		1
-#define DRM_MODE_BLEND_PIXEL_NONE	0
-
-#define DISPC_INT_DONE_MASK		BIT(0)
-#define DISPC_INT_ERR_MASK		BIT(2)
-#define DISPC_INT_UPDATE_DONE_MASK	BIT(4)
-#define DISPC_INT_DPI_VSYNC_MASK	BIT(5)
-#define DISPC_INT_WB_DONE_MASK		BIT(6)
-#define DISPC_INT_WB_FAIL_MASK		BIT(7)
-
 enum {
-	SPRD_DISPC_IF_DBI = 0,
-	SPRD_DISPC_IF_DPI,
-	SPRD_DISPC_IF_EDPI,
-	SPRD_DISPC_IF_LIMIT
-};
-
-enum {
-	SPRD_IMG_DATA_ENDIAN_B0B1B2B3 = 0,
-	SPRD_IMG_DATA_ENDIAN_B3B2B1B0,
-	SPRD_IMG_DATA_ENDIAN_B2B3B0B1,
-	SPRD_IMG_DATA_ENDIAN_B1B0B3B2,
-	SPRD_IMG_DATA_ENDIAN_LIMIT
-};
-
-struct sprd_dpu_layer {
-	u8 index;
-	u8 planes;
-	u32 addr[4];
-	u32 pitch[4];
-	s16 src_x;
-	s16 src_y;
-	s16 src_w;
-	s16 src_h;
-	s16 dst_x;
-	s16 dst_y;
-	u16 dst_w;
-	u16 dst_h;
-	u32 format;
-	u32 alpha;
-	u32 blending;
-	u32 rotation;
-	u32 xfbc;
-	u32 height;
-	u32 header_size_r;
-	u32 header_size_y;
-	u32 header_size_uv;
-	u32 y2r_coef;
-	u8 pallete_en;
-	u32 pallete_color;
-};
-
-struct dpu_capability {
-	u32 max_layers;
-	const u32 *fmts_ptr;
-	u32 fmts_cnt;
+	SPRD_DPU_IF_DBI = 0,
+	SPRD_DPU_IF_DPI,
+	SPRD_DPU_IF_EDPI,
+	SPRD_DPU_IF_LIMIT
 };
 
 struct dpu_context;
@@ -87,23 +35,23 @@ struct dpu_context;
 struct dpu_core_ops {
 	int (*parse_dt)(struct dpu_context *ctx,
 			struct device_node *np);
-	u32 (*version)(struct dpu_context *ctx);
+	void (*version)(struct dpu_context *ctx);
 	int (*init)(struct dpu_context *ctx);
-	void (*uninit)(struct dpu_context *ctx);
+	void (*fini)(struct dpu_context *ctx);
 	void (*run)(struct dpu_context *ctx);
 	void (*stop)(struct dpu_context *ctx);
 	void (*disable_vsync)(struct dpu_context *ctx);
 	void (*enable_vsync)(struct dpu_context *ctx);
 	u32 (*isr)(struct dpu_context *ctx);
-	void (*ifconfig)(struct dpu_context *ctx);
 	void (*write_back)(struct dpu_context *ctx, u8 count, bool debug);
+	void (*ifconfig)(struct dpu_context *ctx);
 	void (*flip)(struct dpu_context *ctx,
-		     struct sprd_dpu_layer layers[], u8 count);
-	int (*capability)(struct dpu_context *ctx,
-			struct dpu_capability *cap);
+		     struct sprd_plane planes[], u8 count);
+	void (*capability)(struct dpu_context *ctx,
+			 struct sprd_crtc_capability *cap);
 	void (*bg_color)(struct dpu_context *ctx, u32 color);
-	int (*modeset)(struct dpu_context *ctx,
-			struct drm_display_mode *mode);
+	int (*context_init)(struct dpu_context *ctx);
+	int (*modeset)(struct dpu_context *ctx, struct drm_display_mode *mode);
 };
 
 struct dpu_clk_ops {
@@ -126,61 +74,81 @@ struct dpu_glb_ops {
 };
 
 struct dpu_context {
-	unsigned long base;
+	/* dpu common parameters */
+	void __iomem *base;
 	u32 base_offset[2];
 	const char *version;
-	u32 corner_size;
 	int irq;
-	u8 id;
-	bool is_inited;
-	bool is_stopped;
-	bool disable_flip;
+	u8 if_type;
 	struct videomode vm;
-	struct semaphore refresh_lock;
-	struct work_struct wb_work;
-	u32 wb_addr_p;
+	struct semaphore lock;
+	bool enabled;
+	bool stopped;
+	bool flip_pending;
+	wait_queue_head_t wait_queue;
+	bool evt_update;
+	bool evt_all_update;
+	bool evt_stop;
 	irqreturn_t (*dpu_isr)(int irq, void *data);
+
+	/* write back parameters */
+	int wb_en;
+	int wb_xfbc_en;
+	int max_vsync_count;
+	int vsync_count;
+	struct sprd_layer_state wb_layer;
+	struct work_struct wb_work;
+	dma_addr_t wb_addr_p;
+	void *wb_addr_v;
+	size_t wb_buf_size;
+	bool wb_configed;
+
+	/* te check parameters */
+	wait_queue_head_t te_wq;
+	bool te_check_en;
+	bool evt_te;
+
+	/* corner config parameters */
+	u32 corner_size;
+	int sprd_corner_radius;
+	bool sprd_corner_support;
+
+	unsigned int *layer_top;
+	unsigned int *layer_bottom;
+
+	/* other specific parameters */
+	bool panel_ready;
+	u32 prev_y2r_coef;
+	u64 frame_count;
+	int time;
+
 	bool bypass_mode;
 	u32 hdr_static_metadata[9];
 	bool static_metadata_changed;
 };
 
-struct sprd_dpu {
-	struct device dev;
-	struct drm_crtc crtc;
-	struct dpu_context ctx;
-	struct dpu_core_ops *core;
-	struct dpu_clk_ops *clk;
-	struct dpu_glb_ops *glb;
-	struct drm_display_mode *mode;
-	struct sprd_dpu_layer *layers;
-	u8 pending_planes;
+struct sprd_dpu_ops {
+	const struct dpu_core_ops *core;
+	const struct dpu_clk_ops *clk;
+	const struct dpu_glb_ops *glb;
 };
 
-extern struct list_head dpu1_core_head;
-extern struct list_head dpu1_clk_head;
-extern struct list_head dpu1_glb_head;
+struct sprd_dpu {
+	struct device dev;
+	struct sprd_crtc *crtc;
+	struct dpu_context ctx;
+	const struct dpu_core_ops *core;
+	const struct dpu_clk_ops *clk;
+	const struct dpu_glb_ops *glb;
+	struct drm_display_mode *mode;
+};
 
-static inline struct sprd_dpu *crtc_to_dpu(struct drm_crtc *crtc)
-{
-	return crtc ? container_of(crtc, struct sprd_dpu, crtc) : NULL;
-}
+void sprd_dpu1_run(struct sprd_dpu *dpu);
+void sprd_dpu1_stop(struct sprd_dpu *dpu);
 
-#define dpu_core_ops_register(entry) \
-	disp_ops_register(entry, &dpu1_core_head)
-#define dpu_clk_ops_register(entry) \
-	disp_ops_register(entry, &dpu1_clk_head)
-#define dpu_glb_ops_register(entry) \
-	disp_ops_register(entry, &dpu1_glb_head)
+extern const struct dpu_core_ops dpu_lite_r3p0_core_ops;
+extern const struct dpu_clk_ops qogirn6pro_dpu1_clk_ops;
+extern const struct dpu_glb_ops qogirn6pro_dpu1_glb_ops;
 
-#define dpu_core_ops_attach(str) \
-	disp_ops_attach(str, &dpu1_core_head)
-#define dpu_clk_ops_attach(str) \
-	disp_ops_attach(str, &dpu1_clk_head)
-#define dpu_glb_ops_attach(str) \
-	disp_ops_attach(str, &dpu1_glb_head)
 
-int sprd_dpu1_run(struct sprd_dpu *dpu);
-int sprd_dpu1_stop(struct sprd_dpu *dpu);
-
-#endif
+#endif /* _SPRD_DPU_H_ */

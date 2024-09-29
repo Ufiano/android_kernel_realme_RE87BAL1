@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * fs/direct-io.c
  *
@@ -241,9 +242,8 @@ void dio_warn_stale_pagecache(struct file *filp)
 	}
 }
 
-/**
+/*
  * dio_complete() - called when all DIO BIO I/O has been completed
- * @offset: the byte offset in the file of the completed operation
  *
  * This drops i_dio_count, lets interested parties know that a DIO operation
  * has completed, and calculates the resulting return code for the operation.
@@ -316,8 +316,7 @@ static ssize_t dio_complete(struct dio *dio, ssize_t ret, unsigned int flags)
 			dio_warn_stale_pagecache(dio->iocb->ki_filp);
 	}
 
-	if (!(dio->flags & DIO_SKIP_DIO_COUNT))
-		inode_dio_end(dio->inode);
+	inode_dio_end(dio->inode);
 
 	if (flags & DIO_COMPLETE_ASYNC) {
 		/*
@@ -435,8 +434,8 @@ dio_bio_alloc(struct dio *dio, struct dio_submit *sdio,
 	struct inode *inode = dio->inode;
 
 	/*
-	 * bio_alloc() is guaranteed to return a bio when called with
-	 * __GFP_RECLAIM and we request a valid number of vectors.
+	 * bio_alloc() is guaranteed to return a bio when allowed to sleep and
+	 * we request a valid number of vectors.
 	 */
 	bio = bio_alloc(GFP_KERNEL, nr_vecs);
 
@@ -524,7 +523,7 @@ static struct bio *dio_await_one(struct dio *dio)
 		dio->waiter = current;
 		spin_unlock_irqrestore(&dio->bio_lock, flags);
 		if (!(dio->iocb->ki_flags & IOCB_HIPRI) ||
-		    !blk_mq_poll(dio->bio_disk->queue, dio->bio_cookie))
+		    !blk_poll(dio->bio_disk->queue, dio->bio_cookie, true))
 			io_schedule();
 		/* wake up sets us TASK_RUNNING */
 		spin_lock_irqsave(&dio->bio_lock, flags);
@@ -543,9 +542,8 @@ static struct bio *dio_await_one(struct dio *dio)
  */
 static blk_status_t dio_bio_complete(struct dio *dio, struct bio *bio)
 {
-	struct bio_vec *bvec;
-	unsigned i;
 	blk_status_t err = bio->bi_status;
+	bool should_dirty = dio->op == REQ_OP_READ && dio->should_dirty;
 
 	if (err) {
 		if (err == BLK_STS_AGAIN && (bio->bi_opf & REQ_NOWAIT))
@@ -554,17 +552,10 @@ static blk_status_t dio_bio_complete(struct dio *dio, struct bio *bio)
 			dio->io_error = -EIO;
 	}
 
-	if (dio->is_async && dio->op == REQ_OP_READ && dio->should_dirty) {
+	if (dio->is_async && should_dirty) {
 		bio_check_pages_dirty(bio);	/* transfers ownership */
 	} else {
-		bio_for_each_segment_all(bvec, bio, i) {
-			struct page *page = bvec->bv_page;
-
-			if (dio->op == REQ_OP_READ && !PageCompound(page) &&
-					dio->should_dirty)
-				set_page_dirty_lock(page);
-			put_page(page);
-		}
+		bio_release_pages(bio, should_dirty);
 		bio_put(bio);
 	}
 	return err;
@@ -870,6 +861,7 @@ submit_page_section(struct dio *dio, struct dio_submit *sdio, struct page *page,
 		    struct buffer_head *map_bh)
 {
 	int ret = 0;
+	int boundary = sdio->boundary;	/* dio_send_cur_page may clear it */
 
 	if (dio->op == REQ_OP_WRITE) {
 		/*
@@ -908,10 +900,10 @@ submit_page_section(struct dio *dio, struct dio_submit *sdio, struct page *page,
 	sdio->cur_page_fs_offset = sdio->block_in_file << sdio->blkbits;
 out:
 	/*
-	 * If sdio->boundary then we want to schedule the IO now to
+	 * If boundary then we want to schedule the IO now to
 	 * avoid metadata seeks.
 	 */
-	if (sdio->boundary) {
+	if (boundary) {
 		ret = dio_send_cur_page(dio, sdio, map_bh);
 		if (sdio->bio)
 			dio_bio_submit(dio, sdio);
@@ -1188,13 +1180,13 @@ do_blockdev_direct_IO(struct kiocb *iocb, struct inode *inode,
 		      get_block_t get_block, dio_iodone_t end_io,
 		      dio_submit_t submit_io, int flags)
 {
-	unsigned i_blkbits = ACCESS_ONCE(inode->i_blkbits);
+	unsigned i_blkbits = READ_ONCE(inode->i_blkbits);
 	unsigned blkbits = i_blkbits;
 	unsigned blocksize_mask = (1 << blkbits) - 1;
 	ssize_t retval = -EINVAL;
-	size_t count = iov_iter_count(iter);
+	const size_t count = iov_iter_count(iter);
 	loff_t offset = iocb->ki_pos;
-	loff_t end = offset + count;
+	const loff_t end = offset + count;
 	struct dio *dio;
 	struct dio_submit sdio = { 0, };
 	struct buffer_head map_bh = { 0, };
@@ -1215,7 +1207,7 @@ do_blockdev_direct_IO(struct kiocb *iocb, struct inode *inode,
 	}
 
 	/* watch out for a 0 len io from a tricksy fs */
-	if (iov_iter_rw(iter) == READ && !iov_iter_count(iter))
+	if (iov_iter_rw(iter) == READ && !count)
 		return 0;
 
 	dio = kmem_cache_alloc(dio_cache, GFP_KERNEL);
@@ -1266,8 +1258,7 @@ do_blockdev_direct_IO(struct kiocb *iocb, struct inode *inode,
 	 */
 	if (is_sync_kiocb(iocb))
 		dio->is_async = false;
-	else if (!(dio->flags & DIO_ASYNC_EXTEND) &&
-		 iov_iter_rw(iter) == WRITE && end > i_size_read(inode))
+	else if (iov_iter_rw(iter) == WRITE && end > i_size_read(inode))
 		dio->is_async = false;
 	else
 		dio->is_async = true;
@@ -1281,6 +1272,8 @@ do_blockdev_direct_IO(struct kiocb *iocb, struct inode *inode,
 	} else {
 		dio->op = REQ_OP_READ;
 	}
+	if (iocb->ki_flags & IOCB_HIPRI)
+		dio->op_flags |= REQ_HIPRI;
 
 	/*
 	 * For AIO O_(D)SYNC writes we need to defer completions to a workqueue
@@ -1311,8 +1304,7 @@ do_blockdev_direct_IO(struct kiocb *iocb, struct inode *inode,
 	/*
 	 * Will be decremented at I/O completion time.
 	 */
-	if (!(dio->flags & DIO_SKIP_DIO_COUNT))
-		inode_dio_begin(inode);
+	inode_dio_begin(inode);
 
 	retval = 0;
 	sdio.blkbits = blkbits;
@@ -1330,10 +1322,9 @@ do_blockdev_direct_IO(struct kiocb *iocb, struct inode *inode,
 	spin_lock_init(&dio->bio_lock);
 	dio->refcount = 1;
 
-	dio->should_dirty = (iter->type == ITER_IOVEC);
+	dio->should_dirty = iter_is_iovec(iter) && iov_iter_rw(iter) == READ;
 	sdio.iter = iter;
-	sdio.final_block_in_request =
-		(offset + iov_iter_count(iter)) >> blkbits;
+	sdio.final_block_in_request = end >> blkbits;
 
 	/*
 	 * In case of non-aligned buffers, we may need 2 more

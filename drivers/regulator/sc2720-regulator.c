@@ -1,4 +1,4 @@
- //SPDX-License-Identifier: GPL-2.0
+//SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (C) 2019 Spreadtrum Communications Inc.
  */
@@ -333,7 +333,6 @@ DEFINE_SIMPLE_ATTRIBUTE(fops_ldo,
 
 static void sc2720_regulator_debugfs_init(struct regulator_dev *rdev)
 {
-
 	debugfs_root = debugfs_create_dir(rdev->desc->name, NULL);
 
 	if (IS_ERR_OR_NULL(debugfs_root)) {
@@ -342,9 +341,9 @@ static void sc2720_regulator_debugfs_init(struct regulator_dev *rdev)
 		return;
 	}
 
-	debugfs_create_file("enable", S_IRUGO | S_IWUSR,
+	debugfs_create_file("enable", 0644,
 			    debugfs_root, rdev, &fops_enable);
-	debugfs_create_file("voltage", S_IRUGO | S_IWUSR,
+	debugfs_create_file("voltage", 0644,
 			    debugfs_root, rdev, &fops_ldo);
 }
 
@@ -396,9 +395,15 @@ static int sc2720_regulator_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static const struct of_device_id sc27xx_regulator_of_match[] = {
+	{ .compatible = "sprd,sc2720-regulator" },
+	{ },
+};
+
 static struct platform_driver sc2720_regulator_driver = {
 	.driver = {
 		.name = "sc27xx-regulator",
+		.of_match_table = sc27xx_regulator_of_match,
 	},
 	.probe = sc2720_regulator_probe,
 	.remove = sc2720_regulator_remove,
@@ -406,6 +411,6 @@ static struct platform_driver sc2720_regulator_driver = {
 
 module_platform_driver(sc2720_regulator_driver);
 
-MODULE_AUTHOR("Zong Hui <sherry.zong@spreadtrum.com>");
+MODULE_AUTHOR("Zhongfa Wang <zhongfa.wang@unisoc.com>");
 MODULE_DESCRIPTION("Spreadtrum SC2720 regulator driver");
 MODULE_LICENSE("GPL v2");

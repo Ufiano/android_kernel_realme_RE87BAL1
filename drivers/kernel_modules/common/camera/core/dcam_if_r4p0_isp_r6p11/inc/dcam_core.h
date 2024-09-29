@@ -253,6 +253,7 @@ struct camera_group {
 struct camera_file {
 	int idx;
 	struct camera_group *grp;
+	uint32_t private_key;
 };
 
 int img_get_timestamp(struct timeval *tv);

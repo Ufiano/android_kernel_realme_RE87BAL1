@@ -1,12 +1,9 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  *  linux/arch/arm/boot/compressed/head.S
  *
  *  Copyright (C) 1996-2002 Russell King
  *  Copyright (C) 2004 Hyok S. Choi (MPU support)
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  */
 #include <linux/linkage.h>
 #include <asm/assembler.h>
@@ -114,7 +111,43 @@
 #endif
 		.endm
 
-		.section ".start", #alloc, #execinstr
+		/*
+		 * Debug kernel copy by printing the memory addresses involved
+		 */
+		.macro dbgkc, begin, end, cbegin, cend
+#ifdef DEBUG
+		kputc   #'\n'
+		kputc   #'C'
+		kputc   #':'
+		kputc   #'0'
+		kputc   #'x'
+		kphex   \begin, 8	/* Start of compressed kernel */
+		kputc	#'-'
+		kputc	#'0'
+		kputc	#'x'
+		kphex	\end, 8		/* End of compressed kernel */
+		kputc	#'-'
+		kputc	#'>'
+		kputc   #'0'
+		kputc   #'x'
+		kphex   \cbegin, 8	/* Start of kernel copy */
+		kputc	#'-'
+		kputc	#'0'
+		kputc	#'x'
+		kphex	\cend, 8	/* End of kernel copy */
+		kputc	#'\n'
+		kputc	#'\r'
+#endif
+		.endm
+
+		.macro	be32tocpu, val, tmp
+#ifndef __ARMEB__
+		/* convert to little endian */
+		rev_l	\val, \tmp
+#endif
+		.endm
+
+		.section ".start", "ax"
 /*
  * sort out different calling conventions
  */
@@ -127,11 +160,23 @@
  AR_CLASS(	.arm	)
 start:
 		.type	start,#function
+		/*
+		 * These 7 nops along with the 1 nop immediately below for
+		 * !THUMB2 form 8 nops that make the compressed kernel bootable
+		 * on legacy ARM systems that were assuming the kernel in a.out
+		 * binary format. The boot loaders on these systems would
+		 * jump 32 bytes into the image to skip the a.out header.
+		 * with these 8 nops filling exactly 32 bytes, things still
+		 * work as expected on these legacy systems. Thumb2 mode keeps
+		 * 7 of the nops as it turns out that some boot loaders
+		 * were patching the initial instructions of the kernel, i.e
+		 * had started to exploit this "patch area".
+		 */
 		.rept	7
 		__nop
 		.endr
 #ifndef CONFIG_THUMB2_KERNEL
-		mov	r0, r0
+		__nop
 #else
  AR_CLASS(	sub	pc, pc, #3	)	@ A/R: switch to Thumb2 mode
   M_CLASS(	nop.w			)	@ M: already in Thumb2 mode
@@ -143,6 +188,8 @@ start:
 		.word	_magic_start	@ absolute load/run zImage address
 		.word	_magic_end	@ zImage end address
 		.word	0x04030201	@ endianness flag
+		.word	0x45454545	@ another magic number to indicate
+		.word	_magic_table	@ additional data table
 
 		__EFI_HEADER
 1:
@@ -303,13 +350,7 @@ restart:	adr	r0, LC0
 
 		/* Get the initial DTB size */
 		ldr	r5, [r6, #4]
-#ifndef __ARMEB__
-		/* convert to little endian */
-		eor	r1, r5, r5, ror #16
-		bic	r1, r1, #0x00ff0000
-		mov	r5, r5, ror #8
-		eor	r5, r5, r1, lsr #8
-#endif
+		be32tocpu r5, r1
 		/* 50% DTB growth should be good enough */
 		add	r5, r5, r5, lsr #1
 		/* preserve 64-bit alignment */
@@ -362,13 +403,7 @@ restart:	adr	r0, LC0
 
 		/* Get the current DTB size */
 		ldr	r5, [r6, #4]
-#ifndef __ARMEB__
-		/* convert r5 (dtb size) to little endian */
-		eor	r1, r5, r5, ror #16
-		bic	r1, r1, #0x00ff0000
-		mov	r5, r5, ror #8
-		eor	r5, r5, r1, lsr #8
-#endif
+		be32tocpu r5, r1
 
 		/* preserve 64-bit alignment */
 		add	r5, r5, #7
@@ -447,6 +482,20 @@ dtb_check_done:
 		bic	r9, r9, #31		@ ... of 32 bytes
 		add	r6, r9, r5
 		add	r9, r9, r10
+
+#ifdef DEBUG
+		sub     r10, r6, r5
+		sub     r10, r9, r10
+		/*
+		 * We are about to copy the kernel to a new memory area.
+		 * The boundaries of the new memory area can be found in
+		 * r10 and r9, whilst r5 and r6 contain the boundaries
+		 * of the memory we are going to copy.
+		 * Calling dbgkc will help with the printing of this
+		 * information.
+		 */
+		dbgkc	r5, r6, r10, r9
+#endif
 
 1:		ldmdb	r6!, {r0 - r3, r10 - r12, lr}
 		cmp	r6, r5
@@ -792,8 +841,6 @@ __armv7_mmu_cache_on:
 		bic     r6, r6, #1 << 31        @ 32-bit translation system
 		bic     r6, r6, #(7 << 0) | (1 << 4)	@ use only ttbr0
 		mcrne	p15, 0, r3, c2, c0, 0	@ load page table pointer
-		mcrne	p15, 0, r0, c8, c7, 0	@ flush I,D TLBs
-		mcr	p15, 0, r0, c7, c5, 4	@ ISB
 		mcrne	p15, 0, r1, c3, c0, 0	@ load domain access control
 		mcrne   p15, 0, r6, c2, c0, 2   @ load ttb control
 #endif
@@ -1090,9 +1137,9 @@ __armv4_mmu_cache_off:
 __armv7_mmu_cache_off:
 		mrc	p15, 0, r0, c1, c0
 #ifdef CONFIG_MMU
-		bic	r0, r0, #0x000d
+		bic	r0, r0, #0x0005
 #else
-		bic	r0, r0, #0x000c
+		bic	r0, r0, #0x0004
 #endif
 		mcr	p15, 0, r0, c1, c0	@ turn MMU and cache off
 		mov	r12, lr
@@ -1221,7 +1268,7 @@ iflush:
 __armv5tej_mmu_cache_flush:
 		tst	r4, #1
 		movne	pc, lr
-1:		mrc	p15, 0, r15, c7, c14, 3	@ test,clean,invalidate D cache
+1:		mrc	p15, 0, APSR_nzcv, c7, c14, 3	@ test,clean,invalidate D cache
 		bne	1b
 		mcr	p15, 0, r0, c7, c5, 0	@ flush I cache
 		mcr	p15, 0, r0, c7, c10, 4	@ drain WB

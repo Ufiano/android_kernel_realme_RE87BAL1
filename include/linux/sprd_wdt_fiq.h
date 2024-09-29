@@ -6,4 +6,3 @@
 int sprd_wdt_fiq_get_dev(struct watchdog_device **wdd);
 
 #endif
-

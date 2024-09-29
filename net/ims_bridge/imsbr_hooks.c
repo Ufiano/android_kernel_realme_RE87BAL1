@@ -1,5 +1,5 @@
-/*
- * Copyright (C) 2016 Spreadtrum Communications Inc.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (C) 2016 Spreadtrum Communications Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-#define pr_fmt(fmt) "imsbr: " fmt
+#define pr_fmt(fmt) "sprd-imsbr: " fmt
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -47,6 +47,7 @@ static bool is_icmp_error(struct nf_conntrack_tuple *nft)
 		case ICMP_REDIRECT:
 			return true;
 		}
+		fallthrough;
 	case IPPROTO_ICMPV6:
 		if (type < 128)
 			return true;
@@ -59,8 +60,6 @@ int imsbr_parse_nfttuple(struct net *net, struct sk_buff *skb,
 			 struct nf_conntrack_tuple *nft)
 {
 	struct nf_conntrack_tuple innertuple, origtuple;
-	const struct nf_conntrack_l4proto *innerproto;
-	const struct nf_conntrack_l3proto *l3proto;
 	struct iphdr *ip = ip_hdr(skb);
 	unsigned int inner_nhoff;
 	u16 l3num;
@@ -94,15 +93,11 @@ int imsbr_parse_nfttuple(struct net *net, struct sk_buff *skb,
 			return 0;
 
 		rcu_read_lock();
-		l3proto = __nf_ct_l3proto_find(l3num);
-		innerproto = __nf_ct_l4proto_find(l3num,
-						  origtuple.dst.protonum);
 		/**
 		 * Ordinarily, we'd expect the inverted tupleproto, but it's
 		 * been preserved inside the ICMP.
 		 */
-		if (!nf_ct_invert_tuple(&innertuple, &origtuple,
-					l3proto, innerproto)) {
+		if (!nf_ct_invert_tuple(&innertuple, &origtuple)) {
 			rcu_read_unlock();
 			return 0;
 		}
@@ -114,7 +109,7 @@ int imsbr_parse_nfttuple(struct net *net, struct sk_buff *skb,
 	return 0;
 
 fail:
-	IMSBR_STAT_INC(nfct_get_fail);
+	IMSBR_STAT_INC(imsbr_stats->nfct_get_fail);
 	return -EINVAL;
 }
 
@@ -132,7 +127,7 @@ static int imsbr_get_tuple(struct net *net, struct sk_buff *skb,
 		return 0;
 	}
 
-	IMSBR_STAT_INC(nfct_slow_path);
+	IMSBR_STAT_INC(imsbr_stats->nfct_slow_path);
 	return imsbr_parse_nfttuple(net, skb, nft);
 }
 
@@ -164,7 +159,7 @@ static bool imsbr_packet_is_ike_auth(unsigned char *ptr, unsigned int len)
 		ub_begin = 28;
 		ub_end = 32;
 		pkt_type = ptr[9];
-		if (ptr[46] == 0x22) {
+		if (ptr[20] == 0x01 && ptr[21] == 0xf4) {
 			pr_info("this is ike packet DO SA INIT!");
 			return true;
 		}
@@ -376,7 +371,7 @@ static struct pernet_operations imsbr_net_ops = {
 	.exit = imsbr_nf_unregister,
 };
 
-static int __init imsbr_nf_ip_init(void)
+int __init imsbr_hooks_init(void)
 {
 	int err;
 
@@ -389,5 +384,9 @@ static int __init imsbr_nf_ip_init(void)
 	return 0;
 }
 
-__initcall(imsbr_nf_ip_init);
+void imsbr_hooks_exit(void)
+{
+	pr_debug("Unregistering netfilter hooks\n");
 
+	unregister_pernet_subsys(&imsbr_net_ops);
+}

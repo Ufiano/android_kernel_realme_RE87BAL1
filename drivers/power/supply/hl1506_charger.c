@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0：
+// Copyright (C) 2021 Spreadtrum Communications Inc.
+
 /*
  * Driver for the Halo charge pump converter hl506 charger.
  *
@@ -114,7 +117,6 @@ struct hl1506_charger_info {
 	struct i2c_client *client;
 	struct device *dev;
 	struct power_supply *psy;
-	struct power_supply_charge_current cur;
 	struct mutex lock;
 	bool charging;
 	u32 limit;
@@ -570,7 +572,7 @@ static int hl1506_charger_set_property(struct power_supply *psy,
 		info->limit = val->intval / 1000;
 		schedule_delayed_work(&info->work, HL1506_CURRENT_WORK_MS * 20);
 		break;
-	case POWER_SUPPLY_PROP_CHARGE_ENABLED:
+	case POWER_SUPPLY_PROP_CALIBRATE:
 		if (val->intval) {
 			ret = hl1506_charger_hw_init(info);
 			hl1506_device_enable(info, true);
@@ -599,7 +601,7 @@ static int hl1506_charger_property_is_writeable(struct power_supply *psy,
 	switch (psp) {
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT:
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
-	case POWER_SUPPLY_PROP_CHARGE_ENABLED:
+	case POWER_SUPPLY_PROP_CALIBRATE:
 	case POWER_SUPPLY_PROP_STATUS:
 		ret = 1;
 		break;
@@ -612,8 +614,8 @@ static int hl1506_charger_property_is_writeable(struct power_supply *psy,
 }
 
 static enum power_supply_property hl1506_charge_pump_converter_properties[] = {
+	POWER_SUPPLY_PROP_CALIBRATE,
 	POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
-	POWER_SUPPLY_PROP_CHARGE_ENABLED,
 };
 
 static const struct power_supply_desc hl1506_charge_pump_converter_desc = {

@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #ifndef __SPRD_DVFS_APSYS_H__
@@ -24,21 +16,6 @@ typedef enum {
 	DVFS_WORK = 0,
 	DVFS_IDLE,
 } set_freq_type;
-
-struct dvfs_ops_entry {
-	const char *ver;
-	void *ops;
-};
-
-struct dvfs_ops_list {
-	struct list_head head;
-	struct dvfs_ops_entry *entry;
-};
-
-struct apsys_regmap {
-	unsigned long apsys_base;
-	unsigned long top_base;
-};
 
 struct apsys_dvfs_coffe {
 	u32 sw_dvfs_en;
@@ -91,35 +68,52 @@ struct apsys_dev {
 	const char *version;
 
 	struct apsys_dvfs_coffe dvfs_coffe;
-	struct apsys_dvfs_ops *dvfs_ops;
+	const struct apsys_dvfs_ops *dvfs_ops;
+
+	unsigned long apsys_base;
+	unsigned long top_base;
+	struct mutex reg_lock;
 };
 
 struct apsys_dvfs_ops {
 	/* apsys common ops */
 	int (*parse_dt)(struct apsys_dev *apsys, struct device_node *np);
 	void (*dvfs_init)(struct apsys_dev *apsys);
-	void (*apsys_hold_en)(u32 hold_en);
-	void (*apsys_force_en)(u32 force_en);
-	void (*apsys_auto_gate)(u32 gate_sel);
-	void (*apsys_wait_window)(u32 wait_window);
-	void (*apsys_min_volt)(u32 min_volt);
+	void (*apsys_hold_en)(struct apsys_dev *apsys, u32 hold_en);
+	void (*apsys_force_en)(struct apsys_dev *apsys, u32 force_en);
+	void (*apsys_auto_gate)(struct apsys_dev *apsys, u32 gate_sel);
+	void (*apsys_wait_window)(struct apsys_dev *apsys, u32 wait_window);
+	void (*apsys_min_volt)(struct apsys_dev *apsys, u32 min_volt);
 
 	/* top common ops */
-	void (*top_dvfs_init)(void);
-	int (*top_cur_volt)(void);
+	void (*top_dvfs_init)(struct apsys_dev *apsys);
+	int (*top_cur_volt)(struct apsys_dev *apsys);
 };
 
-void *dvfs_ops_attach(const char *str, struct list_head *head);
-int dvfs_ops_register(struct dvfs_ops_entry *entry, struct list_head *head);
+struct sprd_apsys_dvfs_ops {
+	 const struct apsys_dvfs_ops *apsys_ops;
+};
 
-extern struct list_head apsys_dvfs_head;
-extern struct apsys_regmap regmap_ctx;
-extern struct mutex apsys_glb_reg_lock;
+struct apsys_dev *find_apsys_device_by_name(char *name);
 
-#define apsys_dvfs_ops_register(entry) \
-	dvfs_ops_register(entry, &apsys_dvfs_head)
+#ifdef CONFIG_DRM_SPRD_GSP_DVFS
+extern struct platform_driver gsp_dvfs_driver;
+#endif
+extern struct platform_driver dpu_dvfs_driver;
+extern struct platform_driver vsp_dvfs_driver;
+extern struct platform_driver vdsp_dvfs_driver;
 
-#define apsys_dvfs_ops_attach(str) \
-	dvfs_ops_attach(str, &apsys_dvfs_head)
+#ifdef CONFIG_DRM_SPRD_GSP_DVFS
+extern struct devfreq_governor gsp_devfreq_gov;
+#endif
+extern struct devfreq_governor vsp_devfreq_gov;
+extern struct devfreq_governor dpu_devfreq_gov;
+extern struct devfreq_governor vdsp_devfreq_gov;
+
+extern const struct apsys_dvfs_ops sharkl5pro_apsys_dvfs_ops;
+extern const struct apsys_dvfs_ops sharkl5_apsys_dvfs_ops;
+extern const struct apsys_dvfs_ops qogirl6_apsys_dvfs_ops;
+extern const struct apsys_dvfs_ops qogirn6pro_apsys_dvfs_ops;
+extern const struct apsys_dvfs_ops roc1_apsys_dvfs_ops;
 
 #endif /* __SPRD_DVFS_APSYS_H__ */

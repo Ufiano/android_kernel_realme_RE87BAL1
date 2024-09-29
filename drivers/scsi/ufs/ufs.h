@@ -38,15 +38,16 @@
 
 #include <linux/mutex.h>
 #include <linux/types.h>
+#include <linux/android_kabi.h>
+#include <uapi/scsi/scsi_bsg_ufs.h>
 
-#define MAX_CDB_SIZE	16
-#define GENERAL_UPIU_REQUEST_SIZE 32
+#define GENERAL_UPIU_REQUEST_SIZE (sizeof(struct utp_upiu_req))
 #define QUERY_DESC_MAX_SIZE       255
 #define QUERY_DESC_MIN_SIZE       2
 #define QUERY_DESC_HDR_SIZE       2
 #define QUERY_OSF_SIZE            (GENERAL_UPIU_REQUEST_SIZE - \
 					(sizeof(struct utp_upiu_header)))
-#define RESPONSE_UPIU_SENSE_DATA_LENGTH	18
+#define UFS_SENSE_SIZE	18
 
 #define UPIU_HEADER_DWORD(byte3, byte2, byte1, byte0)\
 			cpu_to_be32((byte3 << 24) | (byte2 << 16) |\
@@ -88,12 +89,6 @@ enum {
 	UFS_LOGICAL_RESET	= 0x08,
 	UFS_QUERY_TASK		= 0x80,
 	UFS_QUERY_TASK_SET	= 0x81,
-};
-
-enum geometry_desc_param_offset {
-	GEOMETRY_DESC_LEN               = 0x0,
-	GEOMETRY_DESC_TYPE              = 0x1,
-	GEOMETRY_DESC_RPMB_RW_SIZE      = 0x17,
 };
 
 /* UTP UPIU Transaction Codes Initiator to Target */
@@ -150,22 +145,41 @@ enum flag_idn {
 	QUERY_FLAG_IDN_BUSY_RTC				= 0x09,
 	QUERY_FLAG_IDN_RESERVED3			= 0x0A,
 	QUERY_FLAG_IDN_PERMANENTLY_DISABLE_FW_UPDATE	= 0x0B,
-	QUERY_FLAG_IDN_WB_EN				= 0x0E,
-	QUERY_FLAG_IDN_WB_BUFF_FLUSH_EN			= 0x0F,
-	QUERY_FLAG_IDN_WB_BUFF_FLUSH_DURING_HIBERN8	= 0x10,
+	QUERY_FLAG_IDN_WB_EN                            = 0x0E,
+	QUERY_FLAG_IDN_WB_BUFF_FLUSH_EN                 = 0x0F,
+	QUERY_FLAG_IDN_WB_BUFF_FLUSH_DURING_HIBERN8     = 0x10,
 };
 
 /* Attribute idn for Query requests */
 enum attr_idn {
-	QUERY_ATTR_IDN_ACTIVE_ICC_LVL	= 0x03,
-	QUERY_ATTR_IDN_BKOPS_STATUS	= 0x05,
-	QUERY_ATTR_IDN_EE_CONTROL	= 0x0D,
-	QUERY_ATTR_IDN_EE_STATUS	= 0x0E,
-	QUERY_ATTR_IDN_DEVICE_FFU_STATUS	= 0x14,
-	QUERY_ATTR_IDN_WB_FLUSH_STATUS	= 0x1C,
-	QUERY_ATTR_IDN_AVAIL_WB_BUFF_SIZE	= 0x1D,
-	QUERY_ATTR_IDN_WB_BUFF_LIFE_TIME_EST	= 0x1E,
-	QUERY_ATTR_IDN_CURR_WB_BUFF_SIZE	= 0x1F,
+	QUERY_ATTR_IDN_BOOT_LU_EN		= 0x00,
+	QUERY_ATTR_IDN_RESERVED			= 0x01,
+	QUERY_ATTR_IDN_POWER_MODE		= 0x02,
+	QUERY_ATTR_IDN_ACTIVE_ICC_LVL		= 0x03,
+	QUERY_ATTR_IDN_OOO_DATA_EN		= 0x04,
+	QUERY_ATTR_IDN_BKOPS_STATUS		= 0x05,
+	QUERY_ATTR_IDN_PURGE_STATUS		= 0x06,
+	QUERY_ATTR_IDN_MAX_DATA_IN		= 0x07,
+	QUERY_ATTR_IDN_MAX_DATA_OUT		= 0x08,
+	QUERY_ATTR_IDN_DYN_CAP_NEEDED		= 0x09,
+	QUERY_ATTR_IDN_REF_CLK_FREQ		= 0x0A,
+	QUERY_ATTR_IDN_CONF_DESC_LOCK		= 0x0B,
+	QUERY_ATTR_IDN_MAX_NUM_OF_RTT		= 0x0C,
+	QUERY_ATTR_IDN_EE_CONTROL		= 0x0D,
+	QUERY_ATTR_IDN_EE_STATUS		= 0x0E,
+	QUERY_ATTR_IDN_SECONDS_PASSED		= 0x0F,
+	QUERY_ATTR_IDN_CNTX_CONF		= 0x10,
+	QUERY_ATTR_IDN_CORR_PRG_BLK_NUM		= 0x11,
+	QUERY_ATTR_IDN_RESERVED2		= 0x12,
+	QUERY_ATTR_IDN_RESERVED3		= 0x13,
+	QUERY_ATTR_IDN_FFU_STATUS		= 0x14,
+	QUERY_ATTR_IDN_PSA_STATE		= 0x15,
+	QUERY_ATTR_IDN_PSA_DATA_SIZE		= 0x16,
+	QUERY_ATTR_IDN_REF_CLK_GATING_WAIT_TIME	= 0x17,
+	QUERY_ATTR_IDN_WB_FLUSH_STATUS	        = 0x1C,
+	QUERY_ATTR_IDN_AVAIL_WB_BUFF_SIZE       = 0x1D,
+	QUERY_ATTR_IDN_WB_BUFF_LIFE_TIME_EST    = 0x1E,
+	QUERY_ATTR_IDN_CURR_WB_BUFF_SIZE        = 0x1F,
 };
 
 /* Descriptor idn for Query requests */
@@ -189,11 +203,11 @@ enum desc_header_offset {
 };
 
 enum ufs_desc_def_size {
-	QUERY_DESC_DEVICE_DEF_SIZE		= 0x40,
+	QUERY_DESC_DEVICE_DEF_SIZE		= 0x59,
 	QUERY_DESC_CONFIGURATION_DEF_SIZE	= 0x90,
-	QUERY_DESC_UNIT_DEF_SIZE		= 0x23,
+	QUERY_DESC_UNIT_DEF_SIZE		= 0x2D,
 	QUERY_DESC_INTERCONNECT_DEF_SIZE	= 0x06,
-	QUERY_DESC_GEOMETRY_DEF_SIZE		= 0x44,
+	QUERY_DESC_GEOMETRY_DEF_SIZE		= 0x48,
 	QUERY_DESC_POWER_DEF_SIZE		= 0x62,
 	QUERY_DESC_HEALTH_DEF_SIZE		= 0x25,
 };
@@ -207,6 +221,7 @@ enum unit_desc_param {
 	UNIT_DESC_PARAM_BOOT_LUN_ID		= 0x4,
 	UNIT_DESC_PARAM_LU_WR_PROTECT		= 0x5,
 	UNIT_DESC_PARAM_LU_Q_DEPTH		= 0x6,
+	UNIT_DESC_PARAM_PSA_SENSITIVE		= 0x7,
 	UNIT_DESC_PARAM_MEM_TYPE		= 0x8,
 	UNIT_DESC_PARAM_DATA_RELIABILITY	= 0x9,
 	UNIT_DESC_PARAM_LOGICAL_BLK_SIZE	= 0xA,
@@ -259,7 +274,7 @@ enum device_desc_param {
 	DEVICE_DESC_PARAM_EXT_UFS_FEATURE_SUP	= 0x4F,
 	DEVICE_DESC_PARAM_WB_PRESRV_USRSPC_EN	= 0x53,
 	DEVICE_DESC_PARAM_WB_TYPE		= 0x54,
-	DEVICE_DESC_PARAM_WB_SHARED_ALLOC_UNITS	= 0x55,
+	DEVICE_DESC_PARAM_WB_SHARED_ALLOC_UNITS = 0x55,
 };
 
 /* Interconnect descriptor parameters offsets in bytes*/
@@ -320,10 +335,10 @@ enum health_desc_param {
 	HEALTH_DESC_PARAM_LIFE_TIME_EST_B	= 0x4,
 };
 
-/* WriteBooster buffer mode*/
+/* WriteBooster buffer mode */
 enum {
-	WB_BUF_MODE_LU_DEDICATED		= 0x0,
-	WB_BUF_MODE_SHARED			= 0x1,
+	WB_BUF_MODE_LU_DEDICATED	= 0x0,
+	WB_BUF_MODE_SHARED		= 0x1,
 };
 
 enum ufs_ffu_status {
@@ -405,6 +420,20 @@ enum query_opcode {
 	UPIU_QUERY_OPCODE_TOGGLE_FLAG	= 0x8,
 };
 
+/* bRefClkFreq attribute values */
+enum ufs_ref_clk_freq {
+	REF_CLK_FREQ_19_2_MHZ	= 0,
+	REF_CLK_FREQ_26_MHZ	= 1,
+	REF_CLK_FREQ_38_4_MHZ	= 2,
+	REF_CLK_FREQ_52_MHZ	= 3,
+	REF_CLK_FREQ_INVAL	= -1,
+};
+
+struct ufs_ref_clk {
+	unsigned long freq_hz;
+	enum ufs_ref_clk_freq val;
+};
+
 /* Query response result code */
 enum {
 	QUERY_RESULT_SUCCESS                    = 0x00,
@@ -441,6 +470,7 @@ enum {
 	MASK_RSP_UPIU_DATA_SEG_LEN	= 0xFFFF,
 	MASK_RSP_EXCEPTION_EVENT        = 0x10000,
 	MASK_TM_SERVICE_RESP		= 0xFF,
+	MASK_TM_FUNC			= 0xFF,
 };
 
 /* Task management service response */
@@ -462,65 +492,6 @@ enum ufs_dev_pwr_mode {
 #define UFS_WB_BUF_REMAIN_PERCENT(val) ((val) / 10)
 
 /**
- * struct utp_upiu_header - UPIU header structure
- * @dword_0: UPIU header DW-0
- * @dword_1: UPIU header DW-1
- * @dword_2: UPIU header DW-2
- */
-struct utp_upiu_header {
-	__be32 dword_0;
-	__be32 dword_1;
-	__be32 dword_2;
-};
-
-/**
- * struct utp_upiu_cmd - Command UPIU structure
- * @data_transfer_len: Data Transfer Length DW-3
- * @cdb: Command Descriptor Block CDB DW-4 to DW-7
- */
-struct utp_upiu_cmd {
-	__be32 exp_data_transfer_len;
-	u8 cdb[MAX_CDB_SIZE];
-};
-
-/**
- * struct utp_upiu_query - upiu request buffer structure for
- * query request.
- * @opcode: command to perform B-0
- * @idn: a value that indicates the particular type of data B-1
- * @index: Index to further identify data B-2
- * @selector: Index to further identify data B-3
- * @reserved_osf: spec reserved field B-4,5
- * @length: number of descriptor bytes to read/write B-6,7
- * @value: Attribute value to be written DW-5
- * @reserved: spec reserved DW-6,7
- */
-struct utp_upiu_query {
-	u8 opcode;
-	u8 idn;
-	u8 index;
-	u8 selector;
-	__be16 reserved_osf;
-	__be16 length;
-	__be32 value;
-	__be32 reserved[2];
-};
-
-/**
- * struct utp_upiu_req - general upiu request structure
- * @header:UPIU header structure DW-0 to DW-2
- * @sc: fields structure for scsi command DW-3 to DW-7
- * @qr: fields structure for query request DW-3 to DW-7
- */
-struct utp_upiu_req {
-	struct utp_upiu_header header;
-	union {
-		struct utp_upiu_cmd sc;
-		struct utp_upiu_query qr;
-	};
-};
-
-/**
  * struct utp_cmd_rsp - Response UPIU structure
  * @residual_transfer_count: Residual transfer count DW-3
  * @reserved: Reserved double words DW-4 to DW-7
@@ -531,7 +502,7 @@ struct utp_cmd_rsp {
 	__be32 residual_transfer_count;
 	__be32 reserved[4];
 	__be16 sense_data_len;
-	u8 sense_data[RESPONSE_UPIU_SENSE_DATA_LENGTH];
+	u8 sense_data[UFS_SENSE_SIZE];
 };
 
 /**
@@ -546,36 +517,6 @@ struct utp_upiu_rsp {
 		struct utp_cmd_rsp sr;
 		struct utp_upiu_query qr;
 	};
-};
-
-/**
- * struct utp_upiu_task_req - Task request UPIU structure
- * @header - UPIU header structure DW0 to DW-2
- * @input_param1: Input parameter 1 DW-3
- * @input_param2: Input parameter 2 DW-4
- * @input_param3: Input parameter 3 DW-5
- * @reserved: Reserved double words DW-6 to DW-7
- */
-struct utp_upiu_task_req {
-	struct utp_upiu_header header;
-	__be32 input_param1;
-	__be32 input_param2;
-	__be32 input_param3;
-	__be32 reserved[2];
-};
-
-/**
- * struct utp_upiu_task_rsp - Task Management Response UPIU structure
- * @header: UPIU header structure DW0-DW-2
- * @output_param1: Ouput parameter 1 DW3
- * @output_param2: Output parameter 2 DW4
- * @reserved: Reserved double words DW-5 to DW-7
- */
-struct utp_upiu_task_rsp {
-	struct utp_upiu_header header;
-	__be32 output_param1;
-	__be32 output_param2;
-	__be32 reserved[3];
 };
 
 /**
@@ -602,9 +543,9 @@ struct ufs_query_res {
 #define UFS_VREG_VCC_MAX_UV	   3600000 /* uV */
 #define UFS_VREG_VCC_1P8_MIN_UV    1700000 /* uV */
 #define UFS_VREG_VCC_1P8_MAX_UV    1950000 /* uV */
-#define UFS_VREG_VCCQ_MIN_UV	   1100000 /* uV */
-#define UFS_VREG_VCCQ_MAX_UV	   1300000 /* uV */
-#define UFS_VREG_VCCQ2_MIN_UV	   1650000 /* uV */
+#define UFS_VREG_VCCQ_MIN_UV	   1140000 /* uV */
+#define UFS_VREG_VCCQ_MAX_UV	   1260000 /* uV */
+#define UFS_VREG_VCCQ2_MIN_UV	   1700000 /* uV */
 #define UFS_VREG_VCCQ2_MAX_UV	   1950000 /* uV */
 
 /*
@@ -617,10 +558,8 @@ struct ufs_vreg {
 	struct regulator *reg;
 	const char *name;
 	bool enabled;
-	bool unused;
 	int min_uV;
 	int max_uV;
-	int min_uA;
 	int max_uA;
 };
 
@@ -638,24 +577,27 @@ struct ufs_dev_info {
 	/* Maximum number of general LU supported by the UFS device */
 	u8 max_lu_supported;
 	u8 wb_dedicated_lu;
+	u16 wmanufacturerid;
+	/*UFS device Product Name */
+	u8 *model;
 	u16 wspecversion;
+	u32 clk_gating_wait_us;
 	u32 d_ext_ufs_feature_sup;
 	u8 b_wb_buffer_type;
 	u32 d_wb_alloc_units;
 	bool b_rpm_dev_flush_capable;
 	u8 b_presrv_uspc_en;
+	ANDROID_KABI_RESERVE(1);
 };
 
-#define MAX_MODEL_LEN 16
 /**
- * ufs_dev_desc - ufs device details from the device descriptor
- *
- * @wmanufacturerid: card details
- * @model: card model
+ * ufs_is_valid_unit_desc_lun - checks if the given LUN has a unit descriptor
+ * @lun: LU number to check
+ * @return: true if the lun has a matching unit descriptor, false otherwise
  */
-struct ufs_dev_desc {
-	u16 wmanufacturerid;
-	char model[MAX_MODEL_LEN + 1];
-};
+static inline bool ufs_is_valid_unit_desc_lun(u8 lun)
+{
+	return lun == UFS_UPIU_RPMB_WLUN || (lun < UFS_UPIU_MAX_GENERAL_LUN);
+}
 
 #endif /* End of Header */

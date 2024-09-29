@@ -15,7 +15,7 @@
 
 #define DP_LINK_BW_8_1				0x1e
 #define DP_TRAINING_PATTERN_4			7
-#define DP_TPS4_SUPPORTED			BIT(7)
+//#define DP_TPS4_SUPPORTED			BIT(7)
 #define DP_TEST_H_TOTAL_MSB                     0x222
 #define DP_TEST_H_TOTAL_LSB			0x223
 #define DP_TEST_V_TOTAL_MSB                     0x224
@@ -66,8 +66,8 @@
 #define DP_TEST_YCBCR_COEFF_MASK		BIT(4)
 #define DP_TEST_BIT_DEPTH_SHIFT			5
 
-#define DP_TEST_DYNAMIC_RANGE_VESA		0x0
-#define DP_TEST_LINK_AUDIO_PATTERN		BIT(5)
+//#define DP_TEST_DYNAMIC_RANGE_VESA		0x0
+//#define DP_TEST_LINK_AUDIO_PATTERN		BIT(5)
 
 #define DP_TEST_COLOR_FORMAT_RGB	        0x0
 #define DP_TEST_COLOR_FORMAT_YCBCR422           0x2
@@ -98,12 +98,14 @@
 #define DP_TEST_AUDIO_CHANNEL8			0x7
 
 
+/*
 static inline bool
 drm_dp_tps4_supported(const u8 dpcd[DP_RECEIVER_CAP_SIZE])
 {
 	return dpcd[DP_DPCD_REV] >= 0x14 &&
 		dpcd[DP_MAX_DOWNSPREAD] & DP_TPS4_SUPPORTED;
 }
+*/
 
 #define DP_EXTENDED_RECEIVER_CAPABILITY_FIELD_PRESENT BIT(7)
 

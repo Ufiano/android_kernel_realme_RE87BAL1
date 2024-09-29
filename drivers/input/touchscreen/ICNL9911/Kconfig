@@ -1,5 +1,5 @@
 config TOUCHSCREEN_CTS
-    bool "Cts Touchscreen"
+    tristate "Cts Touchscreen"
     help
       Say Y here if you have CTS touch panel.
       If unsure, say N.

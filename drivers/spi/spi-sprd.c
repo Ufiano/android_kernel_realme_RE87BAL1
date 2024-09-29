@@ -569,7 +569,7 @@ static int sprd_spi_dma_submit(struct sprd_spi *ss,
 	}
 
 	if (!desc)
-		return  -ENODEV;
+		return -ENODEV;
 
 	cookie = dmaengine_submit(desc);
 	if (dma_submit_error(cookie))
@@ -590,7 +590,6 @@ static int sprd_spi_dma_rx_config(struct sprd_spi *ss, struct spi_transfer *t)
 		.src_maxburst = ss->dma.fragmens_len,
 		.dst_maxburst = ss->dma.fragmens_len,
 		.direction = DMA_DEV_TO_MEM,
-		.slave_id = dma_chan->chan_id + 1,
 	};
 	int ret;
 
@@ -613,11 +612,10 @@ static int sprd_spi_dma_tx_config(struct sprd_spi *ss, struct spi_transfer *t)
 		.dst_addr_width = ss->dma.width,
 		.src_maxburst = ss->dma.fragmens_len,
 		.direction = DMA_MEM_TO_DEV,
-		.slave_id = dma_chan->chan_id + 1,
 	};
 	int ret;
 
-	if (ss->dma_trans_len > t->len)
+	if (ss->trans_mode == SPRD_SPI_RX_MODE || ss->dma_trans_len > t->len)
 		ret = sprd_spi_dma_submit(ss, dma_chan, &config,
 					  NULL, DMA_MEM_TO_DEV);
 	else
@@ -645,11 +643,11 @@ static int sprd_spi_dma_request(struct sprd_spi *ss)
 
 	ss->dma.dma_chan[SPRD_SPI_TX] = dma_request_chan(ss->dev, "tx_chn");
 	if (IS_ERR_OR_NULL(ss->dma.dma_chan[SPRD_SPI_TX])) {
+		dma_release_channel(ss->dma.dma_chan[SPRD_SPI_RX]);
 		if (PTR_ERR(ss->dma.dma_chan[SPRD_SPI_TX]) == -EPROBE_DEFER)
 			return PTR_ERR(ss->dma.dma_chan[SPRD_SPI_TX]);
 
 		dev_err(ss->dev, "request TX DMA channel failed!\n");
-		dma_release_channel(ss->dma.dma_chan[SPRD_SPI_RX]);
 		return PTR_ERR(ss->dma.dma_chan[SPRD_SPI_TX]);
 	}
 
@@ -915,7 +913,7 @@ static int sprd_spi_setup_transfer(struct spi_device *sdev,
 	if (t->rx_buf)
 		mode |= SPRD_SPI_RX_MODE;
 
-	/* Set SPI do stay value when in idle*/
+	/* Set SPI DO stay value when in idle*/
 	val &= ~SPRD_SPI_DO_STAY_LASTBIT_MASK;
 	switch (ss->do_stay_value) {
 	case 0:
@@ -1254,6 +1252,7 @@ static int sprd_spi_remove(struct platform_device *pdev)
 
 	ret = pm_runtime_get_sync(ss->dev);
 	if (ret < 0) {
+		pm_runtime_put_noidle(ss->dev);
 		dev_err(ss->dev, "failed to resume SPI controller\n");
 		return ret;
 	}
@@ -1347,10 +1346,9 @@ static const struct dev_pm_ops sprd_spi_pm_ops = {
 
 static const struct of_device_id sprd_spi_of_match[] = {
 	{ .compatible = "sprd,sc9860-spi", },
-	{ .compatible = "sprd,sc9863-spi", },
-	{ .compatible = "sprd,ums9620-spi", },
 	{ /* sentinel */ }
 };
+MODULE_DEVICE_TABLE(of, sprd_spi_of_match);
 
 static struct platform_driver sprd_spi_driver = {
 	.driver = {

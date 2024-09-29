@@ -1,4 +1,4 @@
-#include <linux/sprd_drm_notifier.h>
+#include <linux/notifier.h>
 
 static BLOCKING_NOTIFIER_HEAD(disp_notifier_list);
 int disp_notifier_register(struct notifier_block *nb)

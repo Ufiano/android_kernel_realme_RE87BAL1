@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -49,9 +49,6 @@ static unsigned long pressure_max = 90;
 module_param_named(pressure_min, pressure_min, ulong, 0644);
 module_param_named(pressure_max, pressure_max, ulong, 0644);
 
-static short min_score_adj = 360;
-module_param_named(min_score_adj, min_score_adj, short, 0644);
-
 /*
  * Scheduling process reclaim workqueue unecessarily
  * when the reclaim efficiency is low does not make
@@ -92,7 +89,6 @@ module_param_named(swap_low_ratio, swap_low_ratio, int, 0644);
 static atomic_t skip_reclaim = ATOMIC_INIT(0);
 /* Not atomic since only a single instance of swap_fn run at a time */
 static int monitor_eff;
-static bool debug;
 
 struct selected_task {
 	struct task_struct *p;
@@ -141,6 +137,7 @@ static void swap_fn(struct work_struct *work)
 	int i;
 	int tasksize;
 	int total_sz = 0;
+	short min_score_adj = 360;
 	int total_scan = 0;
 	int total_reclaimed = 0;
 	int nr_to_reclaim;
@@ -156,8 +153,7 @@ static void swap_fn(struct work_struct *work)
 		swap_used_ratio =
 			100 * (info.totalswap - info.freeswap) / info.totalswap;
 		if (swap_used_ratio > swap_high_ratio) {
-			if (debug)
-				pr_info("PR, swap free is low, skip reclaim\n");
+			pr_info("PR, swap free is low, skip reclaim\n");
 			return;
 		} else if (swap_used_ratio <= swap_low_ratio)
 			now_per_swap_size = per_swap_size;
@@ -252,10 +248,8 @@ static void swap_fn(struct work_struct *work)
 	if (total_scan) {
 		efficiency = (total_reclaimed * 100) / total_scan;
 
-		if (debug) {
-			pr_info("ppr: scan %d reclaim %d efficiency %d\n",
-				total_scan, total_reclaimed, efficiency);
-		}
+		pr_info("process reclaim scan %d reclaim %d efficiency %d\n",
+			total_scan, total_reclaimed, efficiency);
 
 		if (efficiency < swap_opt_eff) {
 			if (++monitor_eff == swap_eff_win) {
@@ -293,10 +287,8 @@ static int vmpressure_notifier(struct notifier_block *nb,
 
 	if ((pressure >= pressure_min) && (pressure < pressure_max))
 		if (!work_pending(&swap_work)) {
-			if (debug) {
-				pr_info("ppr: queue work at vmpressure %lu\n",
-					pressure);
-			}
+			pr_info("process reclaim queue work at vmpressure %lu\n",
+				pressure);
 			queue_work(system_unbound_wq, &swap_work);
 		}
 	return 0;

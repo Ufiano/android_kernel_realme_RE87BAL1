@@ -1,12 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * RNDIS	Definitions for Remote NDIS
  *
  * Authors:	Benedikt Spranger, Pengutronix
  *		Robert Schwebel, Pengutronix
- *
- *		This program is free software; you can redistribute it and/or
- *		modify it under the terms of the GNU General Public License
- *		version 2, as published by the Free Software Foundation.
  *
  *		This software was originally developed in conformance with
  *		Microsoft's Remote NDIS Specification License Agreement.
@@ -173,7 +170,6 @@ typedef struct rndis_params {
 	struct net_device	*dev;
 
 	u32			vendorID;
-	u8			max_pkt_per_xfer;
 	const char		*vendorDescr;
 	void			(*resp_avail)(void *v);
 	void			*v;
@@ -190,7 +186,6 @@ int  rndis_set_param_vendor(struct rndis_params *params, u32 vendorID,
 			    const char *vendorDescr);
 int  rndis_set_param_medium(struct rndis_params *params, u32 medium,
 			     u32 speed);
-void rndis_set_max_pkt_xfer(struct rndis_params *params, u8 max_pkt_per_xfer);
 void rndis_add_hdr(struct sk_buff *skb);
 int rndis_rm_hdr(struct gether *port, struct sk_buff *skb,
 			struct sk_buff_head *list);

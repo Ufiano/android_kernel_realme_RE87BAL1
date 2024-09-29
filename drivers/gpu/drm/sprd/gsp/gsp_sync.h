@@ -1,14 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #ifndef _GSP_SYNC_H
@@ -16,8 +8,9 @@
 
 #include <linux/types.h>
 #include <linux/kconfig.h>
-#include <drm/gsp_cfg.h>
 #include <linux/sync_file.h>
+
+#include <drm/gsp_cfg.h>
 
 #define GSP_WAIT_FENCE_TIMEOUT 3000/* 3000ms */
 #define GSP_WAIT_FENCE_MAX 8
@@ -43,8 +36,7 @@ struct gsp_fence_data {
 };
 
 int gsp_sync_fence_process(struct gsp_layer *layer,
-				struct gsp_fence_data *data,
-				bool last);
+			struct gsp_fence_data *data, bool last);
 
 void gsp_sync_fence_data_setup(struct gsp_fence_data *data,
 				struct gsp_sync_timeline *tl, int __user *ufd);

@@ -11,6 +11,7 @@
 #include <linux/mfd/syscon.h>
 #include <linux/of_gpio.h>
 #include <linux/regmap.h>
+#include <linux/usb/typec_dp.h>
 #include <dt-bindings/soc/sprd,qogirn6pro-mask.h>
 #include <dt-bindings/soc/sprd,qogirn6pro-regs.h>
 
@@ -96,7 +97,7 @@ static int dp_glb_parse_dt(struct dp_context *ctx,
 	if (!gpio_is_valid(ctx->gpio_en1))
 		ctx->gpio_en1 = -EINVAL;
 	else {
-		ret = gpio_request_one(ctx->gpio_en1, GPIOF_OUT_INIT_LOW, "GPIO_EN1");
+		ret = gpio_request_one(ctx->gpio_en1, GPIOF_OUT_INIT_HIGH, "GPIO_EN1");
 		if (ret < 0 && ret != -EBUSY)
 			pr_err("gpio_request_one GPIO_EN1 failed!\n");
 	}
@@ -105,7 +106,7 @@ static int dp_glb_parse_dt(struct dp_context *ctx,
 	if (!gpio_is_valid(ctx->gpio_en2))
 		ctx->gpio_en2 = -EINVAL;
 	else {
-		ret = gpio_request_one(ctx->gpio_en2, GPIOF_OUT_INIT_LOW, "GPIO_EN2");
+		ret = gpio_request_one(ctx->gpio_en2, GPIOF_OUT_INIT_HIGH, "GPIO_EN2");
 		if (ret < 0 && ret != -EBUSY)
 			pr_err("gpio_request_one GPIO_EN2 failed!\n");
 	}
@@ -138,12 +139,12 @@ static void dp_reset(struct dp_context *ctx)
 {
 }
 
-static void dp_detect(struct dp_context *ctx, int enable)
+static void dp_detect(struct dp_context *ctx, int hpd_status)
 {
 	u32 reg = 0, mask;
 	struct sprd_dp *dp = container_of(ctx, struct sprd_dp, ctx);
 
-	if (enable) {
+	if (hpd_status == DP_HOT_PLUG) {
 		mask = MASK_PMU_APB_PD_DPU_DP_FORCE_SHUTDOWN;
 		regmap_update_bits(ctx->force_shutdown, REG_PMU_APB_PD_DPU_DP_CFG_0, mask, 0);
 
@@ -222,9 +223,17 @@ static void dp_detect(struct dp_context *ctx, int enable)
 		regmap_write(ctx->ipa_dispc1_glb_apb, REG_DISPC1_GLB_APB_HPD_UPDATE, mask);
 		mask |= MASK_DISPC1_GLB_APB_HPD_UPDATE;
 		regmap_write(ctx->ipa_dispc1_glb_apb, REG_DISPC1_GLB_APB_HPD_UPDATE, mask);
-	} else {
+	} else if (hpd_status == DP_HOT_UNPLUG) {
 		/* generate HOT_UNPLUG interrupt */
 		mask = MASK_DISPC1_GLB_APB_DPTX_CONFIG_EN;
+		regmap_write(ctx->ipa_dispc1_glb_apb, REG_DISPC1_GLB_APB_HPD_UPDATE, mask);
+
+		mask |= MASK_DISPC1_GLB_APB_HPD_UPDATE;
+		regmap_write(ctx->ipa_dispc1_glb_apb, REG_DISPC1_GLB_APB_HPD_UPDATE, mask);
+	} else if (hpd_status == DP_HPD_IRQ) {
+		/* generate HOT_UNPLUG interrupt */
+		mask = MASK_DISPC1_GLB_APB_DPTX_CONFIG_EN | MASK_DISPC1_GLB_APB_HPD_STATE |
+				MASK_DISPC1_GLB_APB_HPD_IRQ;
 		regmap_write(ctx->ipa_dispc1_glb_apb, REG_DISPC1_GLB_APB_HPD_UPDATE, mask);
 
 		mask |= MASK_DISPC1_GLB_APB_HPD_UPDATE;
@@ -232,25 +241,13 @@ static void dp_detect(struct dp_context *ctx, int enable)
 	}
 }
 
-static struct dp_glb_ops dp_glb_ops = {
+const struct dp_glb_ops qogirn6pro_dp_glb_ops = {
 	.parse_dt = dp_glb_parse_dt,
 	.reset = dp_reset,
 	.enable = dp_glb_enable,
 	.disable = dp_glb_disable,
 	.detect = dp_detect,
 };
-
-static struct ops_entry entry = {
-	.ver = "qogirn6pro1",
-	.ops = &dp_glb_ops,
-};
-
-static int __init dp_glb_register(void)
-{
-	return dp_glb_ops_register(&entry);
-}
-
-subsys_initcall(dp_glb_register);
 
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("chen.he@unisoc.com");

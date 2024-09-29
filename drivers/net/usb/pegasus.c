@@ -1,9 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  *  Copyright (c) 1999-2013 Petko Manolov (petkan@nucleusys.com)
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  *
  *	ChangeLog:
  *		....	Most of the time spent on reading sources & docs.
@@ -750,12 +747,16 @@ static inline void disable_net_traffic(pegasus_t *pegasus)
 	set_registers(pegasus, EthCtrl0, sizeof(tmp), &tmp);
 }
 
-static inline void get_interrupt_interval(pegasus_t *pegasus)
+static inline int get_interrupt_interval(pegasus_t *pegasus)
 {
 	u16 data;
 	u8 interval;
+	int ret;
 
-	read_eprom_word(pegasus, 4, &data);
+	ret = read_eprom_word(pegasus, 4, &data);
+	if (ret < 0)
+		return ret;
+
 	interval = data >> 8;
 	if (pegasus->usb->speed != USB_SPEED_HIGH) {
 		if (interval < 0x80) {
@@ -770,6 +771,8 @@ static inline void get_interrupt_interval(pegasus_t *pegasus)
 		}
 	}
 	pegasus->intr_interval = interval;
+
+	return 0;
 }
 
 static void set_carrier(struct net_device *net)
@@ -1011,6 +1014,7 @@ static int pegasus_ioctl(struct net_device *net, struct ifreq *rq, int cmd)
 	switch (cmd) {
 	case SIOCDEVPRIVATE:
 		data[0] = pegasus->phy;
+		/* fall through */
 	case SIOCDEVPRIVATE + 1:
 		read_mii_word(pegasus, data[0], data[1] & 0x1f, &data[3]);
 		res = 0;
@@ -1067,7 +1071,7 @@ static inline void setup_pegasus_II(pegasus_t *pegasus)
 
 	set_register(pegasus, Reg1d, 0);
 	set_register(pegasus, Reg7b, 1);
-	mdelay(100);
+	msleep(100);
 	if ((pegasus->features & HAS_HOME_PNA) && mii_mode)
 		set_register(pegasus, Reg7b, 0);
 	else
@@ -1188,7 +1192,9 @@ static int pegasus_probe(struct usb_interface *intf,
 				| NETIF_MSG_PROBE | NETIF_MSG_LINK);
 
 	pegasus->features = usb_dev_id[dev_index].private;
-	get_interrupt_interval(pegasus);
+	res = get_interrupt_interval(pegasus);
+	if (res)
+		goto out2;
 	if (reset_mac(pegasus)) {
 		dev_err(&intf->dev, "can't reset MAC\n");
 		res = -EIO;

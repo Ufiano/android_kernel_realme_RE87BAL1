@@ -6,8 +6,6 @@
 # define_trace.h needs to know how to find our header
 CFLAGS_musb_trace.o	:= -I$(src)
 
-GCOV_PROFILE := $(CONFIG_SPRD_USB_GCOV)
-
 obj-$(CONFIG_USB_MUSB_HDRC) += musb_hdrc.o
 
 musb_hdrc-y := musb_core.o musb_trace.o
@@ -23,11 +21,12 @@ obj-$(CONFIG_USB_MUSB_DSPS)			+= musb_dsps.o
 obj-$(CONFIG_USB_MUSB_TUSB6010)			+= tusb6010.o
 obj-$(CONFIG_USB_MUSB_DAVINCI)			+= davinci.o
 obj-$(CONFIG_USB_MUSB_DA8XX)			+= da8xx.o
-obj-$(CONFIG_USB_MUSB_BLACKFIN)			+= blackfin.o
 obj-$(CONFIG_USB_MUSB_UX500)			+= ux500.o
 obj-$(CONFIG_USB_MUSB_JZ4740)			+= jz4740.o
 obj-$(CONFIG_USB_MUSB_SUNXI)			+= sunxi.o
 obj-$(CONFIG_USB_MUSB_SPRD)			+= musb_sprd.o
+obj-$(CONFIG_USB_MUSB_MEDIATEK)      		+= mediatek.o
+
 
 obj-$(CONFIG_USB_MUSB_AM335X_CHILD)		+= musb_am335x.o
 

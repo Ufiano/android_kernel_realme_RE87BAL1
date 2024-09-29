@@ -16,7 +16,8 @@
 #ifndef HIMAX_COMMON_H
 #define HIMAX_COMMON_H
 
-#include <asm/segment.h>
+//#include <asm/segment.h>
+
 #include <linux/uaccess.h>
 #include <linux/atomic.h>
 #include <linux/delay.h>
@@ -40,19 +41,22 @@
 #include <linux/kallsyms.h>
 #include <linux/version.h>
 #include "linux/hardware_info.h"
-#include "../touch.h"
+#include "../nt36xxx/touch.h"
+#if defined(SPREADTRUM_NOTIFY_MODE)
+#include <linux/notifier.h>
+#endif
 
-
+#include "../../../gpu/drm/sprd/sprd_drm_notifier.h"
 
 #if defined(CONFIG_OF)
-#include <linux/of_gpio.h>
+	#include <linux/of_gpio.h>
 #endif
 
 #define HIMAX_DRIVER_VER "2.0.0.75_ABCD1234_01"
 
 #define FLASH_DUMP_FILE "/sdcard/HX_Flash_Dump.bin"
 
-#if defined(CONFIG_TOUCHSCREEN_HIMAX_DEBUG)
+#if IS_ENABLED(CONFIG_TOUCHSCREEN_HIMAX_DEBUG)
 #define HX_TP_PROC_2T2R
 /*if enable, selftest works in driver*/
 /*#define HX_TP_SELF_TEST_DRIVER*/
@@ -92,28 +96,28 @@
 /*=============================================*/
 
 /* Enable it if driver go into suspend/resume twice */
-/*#undef HX_CONFIG_FB*/
+#undef HX_CONFIG_FB
 
 /* Enable it if driver go into suspend/resume twice */
-//#undef HX_CONFIG_DRM
+#undef HX_CONFIG_DRM
 
 #if defined(HX_CONFIG_FB)
 #include <linux/notifier.h>
 #include <linux/fb.h>
 #elif defined(HX_CONFIG_DRM)
-#include <linux/msm_drm_notify.h>
+#include <linux/notifier.h>
+//#include <linux/msm_drm_notify.h>
 #endif
 
 #if defined(__HIMAX_MOD__)
 #define HX_USE_KSYM
 #if !defined(HX_USE_KSYM) || !defined(__KERNEL_KALLSYMS_ALL_ENABLED__)
-#error Modulized driver must enable HX_USE_KSYM and CONFIG_KALLSYM_ALL
+	#error Modulized driver must enable HX_USE_KSYM and CONFIG_KALLSYM_ALL
 #endif
 #endif
 
 //#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 19, 0))
 #define KERNEL_VER_ABOVE_4_19
-//#endif
 
 #if defined(HX_ZERO_FLASH)
 /*zero flash case, you need to setup the fix_touch_info of module*/
@@ -129,29 +133,35 @@
 #endif
 
 #if defined(OPLUS_PROC_NODE)
-//#define HX_TP_USB_NOTIFIER
-//#define HX_TP_HEADSET_NOTIFIER
-//#define HX_UPDATE_FW_NOTIFIER
-#define OPLUS_HX_UPDATE_FW   /* OPPO bootup upgrade function by thread */
+	//#define HX_TP_USB_NOTIFIER
+	//#define HX_TP_HEADSET_NOTIFIER
+	//#define HX_UPDATE_FW_NOTIFIER
+	#define OPLUS_HX_UPDATE_FW   /* OPLUS bootup upgrade function by thread */
+	#define SPREADTRUM_NOTIFY_MODE
 #endif
 
 #if defined(HX_BOOT_UPGRADE) || defined(HX_ZERO_FLASH)
 /* FW Auto upgrade case, you need to setup the fix_touch_info of module
  */
 #define BOOT_UPGRADE_FWNAME "Himax_firmware.bin"
+#define BOOT_UPGRADE_FWNAME_FOUR "Nico_Huaqin_CID3502_D00_C01_20220429.bin"
+#define MPAP_FWNAME_FOUR "Nico_Huaqin_CID3501_D00_C81_20220429.bin"
 #if defined(HX_ZERO_FLASH)
 #if defined(OPLUS_PROC_NODE)
-#define BOOT_UPGRADE_FWNAME_SIGNED "Himax_firmware_signed.bin"
-#define BOOT_UPGRADE_FWNAME_FIVE "Himax_firmware_five.bin"
-#define FW_UPDATE_COMPLETE_TIMEOUT  msecs_to_jiffies(40*1000)
-#define MPAP_FWNAME "Himax_mpfw.bin"
-#define MPAP_FWNAME_FIVE "Himax_mpfw_five.bin"
+	#define BOOT_UPGRADE_FWNAME_SIGNED "Himax_firmware_signed.bin"
+	#define BOOT_UPGRADE_FWNAME_FIVE "Himax_firmware_five.bin"
+	#define FW_UPDATE_COMPLETE_TIMEOUT  msecs_to_jiffies(40*1000)
+	#define MPAP_FWNAME "Himax_mpfw.bin"
+	#define MPAP_FWNAME_FIVE "Himax_mpfw_five.bin"
 #endif
 #endif
 #endif
 
 #define BOOT_UPGRADE_FWNAME_INX "fw_hx83112a_inx.bin"   //for  11  gong himax_83112a+inx
+
+
 #define HX_FIX_TOUCH_INFO
+
 
 #if defined(HX_SMART_WAKEUP)
 /*This feature need P-sensor driver notified, and FW need to support*/
@@ -184,10 +194,12 @@
 
 #if defined(HX_CONFIG_FB)
 int fb_notifier_callback(struct notifier_block *self,
-			 unsigned long event, void *data);
+		unsigned long event, void *data);
 #elif defined(HX_CONFIG_DRM)
 int drm_notifier_callback(struct notifier_block *self,
-			  unsigned long event, void *data);
+			unsigned long event, void *data);
+#elif defined(SPREADTRUM_NOTIFY_MODE)
+int himax_drm_notifier_callback(struct notifier_block *self, unsigned long event, void *data);
 #endif
 
 /* command[2] + address[4] + data[64k] */
@@ -276,6 +288,7 @@ extern struct firmware g_embedded_fw;
 
 extern unsigned long tp_gesture;
 
+
 enum HX_TS_PATH {
 	HX_REPORT_COORD = 1,
 	HX_REPORT_SMWP_EVENT,
@@ -334,8 +347,8 @@ enum cell_type {
 enum fix_touch_info {
 	FIX_HX_RX_NUM = 36,
 	FIX_HX_TX_NUM = 18,
-	FIX_HX_RX_NUM_102D = 32,
-	FIX_HX_TX_NUM_102D = 18,
+	FIX_HX_RX_NUM_102D =32,
+	FIX_HX_TX_NUM_102D =18,
 	FIX_HX_BT_NUM = 0,
 	FIX_HX_MAX_PT = 10,
 	FIX_HX_INT_IS_EDGE = true,
@@ -379,21 +392,21 @@ enum area_type {
 };
 
 typedef enum {
-	CORNER_TOPLEFT,      /*When Phone Face you in portrait top left corner*/
-	CORNER_TOPRIGHT,     /*When Phone Face you in portrait top right corner*/
-	CORNER_BOTTOMLEFT,   /*When Phone Face you in portrait bottom left corner*/
-	CORNER_BOTTOMRIGHT,  /*When Phone Face you in portrait bottom right corner*/
+    CORNER_TOPLEFT,      /*When Phone Face you in portrait top left corner*/
+    CORNER_TOPRIGHT,     /*When Phone Face you in portrait top right corner*/
+    CORNER_BOTTOMLEFT,   /*When Phone Face you in portrait bottom left corner*/
+    CORNER_BOTTOMRIGHT,  /*When Phone Face you in portrait bottom right corner*/
 } corner_type;
 
 typedef enum {
-	TP_SUSPEND_EARLY_EVENT,
-	TP_SUSPEND_COMPLETE,
-	TP_RESUME_EARLY_EVENT,
-	TP_RESUME_COMPLETE,
-	TP_SPEEDUP_RESUME_COMPLETE,
-} suspend_resume_state;
+    TP_SUSPEND_EARLY_EVENT,
+    TP_SUSPEND_COMPLETE,
+    TP_RESUME_EARLY_EVENT,
+    TP_RESUME_COMPLETE,
+    TP_SPEEDUP_RESUME_COMPLETE,
+}suspend_resume_state;
 
-enum {
+enum{
 	MSM_BOOT_MODE__NORMAL,
 	MSM_BOOT_MODE__FASTBOOT,
 	MSM_BOOT_MODE__RECOVERY,
@@ -404,13 +417,13 @@ enum {
 	MSM_BOOT_MODE__CHARGE,
 	MSM_BOOT_MODE__SILENCE,
 	MSM_BOOT_MODE__SAU,
-
+   
 };
 #endif
 
 #if defined(HX_ZERO_FLASH)
-#define HX_SPI_OPERATION
-#define HX_0F_DEBUG
+	#define HX_SPI_OPERATION
+	#define HX_0F_DEBUG
 #endif
 struct himax_ic_data {
 	int vendor_fw_ver;
@@ -508,8 +521,8 @@ struct himax_report_data {
 };
 #if defined(OPLUS_PROC_NODE)
 struct firmware_head_struct {
-	const uint8_t *data;
-	size_t size;
+        const uint8_t *data;
+        size_t size;
 };
 #endif
 struct himax_ts_data {
@@ -535,32 +548,35 @@ struct himax_ts_data {
 	uint8_t nFinger_support;
 	uint8_t irq_enabled;
 	uint8_t diag_self[50];
-
+	
 #if defined(OPLUS_PROC_NODE)
 	uint8_t backup_flag;
 	uint8_t psensor_stus;
-	int gesture_bak;
+	int 	gesture_bak;
 	uint8_t	Freq_hop_test_stauts;
-	uint8_t Freq_hop_delay_work_start;
-	struct workqueue_struct *himax_Freq_hop_test_wq;
-	struct delayed_work himax_Freq_hop_test_wrok;
+	uint8_t	Freq_hop_delay_work_start;
+	struct  workqueue_struct *himax_Freq_hop_test_wq;
+	struct  delayed_work himax_Freq_hop_test_wrok;
+#if defined(SPREADTRUM_NOTIFY_MODE)
+	struct notifier_block drm_notifier;
+#endif
 	uint8_t limit_enable;
 	uint8_t limit_edge;
 	uint8_t limit_corner;
 	struct edge_limit edge_limit;
 	int firmware_update_type;    /*firmware_update_type: 0=check firmware version 1=force update; 2=for FAE debug*/
 	int force_update;
-	struct completion fw_complete; /*completion for control fw update*/
-	struct work_struct fw_update_work; /*using for fw update*/
+	struct completion      fw_complete;                 /*completion for control fw update*/
+	struct work_struct     fw_update_work;             /*using for fw update*/
 	struct firmware_head_struct firmware_headfile;
 	u8 *g_fw_buf;
 	size_t g_fw_len;
 	bool g_fw_sta;
-	bool using_headfile;
+	bool  using_headfile;
 	bool is_headset_checked;                            /*state of headset or usb*/
-	bool is_usb_checked;                                /*state of charger or usb*/
+    bool is_usb_checked;                                /*state of charger or usb*/
 	struct mutex mode_chg_lock;
-	int boot_mode;
+    int boot_mode;
 	bool recovery_mode;
 	int noise_level;
 	int touch_direction;
@@ -571,11 +587,11 @@ struct himax_ts_data {
 #if defined(HX_UPDATE_FW_NOTIFIER)
 	struct notifier_block notifier_update_fw;
 	struct work_struct resume_work_queue;
-#endif
+#endif	
 #if defined(HX_TP_HEADSET_NOTIFIER)
 	struct notifier_block notifier_headset;
 	struct work_struct headset_work_queue;
-
+	
 #endif
 #endif
 
@@ -619,18 +635,18 @@ struct himax_ts_data {
 	atomic_t irq_state;
 	spinlock_t irq_lock;
 
-	/******* SPI-start *******/
+/******* SPI-start *******/
 	struct spi_device	*spi;
 	int hx_irq;
 	uint8_t *xfer_buff;
-	/******* SPI-end *******/
+/******* SPI-end *******/
 
 	int in_self_test;
 	int self_test_finished;
 	int suspend_resume_done;
 	int bus_speed;
 
-#if defined(HX_CONFIG_FB) || defined(HX_CONFIG_DRM)
+#if defined(HX_CONFIG_FB) || defined(HX_CONFIG_DRM) || defined(SPREADTRUM_NOTIFY_MODE)
 	struct notifier_block fb_notif;
 	struct workqueue_struct *himax_att_wq;
 	struct delayed_work work_att;
@@ -671,7 +687,9 @@ struct himax_ts_data {
 	struct workqueue_struct *guest_info_wq;
 	struct work_struct guest_info_work;
 #endif
-	bool suspend;
+     bool suspend;
+
+
 };
 
 struct himax_debug {
@@ -679,7 +697,7 @@ struct himax_debug {
 	bool is_checking_irq;
 	void (*fp_ts_dbg_func)(struct himax_ts_data *ts, int start);
 	int (*fp_set_diag_cmd)(struct himax_ic_data *ic_data,
-			       struct himax_report_data *hx_touch_data);
+				struct himax_report_data *hx_touch_data);
 };
 
 enum input_protocol_type {
@@ -688,7 +706,7 @@ enum input_protocol_type {
 };
 
 #if defined(HX_HIGH_SENSE)
-void himax_set_HSEN_func(uint8_t HSEN_enable);
+	void himax_set_HSEN_func(uint8_t HSEN_enable);
 #endif
 
 #if defined(HX_SMART_WAKEUP)
@@ -722,14 +740,14 @@ extern struct himax_ts_data *private_ts;
 extern struct himax_ic_data *ic_data;
 extern struct device *g_device;
 
-#if defined(CONFIG_TOUCHSCREEN_HIMAX_DEBUG)
-int himax_debug_init(void);
-int himax_debug_remove(void);
+#if IS_ENABLED(CONFIG_TOUCHSCREEN_HIMAX_DEBUG)
+	int himax_debug_init(void);
+	int himax_debug_remove(void);
 #endif
 
-#if defined(CONFIG_TOUCHSCREEN_HIMAX_INSPECT)
-extern char *g_rslt_data;
-extern void (*fp_himax_self_test_init)(void);
+#if IS_ENABLED(CONFIG_TOUCHSCREEN_HIMAX_INSPECT)
+	extern char *g_rslt_data;
+	extern void (*fp_himax_self_test_init)(void);
 #endif
 
 extern int HX_TOUCH_INFO_POINT_CNT;
@@ -737,7 +755,7 @@ extern int HX_TOUCH_INFO_POINT_CNT;
 extern bool ic_boot_done;
 
 int himax_parse_dt(struct himax_ts_data *ts,
-		   struct himax_i2c_platform_data *pdata);
+			struct himax_i2c_platform_data *pdata);
 int himax_report_data(struct himax_ts_data *ts, int ts_path, int ts_status);
 
 int himax_report_data_init(void);
@@ -752,16 +770,19 @@ extern int headset_register_client(struct notifier_block *notifier_headset);
 void himax_cable_detect_func(bool force_renew);
 extern int tp_usb_register_client(struct notifier_block *notifier_tp_usb);
 #endif
-#ifdef HX_UPDATE_FW_NOTIFIER
-extern int update_tpfw_register_client(struct notifier_block
-				       *notifier_update_fw);
+#if defined(HX_UPDATE_FW_NOTIFIER)
+extern int update_tpfw_register_client(struct notifier_block *notifier_update_fw);
 #endif
 
 void himax_switch_usb_state(int usb_state);
 void himax_headset_mode_switch(int headset_sate);
 void himax_usb_mode_switch(int val);
-void himax_edge_mode_set(char *buf, int cnt);
-void himax_upgrade_fw_by_resquset_fireware(char *name, int count);
+void himax_edge_mode_set(char *buf,int cnt);
+void himax_upgrade_fw_by_resquset_fireware(char *name,int count);
 int himax_get_tp_charge_mode(void);
 int himax_get_tp_headset_mode(void);
+
+
+
+
 #endif

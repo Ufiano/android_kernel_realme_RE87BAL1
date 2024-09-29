@@ -6,6 +6,7 @@
 #include <linux/mfd/syscon.h>
 #include <linux/regmap.h>
 #include <linux/of.h>
+#include <linux/of_address.h>
 #include "gsp_interface_qogirl6.h"
 #include "../gsp_debug.h"
 #include "../gsp_interface.h"

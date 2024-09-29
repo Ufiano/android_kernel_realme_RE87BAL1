@@ -1,14 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #ifndef _GSP_R6P0_REG_H
@@ -87,288 +79,288 @@
 struct R6P0_GSP_GLB_CFG_REG {
 	union {
 		struct {
-			uint32_t GSP_RUN0		:   1;
-			uint32_t GSP_RUN1		:   1;
-			uint32_t GSP_BUSY0		:   1;
-			uint32_t GSP_BUSY1		:   1;
-			uint32_t REG_BUSY		:   1;
-			uint32_t Reserved1		:   3;
-			uint32_t ERR_FLG		:   1;
-			uint32_t ERR_CODE		:   7;
-			uint32_t Reserved2		:  16;
+			u32 GSP_RUN0		:   1;
+			u32 GSP_RUN1		:   1;
+			u32 GSP_BUSY0		:   1;
+			u32 GSP_BUSY1		:   1;
+			u32 REG_BUSY		:   1;
+			u32 Reserved1		:   3;
+			u32 ERR_FLG		:   1;
+			u32 ERR_CODE		:   7;
+			u32 Reserved2		:  16;
 		};
-		uint32_t	value;
+		u32	value;
 	};
 };
 
 struct R6P0_GSP_INT_REG {
 	union {
 		struct {
-			uint32_t INT_GSP_RAW	   :	1;
-			uint32_t INT_CORE1_RAW	   :	1;
-			uint32_t INT_GERR_RAW	   :	1;
-			uint32_t INT_CERR1_RAW	   :	1;
-			uint32_t Reserved1	   :	4;
-			uint32_t INT_GSP_EN	   :	1;
-			uint32_t INT_CORE1_EN	   :	1;
-			uint32_t INT_GERR_EN	   :	1;
-			uint32_t INT_CERR1_EN	   :	1;
-			uint32_t Reserved2	   :	4;
-			uint32_t INT_GSP_CLR	   :	1;
-			uint32_t INT_CORE1_CLR	   :	1;
-			uint32_t INT_GERR_CLR	   :	1;
-			uint32_t INT_CERR1_CLR	   :	1;
-			uint32_t Reserved3	   :	4;
-			uint32_t INT_GSP_STS	   :	1;
-			uint32_t INT_CORE1_STS	   :	1;
-			uint32_t INT_GERR_STS	   :	1;
-			uint32_t INT_CERR1_STS	   :	1;
-			uint32_t Reserved4	   :	4;
+			u32 INT_GSP_RAW		:	1;
+			u32 INT_CORE1_RAW	:	1;
+			u32 INT_GERR_RAW	:	1;
+			u32 INT_CERR1_RAW	:	1;
+			u32 Reserved1		:	4;
+			u32 INT_GSP_EN		:	1;
+			u32 INT_CORE1_EN	:	1;
+			u32 INT_GERR_EN		:	1;
+			u32 INT_CERR1_EN	:	1;
+			u32 Reserved2		:	4;
+			u32 INT_GSP_CLR		:	1;
+			u32 INT_CORE1_CLR	:	1;
+			u32 INT_GERR_CLR	:	1;
+			u32 INT_CERR1_CLR	:	1;
+			u32 Reserved3		:	4;
+			u32 INT_GSP_STS		:	1;
+			u32 INT_CORE1_STS	:	1;
+			u32 INT_GERR_STS	:	1;
+			u32 INT_CERR1_STS	:	1;
+			u32 Reserved4		:	4;
 		};
-		uint32_t	value;
+		u32	value;
 	};
 };
 
 struct R6P0_GSP_MOD_CFG_REG {
 	union {
 		struct {
-			uint32_t WORK_MOD	  :   1;
-			uint32_t CORE_NUM	  :   1;
-			uint32_t CO_WORK0	  :   1;
-			uint32_t CO_WORK1	  :   1;
-			uint32_t PMARGB_EN	  :   1;
-			uint32_t ARLEN_MOD	  :   1;
-			uint32_t IFBCE_AWLEN_MOD  :   2;
-			uint32_t Reserved1	  :   24;
+			u32 WORK_MOD		:   1;
+			u32 CORE_NUM		:   1;
+			u32 CO_WORK0		:   1;
+			u32 CO_WORK1		:   1;
+			u32 PMARGB_EN		:   1;
+			u32 ARLEN_MOD		:   1;
+			u32 IFBCE_AWLEN_MOD	:   2;
+			u32 Reserved1		:   24;
 		};
-		uint32_t	value;
+		u32	value;
 	};
 };
 
 struct R6P0_GSP_SECURE_CFG_REG {
 	union {
 		struct {
-			uint32_t SECURE_MOD	   :   1;
-			uint32_t NONSEC_AWPROT	   :   3;
-			uint32_t NONSEC_ARPROT	   :   3;
-			uint32_t SECURE_AWPROT	   :   3;
-			uint32_t SECURE_ARPROT	   :   3;
-			uint32_t Reserved1	   :   19;
+			u32 SECURE_MOD		   :   1;
+			u32 NONSEC_AWPROT	   :   3;
+			u32 NONSEC_ARPROT	   :   3;
+			u32 SECURE_AWPROT	   :   3;
+			u32 SECURE_ARPROT	   :   3;
+			u32 Reserved1		   :   19;
 		};
-		uint32_t	value;
+		u32	value;
 	};
 };
 
 struct R6P0_DES_DATA_CFG_REG {
 	union {
 		struct {
-			uint32_t Y_ENDIAN_MOD		 :	4;
-			uint32_t UV_ENDIAN_MOD		 :	4;
-			uint32_t Reserved1		 :	1;
-			uint32_t A_SWAP_MOD		 :	1;
-			uint32_t ROT_MOD		 :	3;
-			uint32_t R2Y_MOD		 :	3;
-			uint32_t DES_IMG_FORMAT		 :	3;
-			uint32_t Reserved2		 :	1;
-			uint32_t RSWAP_MOD		 :	3;
-			uint32_t Reserved3		 :	3;
-			uint32_t FBCE_MOD		 :	2;
-			uint32_t DITHER_EN		 :	1;
-			uint32_t BK_EN			 :	1;
-			uint32_t BK_BLD			 :	1;
-			uint32_t Reserved4		 :	1;
+			u32 Y_ENDIAN_MOD		 :	4;
+			u32 UV_ENDIAN_MOD		 :	4;
+			u32 Reserved1			 :	1;
+			u32 A_SWAP_MOD			 :	1;
+			u32 ROT_MOD			 :	3;
+			u32 R2Y_MOD			 :	3;
+			u32 DES_IMG_FORMAT		 :	3;
+			u32 Reserved2			 :	1;
+			u32 RSWAP_MOD			 :	3;
+			u32 Reserved3			 :	3;
+			u32 FBCE_MOD			 :	2;
+			u32 DITHER_EN			 :	1;
+			u32 BK_EN			 :	1;
+			u32 BK_BLD			 :	1;
+			u32 Reserved4			 :	1;
 		};
-		uint32_t	value;
+		u32	value;
 	};
 };
 
 struct R6P0_DES_Y_ADDR_REG {
 	union {
 		struct {
-			uint32_t Reserved	         :   4;
-			uint32_t DES_Y_BASE_ADDR1	 :   28;
+			u32 Reserved	         :   4;
+			u32 DES_Y_BASE_ADDR1	 :   28;
 		};
-		uint32_t	value;
+		u32	value;
 	};
 };
 
 struct R6P0_DES_U_ADDR_REG {
 	union {
 		struct {
-			uint32_t Reserved			:   4;
-			uint32_t DES_U_BASE_ADDR1	:   28;
+			u32 Reserved			:   4;
+			u32 DES_U_BASE_ADDR1		:   28;
 		};
-		uint32_t	value;
+		u32	value;
 	};
 };
 
 struct R6P0_DES_V_ADDR_REG {
 	union {
 		struct {
-			uint32_t DES_V_BASE_ADDR1	:	32;
+			u32 DES_V_BASE_ADDR1	:	32;
 		};
-		uint32_t	value;
+		u32	value;
 	};
 };
 
 struct R6P0_DES_PITCH_REG {
 	union {
 		struct {
-			uint32_t DES_PITCH	 :   13;
-			uint32_t Reserved1	 :   3;
-			uint32_t DES_HEIGHT	 :   13;
-			uint32_t Reserved2	 :   3;
+			u32 DES_PITCH	 :   13;
+			u32 Reserved1	 :   3;
+			u32 DES_HEIGHT	 :   13;
+			u32 Reserved2	 :   3;
 		};
-		uint32_t	value;
+		u32	value;
 	};
 };
 
 struct R6P0_DES_DATA_CFG1_REG {
 	union {
 		struct {
-			uint32_t Y_ENDIAN_MOD		 :   4;
-			uint32_t UV_ENDIAN_MOD		 :   4;
-			uint32_t Reserved1		 :   1;
-			uint32_t A_SWAP_MOD		 :   1;
-			uint32_t ROT_MOD		 :   3;
-			uint32_t R2Y_MOD		 :   3;
-			uint32_t DES_IMG_FORMAT		 :   3;
-			uint32_t Reserved2		 :   1;
-			uint32_t RSWAP_MOD		 :   3;
-			uint32_t Reserved3		 :   3;
-			uint32_t FBCE_MOD		 :   2;
-			uint32_t DITHER_EN		 :   1;
-			uint32_t Reserved4		 :   3;
+			u32 Y_ENDIAN_MOD		 :   4;
+			u32 UV_ENDIAN_MOD		 :   4;
+			u32 Reserved1			 :   1;
+			u32 A_SWAP_MOD			 :   1;
+			u32 ROT_MOD			 :   3;
+			u32 R2Y_MOD			 :   3;
+			u32 DES_IMG_FORMAT		 :   3;
+			u32 Reserved2			 :   1;
+			u32 RSWAP_MOD			 :   3;
+			u32 Reserved3			 :   3;
+			u32 FBCE_MOD			 :   2;
+			u32 DITHER_EN			 :   1;
+			u32 Reserved4			 :   3;
 		};
-		uint32_t	value;
+		u32	value;
 	};
 };
 
 struct R6P0_DES_Y_ADDR1_REG {
 	union {
 		struct {
-			uint32_t Reserved			:   4;
-			uint32_t DES_Y_BASE_ADDR1	:   28;
+			u32 Reserved		:   4;
+			u32 DES_Y_BASE_ADDR1	:   28;
 		};
-		uint32_t	value;
+		u32	value;
 	};
 };
 
 struct R6P0_DES_U_ADDR1_REG {
 	union {
 		struct {
-			uint32_t Reserved	       :   4;
-			uint32_t DES_U_BASE_ADDR1      :   28;
+			u32 Reserved		:   4;
+			u32 DES_U_BASE_ADDR1	:   28;
 		};
-		uint32_t	value;
+		u32	value;
 	};
 };
 
 struct R6P0_DES_V_ADDR1_REG {
 	union {
 		struct {
-			uint32_t DES_V_BASE_ADDR1      :   32;
+			u32 DES_V_BASE_ADDR1      :   32;
 		};
-		uint32_t	value;
+		u32	value;
 	};
 };
 
 struct R6P0_DES_PITCH1_REG {
 	union {
 		struct {
-			uint32_t DES_PITCH	      :    13;
-			uint32_t Reserved1	      :    3;
-			uint32_t DES_HEIGHT	      :    13;
-			uint32_t Reserved2	      :    3;
+			u32 DES_PITCH	      :    13;
+			u32 Reserved1	      :    3;
+			u32 DES_HEIGHT	      :    13;
+			u32 Reserved2	      :    3;
 		};
-		uint32_t	value;
+		u32	value;
 	};
 };
 
 struct R6P0_BACK_RGB_REG {
 	union {
 		struct {
-			uint32_t   BACKGROUND_B			:	8;
-			uint32_t   BACKGROUND_G			:	8;
-			uint32_t   BACKGROUND_R			:	8;
-			uint32_t   BACKGROUND_A			:	8;
+			u32   BACKGROUND_B			:	8;
+			u32   BACKGROUND_G			:	8;
+			u32   BACKGROUND_R			:	8;
+			u32   BACKGROUND_A			:	8;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_WORK_AREA_SIZE_REG {
 	union {
 		struct {
-			uint32_t WORK_AREA_W	   :   13;
-			uint32_t Reserved1	   :   3;
-			uint32_t WORK_AREA_H	   :   13;
-			uint32_t Reserved2	   :   3;
+			u32 WORK_AREA_W	   :   13;
+			u32 Reserved1	   :   3;
+			u32 WORK_AREA_H	   :   13;
+			u32 Reserved2	   :   3;
 		};
-		uint32_t	value;
+		u32	value;
 	};
 };
 
 struct R6P0_WORK_AREA_XY_REG {
 	union {
 		struct {
-			uint32_t WORK_AREA_X	   :   13;
-			uint32_t Reserved1	   :   3;
-			uint32_t WORK_AREA_Y	   :   13;
-			uint32_t Reserved2	   :   3;
+			u32 WORK_AREA_X	   :   13;
+			u32 Reserved1	   :   3;
+			u32 WORK_AREA_Y	   :   13;
+			u32 Reserved2	   :   3;
 		};
-		uint32_t	value;
+		u32	value;
 	};
 };
 
 struct R6P0_GSP_IP_REV_REG {
 	union {
 		struct {
-			uint32_t PATCH_NUM	   :    4;
-			uint32_t GSP_IP_REV	   :    12;
-			uint32_t Reserved1	   :    16;
+			u32 PATCH_NUM	   :    4;
+			u32 GSP_IP_REV	   :    12;
+			u32 Reserved1	   :    16;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_GSP_DEBUG_CFG_REG {
 	union {
 		struct {
-			uint32_t SCL_CLR1	   :    1;
-			uint32_t SCL_CLR2	   :	1;
-			uint32_t CACHE_DIS	   :    1;
-			uint32_t Reserved1	   :    29;
+			u32 SCL_CLR1	   :    1;
+			u32 SCL_CLR2	   :    1;
+			u32 CACHE_DIS	   :    1;
+			u32 Reserved1	   :    29;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_GSP_DEBUG1_REG {
 	union {
 		struct {
-			uint32_t   Reserved1		 :   24;
-			uint32_t   SCL_OUT_EMP0		 :   1;
-			uint32_t   SCL_OUT_FULL0	 :   1;
-			uint32_t   SCL_OUT_EMP1		 :   1;
-			uint32_t   SCL_OUT_FULL1	 :   1;
-			uint32_t   BLD_OUT_EMP		 :   1;
-			uint32_t   BLD_OUT_FULL		 :   1;
-			uint32_t   Reserved2		 :   2;
+			u32   Reserved1			 :   24;
+			u32   SCL_OUT_EMP0		 :   1;
+			u32   SCL_OUT_FULL0		 :   1;
+			u32   SCL_OUT_EMP1		 :   1;
+			u32   SCL_OUT_FULL1		 :   1;
+			u32   BLD_OUT_EMP		 :   1;
+			u32   BLD_OUT_FULL		 :   1;
+			u32   Reserved2			 :   2;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_GSP_DEBUG2_REG {
 	union {
 		struct {
-			uint32_t   LAYER0_DBG_STS		 :   8;
-			uint32_t   LAYER1_DBG_STS		 :   8;
-			uint32_t   LAYER2_DBG_STS		 :   8;
-			uint32_t   LAYER3_DBG_STS		 :   8;
+			u32   LAYER0_DBG_STS		 :   8;
+			u32   LAYER1_DBG_STS		 :   8;
+			u32   LAYER2_DBG_STS		 :   8;
+			u32   LAYER3_DBG_STS		 :   8;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
@@ -376,34 +368,34 @@ struct R6P0_GSP_DEBUG2_REG {
 struct R6P0_LAYERIMG_CFG_REG {
 	union {
 		struct {
-			uint32_t   Y_ENDIAN_MOD		  :   4;
-			uint32_t   UV_ENDIAN_MOD	  :   4;
-			uint32_t   RGB_SWAP_MOD		  :   3;
-			uint32_t   A_SWAP_MOD		  :   1;
-			uint32_t   PMARGB_MOD		  :   1;
-			uint32_t   ROT_SRC		  :   3;
-			uint32_t   IMG_FORMAT		  :   3;
-			uint32_t   CK_EN		  :   1;
-			uint32_t   PALLET_EN		  :   1;
-			uint32_t   FBCD_MOD		  :   2;
-			uint32_t   Y2R_MOD		  :   3;
-			uint32_t   Y2Y_MOD		  :   1;
-			uint32_t   ZNUM_L		  :   2;
-			uint32_t   Reserved1		  :   1;
-			uint32_t   SCALE_EN		  :   1;
-			uint32_t   Limg_en		  :   1;
+			u32   Y_ENDIAN_MOD		  :   4;
+			u32   UV_ENDIAN_MOD		  :   4;
+			u32   RGB_SWAP_MOD		  :   3;
+			u32   A_SWAP_MOD		  :   1;
+			u32   PMARGB_MOD		  :   1;
+			u32   ROT_SRC			  :   3;
+			u32   IMG_FORMAT		  :   3;
+			u32   CK_EN			  :   1;
+			u32   PALLET_EN			  :   1;
+			u32   FBCD_MOD			  :   2;
+			u32   Y2R_MOD			  :   3;
+			u32   Y2Y_MOD			  :   1;
+			u32   ZNUM_L			  :   2;
+			u32   Reserved1			  :   1;
+			u32   SCALE_EN			  :   1;
+			u32   Limg_en			  :   1;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_LAYERIMG_Y_ADDR_REG {
 	union {
 		struct {
-			uint32_t   Reserved1		 :   4;
-			uint32_t   Y_BASE_ADDR		 :   28;
+			u32   Reserved1			 :   4;
+			u32   Y_BASE_ADDR		 :   28;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
@@ -411,142 +403,142 @@ struct R6P0_LAYERIMG_Y_ADDR_REG {
 struct R6P0_LAYERIMG_U_ADDR_REG {
 	union {
 		struct {
-			uint32_t   Reserved1		:   4;
-			uint32_t   U_BASE_ADDR		:   28;
+			u32   Reserved1			:   4;
+			u32   U_BASE_ADDR		:   28;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_LAYERIMG_V_ADDR_REG {
 	union {
 		struct {
-			uint32_t   Reserved1		:   4;
-			uint32_t   V_BASE_ADDR		:   28;
+			u32   Reserved1			:   4;
+			u32   V_BASE_ADDR		:   28;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_LAYERIMG_PITCH_REG {
 	union {
 		struct {
-			uint32_t   PITCH		 :   13;
-			uint32_t   Reserved1		 :   3;
-			uint32_t   HEIGHT		 :   13;
-			uint32_t   Reserved2		 :   3;
+			u32   PITCH		 :   13;
+			u32   Reserved1		 :   3;
+			u32   HEIGHT		 :   13;
+			u32   Reserved2		 :   3;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_LAYERIMG_CLIP_START_REG {
 	union {
 		struct {
-			uint32_t   CLIP_START_X		:   13;
-			uint32_t   Reserved1		:   3;
-			uint32_t   CLIP_START_Y		:   13;
-			uint32_t   Reserved2		:   3;
+			u32   CLIP_START_X		:   13;
+			u32   Reserved1			:   3;
+			u32   CLIP_START_Y		:   13;
+			u32   Reserved2			:   3;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_LAYERIMG_CLIP_SIZE_REG {
 	union {
 		struct {
-			uint32_t   CLIP_SIZE_X				:   13;
-			uint32_t   Reserved1				:   3;
-			uint32_t   CLIP_SIZE_Y				:   13;
-			uint32_t   Reserved2				:   3;
+			u32   CLIP_SIZE_X			:   13;
+			u32   Reserved1				:   3;
+			u32   CLIP_SIZE_Y			:   13;
+			u32   Reserved2				:   3;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_LAYERIMG_DES_START_REG {
 	union {
 		struct {
-			uint32_t   DES_START_X				:   13;
-			uint32_t   Reserved1				:   3;
-			uint32_t   DES_START_Y				:   13;
-			uint32_t   Reserved2				:   3;
+			u32   DES_START_X			:   13;
+			u32   Reserved1				:   3;
+			u32   DES_START_Y			:   13;
+			u32   Reserved2				:   3;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_LAYERIMG_PALLET_RGB_REG {
 	union {
 		struct {
-			uint32_t   PALLET_B			:   8;
-			uint32_t   PALLET_G			:   8;
-			uint32_t   PALLET_R			:   8;
-			uint32_t   PALLET_A			:   8;
+			u32   PALLET_B			:   8;
+			u32   PALLET_G			:   8;
+			u32   PALLET_R			:   8;
+			u32   PALLET_A			:   8;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_LAYERIMG_CK_REG {
 	union {
 		struct {
-			uint32_t   CK_B				:   8;
-			uint32_t   CK_G				:   8;
-			uint32_t   CK_R				:   8;
-			uint32_t   BLOCK_ALPHA		        :   8;
+			u32   CK_B				:   8;
+			u32   CK_G				:   8;
+			u32   CK_R				:   8;
+			u32   BLOCK_ALPHA		        :   8;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_Y2Y_Y_PARAM_REG {
 	union {
 		struct {
-			uint32_t   Y_CONTRAST			:   10;
-			uint32_t   Reserved1			:   6;
-			uint32_t   Y_BRIGHTNESS			:   9;
-			uint32_t   Reserved2			:   7;
+			u32   Y_CONTRAST			:   10;
+			u32   Reserved1				:   6;
+			u32   Y_BRIGHTNESS			:   9;
+			u32   Reserved2				:   7;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_Y2Y_U_PARAM_REG {
 	union {
 		struct {
-			uint32_t   U_SATURATION			:    10;
-			uint32_t   Reserved1			:    6;
-			uint32_t   U_OFFSET			:    8;
-			uint32_t   Reserved2			:    8;
+			u32   U_SATURATION		:    10;
+			u32   Reserved1			:    6;
+			u32   U_OFFSET			:    8;
+			u32   Reserved2			:    8;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_Y2Y_V_PARAM_REG {
 	union {
 		struct {
-			uint32_t   V_SATURATION			:   10;
-			uint32_t   Reserved1			:   6;
-			uint32_t   V_OFFSET			:   8;
-			uint32_t   Reserved2			:   8;
+			u32   V_SATURATION		:   10;
+			u32   Reserved1			:   6;
+			u32   V_OFFSET			:   8;
+			u32   Reserved2			:   8;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_LAYERIMG_DES_SCL_SIZE_REG {
 	union {
 		struct {
-			uint32_t DES_SCL_W	  :   13;
-			uint32_t HTAP_MOD	  :   2;
-			uint32_t Reserved1	  :   1;
-			uint32_t DES_SCL_H	  :   13;
-			uint32_t VTAP_MOD	  :   2;
-			uint32_t Reserved2	  :   1;
+			u32 DES_SCL_W	  :   13;
+			u32 HTAP_MOD	  :   2;
+			u32 Reserved1	  :   1;
+			u32 DES_SCL_H	  :   13;
+			u32 VTAP_MOD	  :   2;
+			u32 Reserved2	  :   1;
 		};
-		uint32_t	value;
+		u32	value;
 	};
 };
 
@@ -555,102 +547,102 @@ struct R6P0_LAYERIMG_DES_SCL_SIZE_REG {
 struct R6P0_LAYEROSD_CFG_REG {
 	union {
 		struct {
-			uint32_t   ENDIAN			  :   4;
-			uint32_t   RGB_SWAP			  :   3;
-			uint32_t   A_SWAP			  :   1;
-			uint32_t   PMARGB_MOD			  :   1;
-			uint32_t   Reserved1			  :   7;
-			uint32_t   IMG_FORMAT			  :   2;
-			uint32_t   CK_EN			  :   1;
-			uint32_t   PALLET_EN			  :   1;
-			uint32_t   FBCD_MOD			  :   1;
-			uint32_t   ZNUM_L			  :   2;
-			uint32_t   Reserved2			  :   8;
-			uint32_t   Losd_en			  :   1;
+			u32   ENDIAN			  :   4;
+			u32   RGB_SWAP			  :   3;
+			u32   A_SWAP			  :   1;
+			u32   PMARGB_MOD		  :   1;
+			u32   Reserved1			  :   7;
+			u32   IMG_FORMAT		  :   2;
+			u32   CK_EN			  :   1;
+			u32   PALLET_EN			  :   1;
+			u32   FBCD_MOD			  :   1;
+			u32   ZNUM_L			  :   2;
+			u32   Reserved2			  :   8;
+			u32   Losd_en			  :   1;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_LAYEROSD_R_ADDR_REG {
 	union {
 		struct {
-			uint32_t   Reserved1			  :   4;
-			uint32_t   R_BASE_ADDR			  :   28;
+			u32   Reserved1				  :   4;
+			u32   R_BASE_ADDR			  :   28;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_LAYEROSD_PITCH_REG {
 	union {
 		struct {
-			uint32_t   PITCH			   :    13;
-			uint32_t   Reserved1			   :    3;
-			uint32_t   HEIGHT			   :    13;
-			uint32_t   Reserved2			   :    3;
+			u32   PITCH			   :    13;
+			u32   Reserved1			   :    3;
+			u32   HEIGHT			   :    13;
+			u32   Reserved2			   :    3;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_LAYEROSD_CLIP_START_REG {
 	union {
 		struct {
-			uint32_t   CLIP_START_X		          :    13;
-			uint32_t   Reserved1			  :    3;
-			uint32_t   CLIP_START_Y			  :    13;
-			uint32_t   Reserved2			  :    3;
+			u32   CLIP_START_X		          :    13;
+			u32   Reserved1				  :    3;
+			u32   CLIP_START_Y			  :    13;
+			u32   Reserved2				  :    3;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_LAYEROSD_CLIP_SIZE_REG {
 	union {
 		struct {
-			uint32_t   CLIP_SIZE_X				:   13;
-			uint32_t   Reserved1				:   3;
-			uint32_t   CLIP_SIZE_Y				:   13;
-			uint32_t   Reserved2				:   3;
+			u32   CLIP_SIZE_X				:   13;
+			u32   Reserved1					:   3;
+			u32   CLIP_SIZE_Y				:   13;
+			u32   Reserved2					:   3;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_LAYEROSD_DES_START_REG {
 	union {
 		struct {
-			uint32_t   DES_START_X				:    13;
-			uint32_t   Reserved1				:    3;
-			uint32_t   DES_START_Y				:    13;
-			uint32_t   Reserved2				:    3;
+			u32   DES_START_X				:    13;
+			u32   Reserved1					:    3;
+			u32   DES_START_Y				:    13;
+			u32   Reserved2					:    3;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_LAYEROSD_PALLET_RGB_REG {
 	union {
 		struct {
-			uint32_t   PALLET_B				:    8;
-			uint32_t   PALLET_G				:    8;
-			uint32_t   PALLET_R				:    8;
-			uint32_t   PALLET_A				:    8;
+			u32   PALLET_B				:    8;
+			u32   PALLET_G				:    8;
+			u32   PALLET_R				:    8;
+			u32   PALLET_A				:    8;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 
 struct R6P0_LAYEROSD_CK_REG {
 	union {
 		struct {
-			uint32_t   CK_B				:    8;
-			uint32_t   CK_G				:    8;
-			uint32_t   CK_R				:    8;
-			uint32_t   BLOCK_ALPHA		        :    8;
+			u32   CK_B				:    8;
+			u32   CK_G				:    8;
+			u32   CK_R				:    8;
+			u32   BLOCK_ALPHA		        :    8;
 		};
-		uint32_t	   value;
+		u32	   value;
 	};
 };
 

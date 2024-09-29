@@ -24,6 +24,8 @@
 #define	SPRD_INTCV_IRQ_EN		0x0008
 #define	SPRD_INTCV_IRQ_DIS		0x000c
 
+DEFINE_MUTEX(doze_mutex);
+
 struct sprd_intc_group {
 	u32 intc0;
 	u32 intc1;
@@ -233,7 +235,7 @@ static void sprd_doze_sleep_enter(void)
 
 	doze_flag_en = 1;
 
-	if (!mutex_trylock(&pm_mutex))
+	if (!mutex_trylock(&doze_mutex))
 		return;
 
 	doze_sleep_bak_restore_uarteb(1);
@@ -317,7 +319,7 @@ static void sprd_doze_sleep_enter(void)
 			   MASK_AP_AHB_MCU_SLEEP_FOLLOW_CA7_EN |
 			   MASK_AP_AHB_MCU_DEEP_SLEEP_EN);
 
-	mutex_unlock(&pm_mutex);
+	mutex_unlock(&doze_mutex);
 }
 
 static void sprd_doze_sleep_exit(void)

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Alarmtimer interface
  *
@@ -10,10 +11,6 @@
  * Copyright (C) 2010 IBM Corperation
  *
  * Author: John Stultz <john.stultz@linaro.org>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
  */
 #include <linux/time.h>
 #include <linux/hrtimer.h>
@@ -91,6 +88,7 @@ static int alarmtimer_rtc_add_device(struct device *dev,
 	unsigned long flags;
 	struct rtc_device *rtc = to_rtc_device(dev);
 	struct wakeup_source *__ws;
+	struct platform_device *pdev;
 	int ret = 0;
 
 	if (rtcdev)
@@ -102,9 +100,11 @@ static int alarmtimer_rtc_add_device(struct device *dev,
 		return -1;
 
 	__ws = wakeup_source_register(dev, "alarmtimer");
+	pdev = platform_device_register_data(dev, "alarmtimer",
+					     PLATFORM_DEVID_AUTO, NULL, 0);
 
 	spin_lock_irqsave(&rtcdev_lock, flags);
-	if (!rtcdev) {
+	if (__ws && !IS_ERR(pdev) && !rtcdev) {
 		if (!try_module_get(rtc->owner)) {
 			ret = -1;
 			goto unlock;
@@ -115,10 +115,14 @@ static int alarmtimer_rtc_add_device(struct device *dev,
 		get_device(dev);
 		ws = __ws;
 		__ws = NULL;
+		pdev = NULL;
+	} else {
+		ret = -1;
 	}
 unlock:
 	spin_unlock_irqrestore(&rtcdev_lock, flags);
 
+	platform_device_unregister(pdev);
 	wakeup_source_unregister(__ws);
 
 	return ret;
@@ -204,8 +208,8 @@ static enum hrtimer_restart alarmtimer_fired(struct hrtimer *timer)
 	struct alarm *alarm = container_of(timer, struct alarm, timer);
 	struct alarm_base *base = &alarm_bases[alarm->type];
 	unsigned long flags;
-	int ret = HRTIMER_NORESTART;
-	int restart = ALARMTIMER_NORESTART;
+	enum hrtimer_restart ret = HRTIMER_NORESTART;
+	enum alarmtimer_restart restart = ALARMTIMER_NORESTART;
 
 	spin_lock_irqsave(&base->lock, flags);
 	alarmtimer_dequeue(base, alarm);
@@ -238,7 +242,6 @@ EXPORT_SYMBOL_GPL(alarm_expires_remaining);
 /**
  * alarmtimer_suspend - Suspend time callback
  * @dev: unused
- * @state: unused
  *
  * When we are going into suspend, we look through the bases
  * to see which is the soonest timer to expire. We then
@@ -299,10 +302,6 @@ static int alarmtimer_suspend(struct device *dev)
 	now = rtc_tm_to_ktime(tm);
 	now = ktime_add(now, min);
 
-	tm = rtc_ktime_to_tm(now);
-	pr_info("Suspend alarm: %d-%d-%d %d:%d:%d\n", tm.tm_year + 1900,
-		tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
-
 	/* Set alarm, if in the past reject suspend briefly to handle */
 	ret = rtc_timer_start(rtc, &rtctimer, now, 0);
 	if (ret < 0)
@@ -320,78 +319,6 @@ static int alarmtimer_resume(struct device *dev)
 	return 0;
 }
 
-void alarmtimer_shutdown(struct platform_device *pdev)
-{
-	ktime_t min = 0, early = ktime_set(120, 0), now;
-	int ret, alarm_type = ALARM_NUMTYPE, i;
-	struct rtc_device *rtc;
-	struct rtc_wkalrm alarm;
-	unsigned long flags;
-	struct rtc_time tm;
-
-	rtc = alarmtimer_get_rtcdev();
-	/* If we have no rtcdev, just return */
-	if (!rtc)
-		return;
-
-	/* Find the soonest timer to expire */
-	for (i = ALARM_POWERON; i < ALARM_NUMTYPE; i++) {
-		struct alarm_base *base = &alarm_bases[i];
-		struct timerqueue_node *next;
-		ktime_t delta;
-
-		spin_lock_irqsave(&base->lock, flags);
-		next = timerqueue_getnext(&base->timerqueue);
-		spin_unlock_irqrestore(&base->lock, flags);
-		if (!next)
-			continue;
-
-		delta = ktime_sub(next->expires, base->gettime());
-
-		if (i == ALARM_POWEROFF_ALARM) {
-			if (ktime_compare(delta, early) <= 0) {
-				pr_info("Poweroff alarm is less than two minutes.\n");
-				continue;
-			} else
-				delta = ktime_sub(delta, early);
-		}
-
-		if (!min || ktime_compare(delta, min) <= 0) {
-			min = delta;
-			alarm_type = i;
-		}
-	}
-
-	if (min == 0) {
-		pr_info("No poweroff alarm found\n");
-		return;
-	} else if (ktime_to_ms(min) < 10 * MSEC_PER_SEC) {
-		pr_warn("Don't need to set poweroff alarm due to less than 10s\n");
-		return;
-	}
-
-	ret = rtc_read_time(rtc, &tm);
-	if (ret < 0) {
-		pr_err("read rtc time error %d\n", ret);
-		return;
-	}
-
-	now = rtc_tm_to_ktime(tm);
-	now = ktime_add(now, min);
-
-	tm = rtc_ktime_to_tm(now);
-	pr_info("Poweroff alarm: %d-%d-%d %d:%d:%d\n", tm.tm_year + 1900,
-		tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
-
-	alarm.time = tm;
-	alarm.enabled = 1;
-
-	/* Setup an rtc timer to fire that far in the future */
-	ret = rtc_set_alarm(rtc, &alarm);
-	if (ret < 0)
-		pr_err("Power off alarm setting error %d\n", ret);
-}
-
 #else
 static int alarmtimer_suspend(struct device *dev)
 {
@@ -401,11 +328,6 @@ static int alarmtimer_suspend(struct device *dev)
 static int alarmtimer_resume(struct device *dev)
 {
 	return 0;
-}
-
-void alarmtimer_shutdown(struct platform_device *pdev)
-{
-       return;
 }
 #endif
 
@@ -519,7 +441,7 @@ int alarm_cancel(struct alarm *alarm)
 		int ret = alarm_try_to_cancel(alarm);
 		if (ret >= 0)
 			return ret;
-		cpu_relax();
+		hrtimer_cancel_wait_running(&alarm->timer);
 	}
 }
 EXPORT_SYMBOL_GPL(alarm_cancel);
@@ -604,25 +526,11 @@ static void alarmtimer_freezerset(ktime_t absexp, enum alarmtimer_type type)
  */
 static enum alarmtimer_type clock2alarm(clockid_t clockid)
 {
-	switch (clockid) {
-	case CLOCK_REALTIME_ALARM:
+	if (clockid == CLOCK_REALTIME_ALARM)
 		return ALARM_REALTIME;
-
-	case CLOCK_BOOTTIME_ALARM:
+	if (clockid == CLOCK_BOOTTIME_ALARM)
 		return ALARM_BOOTTIME;
-
-	case CLOCK_POWEROFF_WAKE:
-		return ALARM_POWEROFF;
-
-	case CLOCK_POWERON_WAKE:
-		return ALARM_POWERON;
-
-	case CLOCK_POWEROFF_ALARM:
-		return ALARM_POWEROFF_ALARM;
-
-	default:
-		return -1;
-	}
+	return -1;
 }
 
 /**
@@ -704,6 +612,19 @@ static ktime_t alarm_timer_remaining(struct k_itimer *timr, ktime_t now)
 static int alarm_timer_try_to_cancel(struct k_itimer *timr)
 {
 	return alarm_try_to_cancel(&timr->it.alarm.alarmtimer);
+}
+
+/**
+ * alarm_timer_wait_running - Posix timer callback to wait for a timer
+ * @timr:	Pointer to the posixtimer data struct
+ *
+ * Called from the core code when timer cancel detected that the callback
+ * is running. @timr is unlocked and rcu read lock is held to prevent it
+ * from being freed.
+ */
+static void alarm_timer_wait_running(struct k_itimer *timr)
+{
+	hrtimer_cancel_wait_running(&timr->it.alarm.alarmtimer.timer);
 }
 
 /**
@@ -917,9 +838,9 @@ static int alarm_timer_nsleep(const clockid_t which_clock, int flags,
 	if (flags == TIMER_ABSTIME)
 		return -ERESTARTNOHAND;
 
-	restart->fn = alarm_timer_nsleep_restart;
 	restart->nanosleep.clockid = type;
 	restart->nanosleep.expires = exp;
+	set_restart_fn(restart, alarm_timer_nsleep_restart);
 	return ret;
 }
 
@@ -935,6 +856,7 @@ const struct k_clock alarm_clock = {
 	.timer_forward		= alarm_timer_forward,
 	.timer_remaining	= alarm_timer_remaining,
 	.timer_try_to_cancel	= alarm_timer_try_to_cancel,
+	.timer_wait_running	= alarm_timer_wait_running,
 	.nsleep			= alarm_timer_nsleep,
 };
 #endif /* CONFIG_POSIX_TIMERS */
@@ -950,8 +872,7 @@ static struct platform_driver alarmtimer_driver = {
 	.driver = {
 		.name = "alarmtimer",
 		.pm = &alarmtimer_pm_ops,
-	},
-	.shutdown = alarmtimer_shutdown,
+	}
 };
 
 /**
@@ -962,8 +883,7 @@ static struct platform_driver alarmtimer_driver = {
  */
 static int __init alarmtimer_init(void)
 {
-	struct platform_device *pdev;
-	int error = 0;
+	int error;
 	int i;
 
 	alarmtimer_rtc_timer_init();
@@ -973,12 +893,6 @@ static int __init alarmtimer_init(void)
 	alarm_bases[ALARM_REALTIME].gettime = &ktime_get_real;
 	alarm_bases[ALARM_BOOTTIME].base_clockid = CLOCK_BOOTTIME;
 	alarm_bases[ALARM_BOOTTIME].gettime = &ktime_get_boottime;
-	alarm_bases[ALARM_POWEROFF].base_clockid = CLOCK_REALTIME;
-	alarm_bases[ALARM_POWEROFF].gettime = &ktime_get_real;
-	alarm_bases[ALARM_POWERON].base_clockid = CLOCK_REALTIME;
-	alarm_bases[ALARM_POWERON].gettime = &ktime_get_real;
-	alarm_bases[ALARM_POWEROFF_ALARM].base_clockid = CLOCK_REALTIME;
-	alarm_bases[ALARM_POWEROFF_ALARM].gettime = &ktime_get_real;
 	for (i = 0; i < ALARM_NUMTYPE; i++) {
 		timerqueue_init_head(&alarm_bases[i].timerqueue);
 		spin_lock_init(&alarm_bases[i].lock);
@@ -992,15 +906,7 @@ static int __init alarmtimer_init(void)
 	if (error)
 		goto out_if;
 
-	pdev = platform_device_register_simple("alarmtimer", -1, NULL, 0);
-	if (IS_ERR(pdev)) {
-		error = PTR_ERR(pdev);
-		goto out_drv;
-	}
 	return 0;
-
-out_drv:
-	platform_driver_unregister(&alarmtimer_driver);
 out_if:
 	alarmtimer_rtc_interface_remove();
 	return error;

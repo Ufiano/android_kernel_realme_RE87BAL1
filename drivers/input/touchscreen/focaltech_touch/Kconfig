@@ -3,7 +3,7 @@
 #
 
 config TOUCHSCREEN_FTS
-    bool "Focaltech Touchscreen"
+    tristate "Focaltech Touchscreen"
     default n
     depends on TOUCHSCREEN_FTS_CHIPSET
     help
@@ -11,7 +11,7 @@ config TOUCHSCREEN_FTS
       If unsure, say N.
       
 config TOUCHSCREEN_FTS_DIRECTORY
-    string "Focaltech ts directory name"
+    tristate "Focaltech ts directory name"
     default "focaltech_touch"
     depends on TOUCHSCREEN_FTS
     

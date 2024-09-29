@@ -1,5 +1,5 @@
  /*
- * Copyright (C) 2015-2018 Spreadtrum Communications Inc.
+ * Copyright (C) 2015-2022 Unisoc Communications Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -33,10 +33,17 @@ struct ufs_sprd_host {
 	struct syscon_ufs aon_apb_ufs_rst;
 	struct syscon_ufs phy_sram_init_done;
 	struct syscon_ufs aon_apb_ufs_clk_en;
+	struct syscon_ufs ufsdev_refclk_en;
+	struct syscon_ufs usb31pllv_ref2mphy_en;
+
 	struct clk *hclk_source;
 	struct clk *hclk;
+	uint32_t ufs_lane_calib_data0;
+	uint32_t ufs_lane_calib_data1;
 };
 
+/* Set auto h8 ilde time to 10ms */
+#define AUTO_H8_IDLE_TIME_10MS 0x1001
 
 /* UFS host controller vendor specific registers */
 #define REG_SW_RST	0xb0
@@ -85,5 +92,26 @@ struct ufs_sprd_host {
 
 #define REG_DIG_CFG35	0x8c
 #define TX_FIFOMODE	(1 << 15)
+
+/*
+ * Synopsys common M-PHY Attributes
+ */
+#define CBRATESEL				0x8114
+#define CBCREGADDRLSB				0x8116
+#define CBCREGADDRMSB				0x8117
+#define CBCREGWRLSB				0x8118
+#define CBCREGWRMSB				0x8119
+#define CBCREGRDWRSEL				0x811C
+#define CBCRCTRL				0x811F
+#define CBREFCLKCTRL2				0x8132
+
+/*
+ *Synopsys RX implementation specific M-PHY Attributes
+ */
+#define RXSQCONTROL				0x8009
+
+#define VS_MPHYDISABLE		0xD0C1
+
+#define UFSHCI_VERSION_30	0x00000300 /* 3.0 */
 
 #endif/* _UFS_SPRD_H_ */

@@ -1,5 +1,10 @@
-#ifndef _MIPI_DSI_R1P0_H_
-#define _MIPI_DSI_R1P0_H_
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (C) 2020 Unisoc Inc.
+ */
+
+#ifndef _DSI_CTRL_R1P0_H_
+#define _DSI_CTRL_R1P0_H_
 
 #include <asm/types.h>
 
@@ -1409,4 +1414,4 @@ struct dsi_reg {
 
 };
 
-#endif
+#endif /* _DSI_CTRL_R1P0_H_ */

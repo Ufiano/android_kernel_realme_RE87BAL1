@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (C) 2018 Spreadtrum Communications Inc.
  *
@@ -11,122 +12,7 @@
  * GNU General Public License for more details.
  */
 
-#ifdef pr_fmt
-#undef pr_fmt
-#endif
-#define pr_fmt(fmt) "sprd-iq: " fmt
-
-#include <linux/kernel.h>
-#include <linux/module.h>
-#include <linux/wait.h>
-#include <linux/interrupt.h>
-#include <linux/sched.h>
-#include <linux/kthread.h>
-#include <linux/delay.h>
-#include <linux/slab.h>
-#include <linux/io.h>
-#include <linux/sizes.h>
-#include <linux/of.h>
-#include <linux/of_address.h>
-#include <linux/of_device.h>
-#include <linux/of_platform.h>
-#include <linux/of_reserved_mem.h>
-#include <linux/mod_devicetable.h>
-#include <linux/memblock.h>
-#include <linux/poll.h>
-#include <linux/device.h>
-#include <linux/mm.h>
-#include <linux/platform_device.h>
-#include <linux/miscdevice.h>
-#include <linux/debugfs.h>
-#include <linux/sipc.h>
-#ifdef CONFIG_X86
-#include <asm/cacheflush.h>
-#endif
-#include <uapi/linux/sched/types.h>
-
-#define MAX_CHAR_NUM               128
-
-#define IQ_BUF_INIT                0x5A5A5A5A
-#define IQ_BUF_WRITE_FINISHED      0x5A5A8181
-#define IQ_BUF_READ_FINISHED       0x81815A5A
-#define IQ_BUF_READING             0x81005a00
-
-#define IQ_BUF_OPEN                0x424F504E
-#define IQ_BUF_LOCK                0x424C434B
-#define DATA_AP_MOVE               0x4441504D
-#define DATA_AP_MOVING             0x504D4441
-#define DATA_CP_INJECT             0x44435049
-#define DATA_AP_MOVE_FINISH        DATA_CP_INJECT
-#define DATA_RESET                 0x44525354
-#define MAX_PB_HEADER_SIZE		   0x100
-
-#define IQ_TRANSFER_SIZE (500*1024)
-
-#define SPRD_IQ_CLASS_NAME		"sprd_iq"
-
-#ifdef CONFIG_USB_F_VSERIAL_BYPASS_USER
-extern ssize_t vser_pass_user_write(char *buf, size_t count);
-extern void kernel_vser_register_callback(void *function, void *p);
-extern void kernel_vser_set_pass_mode(bool pass);
-#else
-static ssize_t vser_pass_user_write(char *buf, size_t count) { return count; }
-static void kernel_vser_register_callback(void *function, void *p) {}
-static void kernel_vser_set_pass_mode(bool pass) {}
-#endif
-
-enum {
-	CMD_GET_IQ_BUF_INFO = 0x0,
-	CMD_GET_IQ_PB_INFO,
-	CMD_SET_IQ_CH_TYPE = 0x80,
-	CMD_SET_IQ_WR_FINISHED,
-	CMD_SET_IQ_RD_FINISHED,
-	CMD_SET_IQ_MOVE_FINISHED,
-};
-
-enum {
-	IQ_USB_MODE = 0,
-	IQ_SLOG_MODE,
-	PLAY_BACK_MODE,
-};
-
-struct iq_buf_info {
-	u32 base_offs;
-	u32 data_len;
-};
-
-struct iq_header {
-	volatile u32  WR_RD_FLAG;
-	u32  data_addr;
-	u32  data_len;
-	u32  reserved;
-};
-
-struct iq_pb_data_header {
-	u32 data_status;
-	u32 iqdata_offset;
-	u32 iqdata_length;
-	char iqdata_filename[MAX_CHAR_NUM];
-};
-
-struct iq_header_info {
-	struct iq_header *head_1;
-	struct iq_header *head_2;
-	struct iq_pb_data_header *ipd_head;
-};
-
-struct sprd_iq_mgr {
-	uint mode;
-	uint ch;
-	phys_addr_t base;
-	phys_addr_t size;
-	u32 mapping_offs;
-	void *vbase;
-	struct reserved_mem *rmem;
-	struct iq_header_info *header_info;
-	struct task_struct *iq_thread;
-	wait_queue_head_t wait;
-};
+#include "sprd_iq.h"
 
 static struct sprd_iq_mgr iq;
 
@@ -136,25 +22,9 @@ static uint iq_size;
 module_param_named(iq_base, iq_base, uint, 0444);
 module_param_named(iq_size, iq_size, uint, 0444);
 
-static int __init early_mode(char *str)
-{
-	pr_info("early mode\n");
-	if (!memcmp(str, "iq", 2))
-		iq.mode = 1;
-
-	return 0;
-}
-
-int in_iqmode(void)
-{
-	return (iq.mode == 1);
-}
-
-early_param("androidboot.mode", early_mode);
-
 static ssize_t sprd_iq_write(u32 paddr, u32 length)
 {
-#ifdef CONFIG_USB_F_VSERIAL
+#if IS_ENABLED(CONFIG_USB_F_VSERIAL)
 	void *vaddr;
 	u32 len;
 	u32 send_num = 0;
@@ -169,11 +39,11 @@ static ssize_t sprd_iq_write(u32 paddr, u32 length)
 		vaddr = __va(paddr + send_num);
 		if (!vaddr) {
 			pr_err("no memory\n");
-			msleep(10);
+			msleep(20);
 			continue;
 		}
 
-		ret = vser_pass_user_write(vaddr, len);
+		ret = _vser_pass_user_write(vaddr, len);
 		if (ret < 0)
 			msleep(200);
 		else
@@ -192,18 +62,18 @@ static int sprd_iq_thread(void *data)
 	struct iq_header_info *p_iq = t_iq->header_info;
 	struct sched_param param = {.sched_priority = 80};
 
-	if (NULL == p_iq->head_1 || NULL == p_iq->head_2)
+	if (p_iq->head_1 == NULL || p_iq->head_2 == NULL)
 		return -EPERM;
 
 	sched_setscheduler(current, SCHED_RR, &param);
 
 	while (!kthread_should_stop()) {
-		if (PLAY_BACK_MODE == iq.ch) {
-			if (DATA_AP_MOVE == p_iq->ipd_head->data_status) {
+		if (iq.ch == PLAY_BACK_MODE) {
+			if (p_iq->ipd_head->data_status == DATA_AP_MOVE) {
 				p_iq->ipd_head->data_status = DATA_AP_MOVING;
 				wake_up_interruptible(&t_iq->wait);
 
-			} else if (DATA_AP_MOVE == p_iq->ipd_head->data_status) {
+			} else if (p_iq->ipd_head->data_status == DATA_AP_MOVE) {
 				if (t_iq->vbase)
 					memset(t_iq->vbase, 0, t_iq->size);
 				p_iq->head_1->WR_RD_FLAG = IQ_BUF_OPEN;
@@ -212,22 +82,22 @@ static int sprd_iq_thread(void *data)
 
 		if (p_iq->head_1->WR_RD_FLAG == IQ_BUF_WRITE_FINISHED) {
 			p_iq->head_1->WR_RD_FLAG = IQ_BUF_READING;
-			if (IQ_USB_MODE == iq.ch)
+			if (iq.ch == IQ_USB_MODE)
 				sprd_iq_write(p_iq->head_1->data_addr -
 					      iq.mapping_offs,
 					      p_iq->head_1->data_len);
 
-			else if (IQ_SLOG_MODE == iq.ch)
+			else if (iq.ch == IQ_SLOG_MODE)
 				wake_up_interruptible(&t_iq->wait);
 
 		} else if (p_iq->head_2->WR_RD_FLAG == IQ_BUF_WRITE_FINISHED) {
 			p_iq->head_2->WR_RD_FLAG = IQ_BUF_READING;
-			if (IQ_USB_MODE == iq.ch)
+			if (iq.ch == IQ_USB_MODE)
 				sprd_iq_write(p_iq->head_2->data_addr -
 					      iq.mapping_offs,
 					      p_iq->head_2->data_len);
 
-			else if (IQ_SLOG_MODE == iq.ch)
+			else if (iq.ch == IQ_SLOG_MODE)
 				wake_up_interruptible(&t_iq->wait);
 
 		} else {
@@ -241,12 +111,12 @@ static int sprd_iq_thread(void *data)
 	return 0;
 }
 
-#ifdef CONFIG_USB_F_VSERIAL
+#if IS_ENABLED(CONFIG_USB_F_VSERIAL)
 static void sprd_iq_complete(char *buf,  unsigned int length, void *unused)
 {
 	char *vaddr;
 
-	if (IQ_USB_MODE != iq.ch)
+	if (iq.ch != IQ_USB_MODE)
 		return;
 	vaddr = buf;
 	pr_info("complete 0x%p, 0x%x\n", vaddr, length);
@@ -268,7 +138,7 @@ static long iq_mem_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 
 	pr_info("enter ioctl cmd = 0x%x\n", cmd);
 
-	if (NULL == iq.header_info->head_1 || NULL == iq.header_info->head_2)
+	if (iq.header_info->head_1 == NULL || iq.header_info->head_2 == NULL)
 		return -EPERM;
 
 	switch (cmd) {
@@ -295,7 +165,7 @@ static long iq_mem_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		break;
 
 	case CMD_GET_IQ_PB_INFO:
-		if (PLAY_BACK_MODE != iq.ch) {
+		if (iq.ch != PLAY_BACK_MODE) {
 			pr_err("current mode is not playback mode\n");
 			return -EINVAL;
 		}
@@ -317,7 +187,7 @@ static long iq_mem_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			return -EINVAL;
 		}
 
-		if (IQ_SLOG_MODE == arg) {
+		if (arg == IQ_SLOG_MODE) {
 			if (IQ_BUF_READING ==
 					iq.header_info->head_1->WR_RD_FLAG ||
 				IQ_BUF_READING ==
@@ -325,7 +195,7 @@ static long iq_mem_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				wake_up_interruptible(&iq.wait);
 			}
 
-		} else if (PLAY_BACK_MODE == arg) {
+		} else if (arg == PLAY_BACK_MODE) {
 			iq.header_info->ipd_head =
 				(struct iq_pb_data_header *)(iq.vbase +
 					sizeof(struct iq_header));
@@ -350,7 +220,7 @@ static long iq_mem_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		break;
 
 	case CMD_SET_IQ_MOVE_FINISHED:
-		if (PLAY_BACK_MODE != iq.ch) {
+		if (iq.ch != PLAY_BACK_MODE) {
 			pr_err("current mode is not playback mode\n");
 			return -EINVAL;
 		}
@@ -383,20 +253,20 @@ static long iq_mem_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 static unsigned int iq_mem_poll(struct file *filp,
 	struct poll_table_struct *wait)
 {
-	unsigned mask = 0;
+	unsigned int mask = 0;
 
-	if (NULL == iq.header_info->head_1 || NULL == iq.header_info->head_2)
+	if (iq.header_info->head_1 == NULL || iq.header_info->head_2 == NULL)
 		return POLLERR;
 
 	poll_wait(filp, &iq.wait, wait);
 
-	if (IQ_SLOG_MODE == iq.ch) {
-		if (IQ_BUF_READING == iq.header_info->head_1->WR_RD_FLAG ||
-		    IQ_BUF_READING == iq.header_info->head_2->WR_RD_FLAG) {
+	if (iq.ch == IQ_SLOG_MODE) {
+		if (iq.header_info->head_1->WR_RD_FLAG == IQ_BUF_READING ||
+		    iq.header_info->head_2->WR_RD_FLAG == IQ_BUF_READING) {
 			mask |= (POLLIN | POLLRDNORM);
 		}
-	} else if (PLAY_BACK_MODE == iq.ch) {
-		if (DATA_AP_MOVING == iq.header_info->ipd_head->data_status) {
+	} else if (iq.ch == PLAY_BACK_MODE) {
+		if (iq.header_info->ipd_head->data_status == DATA_AP_MOVING) {
 			pr_err("I/Q playback status DATA_AP_MOVING\n");
 			mask |= (POLLIN | POLLRDNORM);
 		}
@@ -438,13 +308,13 @@ static int iq_mem_nocache_mmap(struct file *filp, struct vm_area_struct *vma)
 
 static int iq_mem_open(struct inode *inode, struct file *filp)
 {
-	pr_info("iq_mem_open called\n");
+	pr_info("%s called\n", __func__);
 	return 0;
 }
 
 static int iq_mem_release(struct inode *inode, struct file *filp)
 {
-	pr_info("iq_mem_release\n");
+	pr_info("%s called\n", __func__);
 	return 0;
 }
 
@@ -496,10 +366,7 @@ static int sprd_iq_parse_dt(struct platform_device *pdev,
 			(unsigned long)iq->base, (unsigned long)iq->size);
 	}
 
-	/* get the cp and ap address mapping on ddr, such as iwhale2,
-	the address 0x00000000 in AP is 0x80000000 in CP, the default
-	mapping_offs is 0
-	*/
+	/* the address 0x0 in AP is 0x80000000 in CP, the default mapping_offs is 0 */
 	iq->mapping_offs = 0;
 
 	if (of_property_read_u32(np, "sprd,mapping-offs", &val) == 0)
@@ -510,14 +377,37 @@ static int sprd_iq_parse_dt(struct platform_device *pdev,
 	return 0;
 }
 
+int in_iqmode(void)
+{
+	struct device_node *cmdline_node;
+	const char *cmdline, *mode;
+	int ret;
+
+	cmdline_node = of_find_node_by_path("/chosen");
+	ret = of_property_read_string(cmdline_node, "bootargs", &cmdline);
+	if (ret) {
+		pr_err("Can't not parse bootargs\n");
+		return 0;
+	}
+
+	mode = strstr(cmdline, "androidboot.mode=iq");
+	if (mode)
+		return 1;
+	else
+		return 0;
+}
+
 static int sprd_iq_probe(struct platform_device *pdev)
 {
 	int ret;
 	struct device *dev = &pdev->dev;
 
-	/* if iq.base == 0, indicate that the  reserved_mem_iq_setup function
-	is not be called, the iq base must be gotten by sprd_iq_parse_dt
-	*/
+	if (!in_iqmode()) {
+		pr_info("Not in iq mode\n");
+		return -ENODEV;
+	}
+	pr_info("In iq mode\n");
+
 	if (iq.base == 0) {
 		ret = sprd_iq_parse_dt(pdev, &iq);
 		if (ret)
@@ -541,12 +431,8 @@ static int sprd_iq_probe(struct platform_device *pdev)
 	}
 
 	init_waitqueue_head(&iq.wait);
-#ifdef CONFIG_SPRD_SIPC_V2
 	iq.vbase = shmem_ram_vmap_nocache(SIPC_ID_LTE, iq.base, iq.size);
-#else
-	iq.vbase = shmem_ram_vmap_nocache(iq.base, iq.size);
-#endif
-	if (NULL == iq.vbase) {
+	if (iq.vbase == NULL) {
 		ret = -ENOMEM;
 		goto err2;
 	}
@@ -566,8 +452,8 @@ static int sprd_iq_probe(struct platform_device *pdev)
 	iq.header_info->head_1->WR_RD_FLAG = IQ_BUF_INIT;
 	iq.header_info->head_2->WR_RD_FLAG = IQ_BUF_INIT;
 
-#ifdef CONFIG_USB_F_VSERIAL
-	kernel_vser_register_callback((void *)sprd_iq_complete, NULL);
+#if IS_ENABLED(CONFIG_USB_F_VSERIAL)
+	_kernel_vser_register_callback((void *)sprd_iq_complete, NULL);
 #endif
 
 	iq.iq_thread = kthread_create(sprd_iq_thread, (void *)&iq, "iq_thread");
@@ -583,11 +469,7 @@ static int sprd_iq_probe(struct platform_device *pdev)
 	return 0;
 
 err3:
-#ifdef CONFIG_SPRD_SIPC_V2
 	shmem_ram_unmap(SIPC_ID_LTE, iq.vbase);
-#else
-	shmem_ram_unmap(iq.vbase);
-#endif
 err2:
 	misc_deregister(&iq_mem_dev);
 err1:
@@ -598,13 +480,8 @@ err0:
 
 static int sprd_iq_remove(struct platform_device *pdev)
 {
-	if (NULL == iq.vbase) {
-	#ifdef CONFIG_SPRD_SIPC_V2
+	if (iq.vbase == NULL)
 		shmem_ram_unmap(SIPC_ID_LTE, iq.vbase);
-	#else
-		shmem_ram_unmap(iq.vbase);
-	#endif
-	}
 
 	kfree(iq.header_info);
 
@@ -628,12 +505,13 @@ static struct platform_driver iq_driver = {
 
 static int __init sprd_iq_init(void)
 {
+	int ret = 0;
+
 	if (!in_iqmode()) {
 		pr_err("no in iq mode\n");
-		return -ENODEV;
+		return ret;
 	}
-	kernel_vser_set_pass_mode(true);
-	pr_debug("in iq mode and register iq driver\n");
+	_kernel_vser_set_pass_mode(true);
 	return platform_driver_register(&iq_driver);
 }
 

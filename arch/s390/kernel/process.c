@@ -29,6 +29,7 @@
 #include <linux/random.h>
 #include <linux/export.h>
 #include <linux/init_task.h>
+#include <asm/cpu_mf.h>
 #include <asm/io.h>
 #include <asm/processor.h>
 #include <asm/vtimer.h>
@@ -36,6 +37,7 @@
 #include <asm/irq.h>
 #include <asm/nmi.h>
 #include <asm/smp.h>
+#include <asm/stacktrace.h>
 #include <asm/switch_to.h>
 #include <asm/runtime_instr.h>
 #include "entry.h"
@@ -44,26 +46,23 @@ asmlinkage void ret_from_fork(void) asm ("ret_from_fork");
 
 extern void kernel_thread_starter(void);
 
-/*
- * Free current thread data structures etc..
- */
-void exit_thread(struct task_struct *tsk)
-{
-	if (tsk == current)
-		exit_thread_gs();
-}
-
 void flush_thread(void)
 {
 }
 
-void release_thread(struct task_struct *dead_task)
+void arch_setup_new_exec(void)
 {
+	if (S390_lowcore.current_pid != current->pid) {
+		S390_lowcore.current_pid = current->pid;
+		if (test_facility(40))
+			lpp(&S390_lowcore.lpp);
+	}
 }
 
 void arch_release_task_struct(struct task_struct *tsk)
 {
 	runtime_instr_release(tsk);
+	guarded_storage_release(tsk);
 }
 
 int arch_dup_task_struct(struct task_struct *dst, struct task_struct *src)
@@ -106,6 +105,7 @@ int copy_thread_tls(unsigned long clone_flags, unsigned long new_stackp,
 	p->thread.system_timer = 0;
 	p->thread.hardirq_timer = 0;
 	p->thread.softirq_timer = 0;
+	p->thread.last_break = 1;
 
 	frame->sf.back_chain = 0;
 	/* new return point is ret_from_fork */
@@ -197,12 +197,12 @@ unsigned long get_wchan(struct task_struct *p)
 		goto out;
 	}
 	for (count = 0; count < 16; count++) {
-		sf = (struct stack_frame *) sf->back_chain;
+		sf = (struct stack_frame *)READ_ONCE_NOCHECK(sf->back_chain);
 		if (sf <= low || sf > high) {
 			return_address = 0;
 			goto out;
 		}
-		return_address = sf->gprs[8];
+		return_address = READ_ONCE_NOCHECK(sf->gprs[8]);
 		if (!in_sched_functions(return_address))
 			goto out;
 	}

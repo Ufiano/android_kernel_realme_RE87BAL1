@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 #ifndef _LMC_VAR_H_
 #define _LMC_VAR_H_
 
@@ -10,9 +11,6 @@
   * Rob Braun (bbraun@vix.com),
   * Michael Graff (explorer@vix.com) and
   * Matt Thomas (matt@3am-software.com).
-  *
-  * This software may be used and distributed according to the terms
-  * of the GNU General Public License version 2, incorporated herein by reference.
   */
 
 #include <linux/timer.h>
@@ -46,11 +44,9 @@ typedef struct lmc___ctl lmc_ctl_t;
 #define LMC_CSR_WRITE(sc, reg, val) \
 	outl((val), (sc)->lmc_csrs.reg)
 
-//#ifdef _LINUX_DELAY_H
 //	#define SLOW_DOWN_IO udelay(2);
 //	#undef __SLOW_DOWN_IO
 //	#define __SLOW_DOWN_IO udelay(2);
-//#endif
 
 #define DELAY(n) SLOW_DOWN_IO
 

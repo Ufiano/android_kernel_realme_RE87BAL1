@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/slab.h>
@@ -22,11 +14,9 @@
 #define CREATE_TRACE_POINTS
 #include "gsp_trace.h"
 
-void gsp_workqueue_load(struct gsp_kcfg *kcfg,
-			struct gsp_workqueue *wq)
+void gsp_workqueue_load(struct gsp_kcfg *kcfg, struct gsp_workqueue *wq)
 {
-	if (IS_ERR_OR_NULL(kcfg)
-	    || IS_ERR_OR_NULL(wq)) {
+	if (IS_ERR_OR_NULL(kcfg) || IS_ERR_OR_NULL(wq)) {
 		GSP_ERR("work queue load params error\n");
 		return;
 	}
@@ -72,7 +62,7 @@ struct gsp_core *gsp_workqueue_to_core(struct gsp_workqueue *wq)
 void gsp_workqueue_filled_invalidate(struct gsp_workqueue *wq)
 {
 	struct gsp_kcfg *kcfg = NULL;
-	int i = 0;
+	int i;
 
 	if (IS_ERR_OR_NULL(wq)) {
 		GSP_ERR("work queue destroy params error\n");
@@ -83,7 +73,7 @@ void gsp_workqueue_filled_invalidate(struct gsp_workqueue *wq)
 		return;
 
 	GSP_DEBUG("wq invalidate fill_cnt: %d\n",
-			 gsp_workqueue_get_fill_kcfg_num(wq));
+		gsp_workqueue_get_fill_kcfg_num(wq));
 
 	for (i = 0; i < gsp_workqueue_get_fill_kcfg_num(wq); ) {
 		kcfg = gsp_workqueue_pull(wq);
@@ -122,13 +112,11 @@ void gsp_workqueue_free(struct gsp_workqueue *wq)
 	kfree((void *)wq);
 }
 
-int gsp_workqueue_init(struct gsp_workqueue *wq,
-		       struct gsp_core *core)
+int gsp_workqueue_init(struct gsp_workqueue *wq, struct gsp_core *core)
 {
 	struct gsp_kcfg *kcfg = NULL;
 
-	if (IS_ERR_OR_NULL(wq)
-	    || gsp_core_verify(core)) {
+	if (IS_ERR_OR_NULL(wq) || gsp_core_verify(core)) {
 		GSP_ERR("initialize null work queue\n");
 		return -1;
 	}
@@ -170,8 +158,7 @@ struct gsp_kcfg *gsp_workqueue_acquire(struct gsp_workqueue *wq)
 
 	mutex_lock(&wq->empty_lock);
 	if (wq->empty_cnt > 0) {
-		kcfg = list_first_entry(&wq->empty_head,
-					struct gsp_kcfg, list);
+		kcfg = list_first_entry(&wq->empty_head, struct gsp_kcfg, list);
 		if (!gsp_kcfg_verify(kcfg)) {
 			list_del_init(&kcfg->list);
 			wq->empty_cnt--;
@@ -182,11 +169,9 @@ struct gsp_kcfg *gsp_workqueue_acquire(struct gsp_workqueue *wq)
 	return kcfg;
 }
 
-void gsp_workqueue_cancel(struct gsp_kcfg *kcfg,
-			  struct gsp_workqueue *wq)
+void gsp_workqueue_cancel(struct gsp_kcfg *kcfg, struct gsp_workqueue *wq)
 {
-	if (gsp_kcfg_verify(kcfg)
-	    || IS_ERR_OR_NULL(wq)) {
+	if (gsp_kcfg_verify(kcfg) || IS_ERR_OR_NULL(wq)) {
 		GSP_ERR("work queue put params error\n");
 		return;
 	}
@@ -199,32 +184,28 @@ void gsp_workqueue_cancel(struct gsp_kcfg *kcfg,
 	}
 }
 
-void gsp_workqueue_put(struct gsp_kcfg *kcfg,
-		       struct gsp_workqueue *wq)
+void gsp_workqueue_put(struct gsp_kcfg *kcfg, struct gsp_workqueue *wq)
 {
-	if (gsp_kcfg_verify(kcfg)
-	    || IS_ERR_OR_NULL(wq)) {
+	if (gsp_kcfg_verify(kcfg) || IS_ERR_OR_NULL(wq)) {
 		GSP_ERR("work queue put params error\n");
 		return;
 	}
 
 	mutex_lock(&wq->empty_lock);
-		list_add_tail(&kcfg->list, &wq->empty_head);
-		wq->empty_cnt++;
+	list_add_tail(&kcfg->list, &wq->empty_head);
+	wq->empty_cnt++;
 	mutex_unlock(&wq->empty_lock);
 
 	trace_kcfg_put(kcfg);
 }
 
-int gsp_workqueue_push(struct gsp_kcfg *kcfg,
-		       struct gsp_workqueue *wq)
+int gsp_workqueue_push(struct gsp_kcfg *kcfg, struct gsp_workqueue *wq)
 {
 	int ret = -1;
 	int cnt = 0;
 	struct gsp_core *core = NULL;
 
-	if (gsp_kcfg_verify(kcfg)
-	    || IS_ERR_OR_NULL(wq)) {
+	if (gsp_kcfg_verify(kcfg) || IS_ERR_OR_NULL(wq)) {
 		GSP_ERR("work queue push params error\n");
 		return ret;
 	}

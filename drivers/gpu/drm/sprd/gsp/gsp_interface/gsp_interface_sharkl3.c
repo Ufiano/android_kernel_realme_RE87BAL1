@@ -1,16 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2017 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
-
 
 #include <linux/mfd/syscon.h>
 #include <linux/regmap.h>
@@ -19,9 +10,8 @@
 #include "../gsp_debug.h"
 #include "../gsp_interface.h"
 
-
 int gsp_interface_sharkl3_parse_dt(struct gsp_interface *intf,
-				  struct device_node *node)
+				struct device_node *node)
 {
 	int status = 0;
 	struct gsp_interface_sharkl3 *gsp_interface = NULL;
@@ -61,7 +51,6 @@ int gsp_interface_sharkl3_prepare(struct gsp_interface *intf)
 
 	gsp_interface = (struct gsp_interface_sharkl3 *)intf;
 
-
 	ret = clk_prepare_enable(gsp_interface->clk_aon_apb_disp_eb);
 	if (ret) {
 		GSP_ERR("enable interface[%s] clk_aon_apb_disp_eb failed\n",
@@ -73,12 +62,11 @@ int gsp_interface_sharkl3_prepare(struct gsp_interface *intf)
 
 clk_aon_apb_disp_eb_disable:
 	clk_disable_unprepare(gsp_interface->clk_aon_apb_disp_eb);
-	GSP_ERR("interface[%s] prepare ERR !\n",
-			  gsp_interface_to_name(intf));
+	GSP_ERR("interface[%s] prepare ERR !\n", gsp_interface_to_name(intf));
 
 exit:
 	GSP_DEBUG("interface[%s] prepare success\n",
-			  gsp_interface_to_name(intf));
+		gsp_interface_to_name(intf));
 	return ret;
 }
 
@@ -96,7 +84,7 @@ int gsp_interface_sharkl3_unprepare(struct gsp_interface *intf)
 	clk_disable_unprepare(gsp_interface->clk_aon_apb_disp_eb);
 
 	GSP_DEBUG("interface[%s] unprepare success\n",
-		  gsp_interface_to_name(intf));
+		gsp_interface_to_name(intf));
 	return 0;
 }
 

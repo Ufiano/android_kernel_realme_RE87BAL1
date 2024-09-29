@@ -39,6 +39,8 @@ const struct firmware *fw_entry = NULL;
 static size_t fw_need_write_size = 0;
 static uint8_t *fwbuf = NULL;
 
+//extern ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_t *pos);
+
 struct nvt_ts_bin_map {
 	char name[12];
 	uint32_t BIN_addr;
@@ -390,6 +392,8 @@ return:
 	n.a.
 *******************************************************/
 loff_t file_offset = 0;
+//for GKI
+#if 0
 static int32_t nvt_read_ram_and_save_file(uint32_t addr, uint16_t len, char *name)
 {
 	char file[256] = "";
@@ -410,19 +414,21 @@ static int32_t nvt_read_ram_and_save_file(uint32_t addr, uint16_t len, char *nam
 
 	org_fs = get_fs();
 	set_fs(KERNEL_DS);
+
 	fp = filp_open(file, O_RDWR | O_CREAT, 0644);
 	if (fp == NULL || IS_ERR(fp)) {
 		ret = -ENOMEM;
 		NVT_ERR("open file failed\n");
 		goto open_file_fail;
 	}
-
+ 
 	/* SPI read */
 	//---set xdata index to addr---
 	nvt_set_page(addr);
 
 	fbufp[0] = addr & 0x7F;	//offset
 	CTP_SPI_READ(ts->client, fbufp, len+1);
+
 
 	/* Write to file */
 	ret = vfs_write(fp, (char __user *)fbufp+1, len, &file_offset);
@@ -435,6 +441,7 @@ static int32_t nvt_read_ram_and_save_file(uint32_t addr, uint16_t len, char *nam
 
 open_file_fail:
 	set_fs(org_fs);
+
 	if (!IS_ERR_OR_NULL(fp)) {
 		filp_close(fp, NULL);
 		fp = NULL;
@@ -447,6 +454,13 @@ open_file_fail:
 alloc_buf_fail:
 
 	return ret;
+}
+#endif
+
+static int32_t nvt_read_ram_and_save_file(uint32_t addr, uint16_t len, char *name)
+{
+	NVT_ERR("%s:for GKI, cancel save file!\n", __func__);
+	return 0;
 }
 
 /*******************************************************

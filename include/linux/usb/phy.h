@@ -13,6 +13,7 @@
 #include <linux/extcon.h>
 #include <linux/notifier.h>
 #include <linux/usb.h>
+#include <linux/android_kabi.h>
 #include <uapi/linux/usb/charger.h>
 
 enum usb_phy_interface {
@@ -126,9 +127,6 @@ struct usb_phy {
 	int	(*init)(struct usb_phy *x);
 	void	(*shutdown)(struct usb_phy *x);
 
-	/* do additional settings after complete initialization */
-	int	(*post_init)(struct usb_phy *x);
-
 	/* enable/disable VBUS */
 	int	(*set_vbus)(struct usb_phy *x, int on);
 
@@ -158,32 +156,8 @@ struct usb_phy {
 	 * manually detect the charger type.
 	 */
 	enum usb_charger_type (*charger_detect)(struct usb_phy *x);
-	/*
-	 * Charger re-detection method can be implemented if you need to
-	 * manually detect the charger type.
-	 */
-	enum usb_charger_type (*retry_charger_detect)(struct usb_phy *x);
 
-	/* reset the PHY */
-	int	(*reset_phy)(struct usb_phy *x);
-
-	void	(*set_emphasis)(struct usb_phy *x, bool enabled);
-};
-
-/**
- * struct usb_phy_bind - represent the binding for the phy
- * @dev_name: the device name of the device that will bind to the phy
- * @phy_dev_name: the device name of the phy
- * @index: used if a single controller uses multiple phys
- * @phy: reference to the phy
- * @list: to maintain a linked list of the binding information
- */
-struct usb_phy_bind {
-	const char	*dev_name;
-	const char	*phy_dev_name;
-	u8		index;
-	struct usb_phy	*phy;
-	struct list_head list;
+	ANDROID_KABI_RESERVE(1);
 };
 
 /* for board-specific init logic */
@@ -217,16 +191,6 @@ usb_phy_init(struct usb_phy *x)
 	return 0;
 }
 
-
-static inline int
-usb_phy_post_init(struct usb_phy *x)
-{
-	if (x && x->post_init)
-		return x->post_init(x);
-
-	return 0;
-}
-
 static inline void
 usb_phy_shutdown(struct usb_phy *x)
 {
@@ -252,37 +216,17 @@ usb_phy_vbus_off(struct usb_phy *x)
 	return x->set_vbus(x, false);
 }
 
-static inline int usb_phy_reset(struct usb_phy *x)
-{
-	if (!x || !x->reset_phy)
-		return 0;
-
-	return x->reset_phy(x);
-}
-
-static inline void usb_phy_emphasis_set(struct usb_phy *x, bool enabled)
-{
-	if (!x || !x->set_emphasis)
-		return;
-
-	x->set_emphasis(x, enabled);
-}
-
 /* for usb host and peripheral controller drivers */
 #if IS_ENABLED(CONFIG_USB_PHY)
 extern struct usb_phy *usb_get_phy(enum usb_phy_type type);
 extern struct usb_phy *devm_usb_get_phy(struct device *dev,
 	enum usb_phy_type type);
-extern struct usb_phy *usb_get_phy_dev(struct device *dev, u8 index);
-extern struct usb_phy *devm_usb_get_phy_dev(struct device *dev, u8 index);
 extern struct usb_phy *devm_usb_get_phy_by_phandle(struct device *dev,
 	const char *phandle, u8 index);
 extern struct usb_phy *devm_usb_get_phy_by_node(struct device *dev,
 	struct device_node *node, struct notifier_block *nb);
 extern void usb_put_phy(struct usb_phy *);
 extern void devm_usb_put_phy(struct device *dev, struct usb_phy *x);
-extern int usb_bind_phy(const char *dev_name, u8 index,
-				const char *phy_dev_name);
 extern void usb_phy_set_event(struct usb_phy *x, unsigned long event);
 extern void usb_phy_set_charger_current(struct usb_phy *usb_phy,
 					unsigned int mA);
@@ -298,16 +242,6 @@ static inline struct usb_phy *usb_get_phy(enum usb_phy_type type)
 
 static inline struct usb_phy *devm_usb_get_phy(struct device *dev,
 	enum usb_phy_type type)
-{
-	return ERR_PTR(-ENXIO);
-}
-
-static inline struct usb_phy *usb_get_phy_dev(struct device *dev, u8 index)
-{
-	return ERR_PTR(-ENXIO);
-}
-
-static inline struct usb_phy *devm_usb_get_phy_dev(struct device *dev, u8 index)
 {
 	return ERR_PTR(-ENXIO);
 }
@@ -330,12 +264,6 @@ static inline void usb_put_phy(struct usb_phy *x)
 
 static inline void devm_usb_put_phy(struct device *dev, struct usb_phy *x)
 {
-}
-
-static inline int usb_bind_phy(const char *dev_name, u8 index,
-				const char *phy_dev_name)
-{
-	return -EOPNOTSUPP;
 }
 
 static inline void usb_phy_set_event(struct usb_phy *x, unsigned long event)

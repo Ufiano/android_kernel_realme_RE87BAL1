@@ -28,7 +28,7 @@ endif
 
 ccflags-y += -DBSP_SIL_PLAT_SPRD
 ccflags-y += -DCONFIG_SILEAD_FP_PLATFORM
-obj-y += silead_fp.o
+obj-m += silead_fp.o
 
 
 

@@ -1,4 +1,4 @@
-/*
+/* SPDX-License-Identifier: GPL-2.0
  * File:shub_opcode.h
  * Author:bao.yue@spreadtrum.com
  *

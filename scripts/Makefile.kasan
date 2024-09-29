@@ -1,4 +1,9 @@
 # SPDX-License-Identifier: GPL-2.0
+ifdef CONFIG_KASAN
+CFLAGS_KASAN_NOSANITIZE := -fno-builtin
+KASAN_SHADOW_OFFSET ?= $(CONFIG_KASAN_SHADOW_OFFSET)
+endif
+
 ifdef CONFIG_KASAN_GENERIC
 
 ifdef CONFIG_KASAN_INLINE
@@ -7,16 +12,7 @@ else
 	call_threshold := 0
 endif
 
-KASAN_SHADOW_OFFSET ?= $(CONFIG_KASAN_SHADOW_OFFSET)
-
 CFLAGS_KASAN_MINIMAL := -fsanitize=kernel-address
-
-ifeq ($(call cc-option, $(CFLAGS_KASAN_MINIMAL) -Werror),)
-    ifneq ($(CONFIG_COMPILE_TEST),y)
-        $(error Cannot use CONFIG_KASAN_GENERIC: \
-          -fsanitize=kernel-address is not supported by compiler)
-    endif
-endif
 
 cc-param = $(call cc-option, -mllvm -$(1), $(call cc-option, --param $(1)))
 
@@ -41,15 +37,6 @@ endif # CONFIG_KASAN_GENERIC
 
 ifdef CONFIG_KASAN_SW_TAGS
 
-CFLAGS_KASAN_MINIMAL := -fsanitize=kernel-hwaddress
-
-ifeq ($(call cc-option, $(CFLAGS_KASAN_MINIMAL) -Werror),)
-    ifneq ($(CONFIG_COMPILE_TEST),y)
-        $(error Cannot use CONFIG_KASAN_SW_TAGS: \
-          -fsanitize=kernel-hwaddress is not supported by compiler)
-    endif
-endif
-
 ifdef CONFIG_KASAN_INLINE
     instrumentation_flags := -mllvm -hwasan-mapping-offset=$(KASAN_SHADOW_OFFSET)
 else
@@ -61,7 +48,3 @@ CFLAGS_KASAN := -fsanitize=kernel-hwaddress \
 		$(instrumentation_flags)
 
 endif # CONFIG_KASAN_SW_TAGS
-
-ifdef CONFIG_KASAN
-CFLAGS_KASAN_NOSANITIZE := -fno-builtin
-endif

@@ -164,10 +164,10 @@ static void estimate_pid_constants(struct thermal_zone_device *tz,
 			temperature_threshold;
 
 	if (!tz->tzp->k_i || force)
-		tz->tzp->k_i = int_to_frac(2) / 1000;
+		tz->tzp->k_i = int_to_frac(10) / 1000;
 	/*
-	 * The default for k_d, integral_cutoff and clear_integral_cutoff
-	 * is 0, so we can leave them as they are.
+	 * The default for k_d and integral_cutoff is 0, so we can
+	 * leave them as they are.
 	 */
 }
 
@@ -214,10 +214,6 @@ static u32 pid_controller(struct thermal_zone_device *tz,
 
 	/* Calculate the proportional term */
 	p = mul_frac(err < 0 ? tz->tzp->k_po : tz->tzp->k_pu, err);
-	if (tz->tzp->clear_integral_cutoff)
-		if ((err >= int_to_frac(tz->tzp->clear_integral_cutoff)) &&
-			(params->err_integral < 0))
-			params->err_integral = 0;
 
 	/*
 	 * Calculate the integral term
@@ -321,17 +317,24 @@ static void divvy_up_power(u32 *req_power, u32 *max_power, int num_actors,
 
 	if (!extra_power)
 		return;
+
 	/*
 	 * Re-divvy the reclaimed extra among actors based on
 	 * how far they are from the max
 	 */
 	extra_power = min(extra_power, capped_extra_power);
 	if (capped_extra_power > 0)
+#ifdef CONFIG_SPRD_THERMAL_POLICY
 		for (i = 0; i < num_actors; i++) {
 			u64 extra_range = (u64)extra_actor_power[i] * extra_power;
 			granted_power[i] += DIV_ROUND_CLOSEST_ULL(extra_range,
-			capped_extra_power);
+							capped_extra_power);
 		}
+#else
+		for (i = 0; i < num_actors; i++)
+			granted_power[i] += (extra_actor_power[i] *
+					extra_power) / capped_extra_power;
+#endif
 }
 
 static int allocate_power(struct thermal_zone_device *tz,
@@ -539,23 +542,6 @@ static void allow_maximum_power(struct thermal_zone_device *tz)
 		instance->cdev->updated = false;
 		mutex_unlock(&instance->cdev->lock);
 		thermal_cdev_update(instance->cdev);
-		if (instance->cdev->ops->online_everything)
-			instance->cdev->ops->online_everything(instance->cdev);
-	}
-	mutex_unlock(&tz->lock);
-}
-
-static void allow_maximum_freq(struct thermal_zone_device *tz)
-{
-	struct thermal_instance *instance;
-
-	mutex_lock(&tz->lock);
-	list_for_each_entry(instance, &tz->thermal_instances, tz_node) {
-		if (!cdev_is_power_actor(instance->cdev))
-			continue;
-
-		if (instance->cdev->ops->update_max_freq)
-			instance->cdev->ops->update_max_freq(instance->cdev, tz);
 	}
 	mutex_unlock(&tz->lock);
 }
@@ -604,12 +590,14 @@ static int power_allocator_bind(struct thermal_zone_device *tz)
 					       control_temp, false);
 	}
 
-	tz->tzp->thm_enable = 1;
-	tz->tzp->reset_done = 0;
 	reset_pid_controller(params);
 
 	tz->governor_data = params;
 
+#ifdef CONFIG_SPRD_THERMAL_DEBUG
+	tz->tzp->thm_enable = 1;
+	tz->tzp->reset_done = 0;
+#endif
 	return 0;
 
 free_params:
@@ -633,6 +621,21 @@ static void power_allocator_unbind(struct thermal_zone_device *tz)
 	tz->governor_data = NULL;
 }
 
+#ifdef CONFIG_SPRD_THERMAL_MAX_FREQ_LIMIT
+static void allow_maximum_freq(struct thermal_zone_device *tz)
+{
+	struct thermal_instance *instance;
+
+	mutex_lock(&tz->lock);
+	list_for_each_entry(instance, &tz->thermal_instances, tz_node) {
+		if (!cdev_is_power_actor(instance->cdev))
+			continue;
+		cpufreq_check_cdev(instance->cdev, tz);
+	}
+	mutex_unlock(&tz->lock);
+}
+#endif
+
 static int power_allocator_throttle(struct thermal_zone_device *tz, int trip)
 {
 	int ret;
@@ -646,7 +649,11 @@ static int power_allocator_throttle(struct thermal_zone_device *tz, int trip)
 	if (trip != params->trip_max_desired_temperature)
 		return 0;
 
+#ifdef CONFIG_SPRD_THERMAL_MAX_FREQ_LIMIT
 	allow_maximum_freq(tz);
+#endif
+
+#ifdef CONFIG_SPRD_THERMAL_DEBUG
 	if (!tz->tzp->thm_enable) {
 		if (!tz->tzp->reset_done) {
 			tz->passive = 0;
@@ -657,7 +664,7 @@ static int power_allocator_throttle(struct thermal_zone_device *tz, int trip)
 		return 0;
 	} else
 		tz->tzp->reset_done = 0;
-
+#endif
 	ret = tz->ops->get_trip_temp(tz, params->trip_switch_on,
 				     &switch_on_temp);
 	if (!ret && (tz->temperature < switch_on_temp)) {
@@ -687,13 +694,4 @@ static struct thermal_governor thermal_gov_power_allocator = {
 	.unbind_from_tz	= power_allocator_unbind,
 	.throttle	= power_allocator_throttle,
 };
-
-int thermal_gov_power_allocator_register(void)
-{
-	return thermal_register_governor(&thermal_gov_power_allocator);
-}
-
-void thermal_gov_power_allocator_unregister(void)
-{
-	thermal_unregister_governor(&thermal_gov_power_allocator);
-}
+THERMAL_GOVERNOR_DECLARE(thermal_gov_power_allocator);

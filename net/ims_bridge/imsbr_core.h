@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 #ifndef _IMSBR_CORE_H
 #define _IMSBR_CORE_H
 
@@ -111,7 +112,7 @@ struct imsbr_stat {
 
 extern struct imsbr_stat __percpu *imsbr_stats;
 
-#define IMSBR_STAT_INC(field)	this_cpu_inc(imsbr_stats->field)
+#define IMSBR_STAT_INC(field)	this_cpu_inc(field)
 
 struct imsbr_simcard {
 	int		init_call;
@@ -153,6 +154,21 @@ static inline bool imsbr_in_lte2wifi(int simcard)
 	return false;
 }
 
+#ifdef CONFIG_SPRD_IMS_BRIDGE_TEST
+
+struct call_c_function {
+	void (*cptuple_update) (struct imsbr_msghdr *msg, unsigned long add);
+	void (*cp_sync_esp) (struct imsbr_msghdr *msg, unsigned long unused);
+	void (*handover_state) (struct imsbr_msghdr *msg, unsigned long unused);
+	void (*cptuple_reset) (struct imsbr_msghdr *msg, unsigned long unused);
+	void (*cp_reset) (struct imsbr_msghdr *msg, unsigned long unused);
+	void (*echo_ping) (struct imsbr_msghdr *msg, unsigned long unused);
+	void (*echo_pong) (struct imsbr_msghdr *msg, unsigned long unused);
+};
+void call_core_function(struct call_c_function *ccf);
+
+#endif
+
 void imsbr_set_callstate(enum imsbr_call_state state, u32 simcard);
 
 void imsbr_set_calltype(enum imsbr_lowpower_state lp_st);
@@ -176,5 +192,9 @@ void imsbr_process_msg(struct imsbr_sipc *sipc, struct sblock *blk,
 
 int imsbr_core_init(void);
 void imsbr_core_exit(void);
+
+//TODO temp modification
+int imsbr_esp_update_esphs(char *esp);
+void imsbr_esp_update_lp_st(int lp_st);
 
 #endif

@@ -1,4 +1,4 @@
 #
 # Makefile for PN557 based NFC driver
 #
-obj-y     += nq-nci.o
+obj-m     += nq-nci.o

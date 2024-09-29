@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  *	fs/libfs.c
  *	Library for filesystems writers.
@@ -16,6 +17,8 @@
 #include <linux/exportfs.h>
 #include <linux/writeback.h>
 #include <linux/buffer_head.h> /* sync_mapping_buffers */
+#include <linux/fs_context.h>
+#include <linux/pseudo_fs.h>
 #include <linux/unicode.h>
 #include <linux/fscrypt.h>
 
@@ -91,14 +94,13 @@ EXPORT_SYMBOL(dcache_dir_close);
 /*
  * Returns an element of siblings' list.
  * We are looking for <count>th positive after <p>; if
- * found, dentry is grabbed and passed to caller via *<res>.
- * If no such element exists, the anchor of list is returned
- * and *<res> is set to NULL.
+ * found, dentry is grabbed and returned to caller.
+ * If no such element exists, NULL is returned.
  */
-static struct list_head *scan_positives(struct dentry *cursor,
+static struct dentry *scan_positives(struct dentry *cursor,
 					struct list_head *p,
 					loff_t count,
-					struct dentry **res)
+					struct dentry *last)
 {
 	struct dentry *dentry = cursor->d_parent, *found = NULL;
 
@@ -126,9 +128,8 @@ static struct list_head *scan_positives(struct dentry *cursor,
 		}
 	}
 	spin_unlock(&dentry->d_lock);
-	dput(*res);
-	*res = found;
-	return p;
+	dput(last);
+	return found;
 }
 
 loff_t dcache_dir_lseek(struct file *file, loff_t offset, int whence)
@@ -137,33 +138,32 @@ loff_t dcache_dir_lseek(struct file *file, loff_t offset, int whence)
 	switch (whence) {
 		case 1:
 			offset += file->f_pos;
+			/* fall through */
 		case 0:
 			if (offset >= 0)
 				break;
+			/* fall through */
 		default:
 			return -EINVAL;
 	}
 	if (offset != file->f_pos) {
 		struct dentry *cursor = file->private_data;
 		struct dentry *to = NULL;
-		struct list_head *p;
 
-		file->f_pos = offset;
 		inode_lock_shared(dentry->d_inode);
 
-		if (file->f_pos > 2) {
-			p = scan_positives(cursor, &dentry->d_subdirs,
-					   file->f_pos - 2, &to);
-			spin_lock(&dentry->d_lock);
-			list_move(&cursor->d_child, p);
-			spin_unlock(&dentry->d_lock);
-		} else {
-			spin_lock(&dentry->d_lock);
+		if (offset > 2)
+			to = scan_positives(cursor, &dentry->d_subdirs,
+					    offset - 2, NULL);
+		spin_lock(&dentry->d_lock);
+		if (to)
+			list_move(&cursor->d_child, &to->d_child);
+		else
 			list_del_init(&cursor->d_child);
-			spin_unlock(&dentry->d_lock);
-		}
-
+		spin_unlock(&dentry->d_lock);
 		dput(to);
+
+		file->f_pos = offset;
 
 		inode_unlock_shared(dentry->d_inode);
 	}
@@ -196,17 +196,23 @@ int dcache_readdir(struct file *file, struct dir_context *ctx)
 
 	if (ctx->pos == 2)
 		p = anchor;
-	else
+	else if (!list_empty(&cursor->d_child))
 		p = &cursor->d_child;
+	else
+		return 0;
 
-	while ((p = scan_positives(cursor, p, 1, &next)) != anchor) {
+	while ((next = scan_positives(cursor, p, 1, next)) != NULL) {
 		if (!dir_emit(ctx, next->d_name.name, next->d_name.len,
 			      d_inode(next)->i_ino, dt_type(d_inode(next))))
 			break;
 		ctx->pos++;
+		p = &next->d_child;
 	}
 	spin_lock(&dentry->d_lock);
-	list_move_tail(&cursor->d_child, p);
+	if (next)
+		list_move_tail(&cursor->d_child, &next->d_child);
+	else
+		list_del_init(&cursor->d_child);
 	spin_unlock(&dentry->d_lock);
 	dput(next);
 
@@ -239,34 +245,22 @@ static const struct super_operations simple_super_operations = {
 	.statfs		= simple_statfs,
 };
 
-/*
- * Common helper for pseudo-filesystems (sockfs, pipefs, bdev - stuff that
- * will never be mountable)
- */
-struct dentry *mount_pseudo_xattr(struct file_system_type *fs_type, char *name,
-	const struct super_operations *ops, const struct xattr_handler **xattr,
-	const struct dentry_operations *dops, unsigned long magic)
+static int pseudo_fs_fill_super(struct super_block *s, struct fs_context *fc)
 {
-	struct super_block *s;
-	struct dentry *dentry;
+	struct pseudo_fs_context *ctx = fc->fs_private;
 	struct inode *root;
-	struct qstr d_name = QSTR_INIT(name, strlen(name));
-
-	s = sget_userns(fs_type, NULL, set_anon_super, MS_KERNMOUNT|MS_NOUSER,
-			&init_user_ns, NULL);
-	if (IS_ERR(s))
-		return ERR_CAST(s);
 
 	s->s_maxbytes = MAX_LFS_FILESIZE;
 	s->s_blocksize = PAGE_SIZE;
 	s->s_blocksize_bits = PAGE_SHIFT;
-	s->s_magic = magic;
-	s->s_op = ops ? ops : &simple_super_operations;
-	s->s_xattr = xattr;
+	s->s_magic = ctx->magic;
+	s->s_op = ctx->ops ?: &simple_super_operations;
+	s->s_xattr = ctx->xattr;
 	s->s_time_gran = 1;
 	root = new_inode(s);
 	if (!root)
-		goto Enomem;
+		return -ENOMEM;
+
 	/*
 	 * since this is the first inode, make it number 1. New inodes created
 	 * after this must take care not to collide with it (by passing
@@ -275,22 +269,48 @@ struct dentry *mount_pseudo_xattr(struct file_system_type *fs_type, char *name,
 	root->i_ino = 1;
 	root->i_mode = S_IFDIR | S_IRUSR | S_IWUSR;
 	root->i_atime = root->i_mtime = root->i_ctime = current_time(root);
-	dentry = __d_alloc(s, &d_name);
-	if (!dentry) {
-		iput(root);
-		goto Enomem;
-	}
-	d_instantiate(dentry, root);
-	s->s_root = dentry;
-	s->s_d_op = dops;
-	s->s_flags |= MS_ACTIVE;
-	return dget(s->s_root);
-
-Enomem:
-	deactivate_locked_super(s);
-	return ERR_PTR(-ENOMEM);
+	s->s_root = d_make_root(root);
+	if (!s->s_root)
+		return -ENOMEM;
+	s->s_d_op = ctx->dops;
+	return 0;
 }
-EXPORT_SYMBOL(mount_pseudo_xattr);
+
+static int pseudo_fs_get_tree(struct fs_context *fc)
+{
+	return get_tree_nodev(fc, pseudo_fs_fill_super);
+}
+
+static void pseudo_fs_free(struct fs_context *fc)
+{
+	kfree(fc->fs_private);
+}
+
+static const struct fs_context_operations pseudo_fs_context_ops = {
+	.free		= pseudo_fs_free,
+	.get_tree	= pseudo_fs_get_tree,
+};
+
+/*
+ * Common helper for pseudo-filesystems (sockfs, pipefs, bdev - stuff that
+ * will never be mountable)
+ */
+struct pseudo_fs_context *init_pseudo(struct fs_context *fc,
+					unsigned long magic)
+{
+	struct pseudo_fs_context *ctx;
+
+	ctx = kzalloc(sizeof(struct pseudo_fs_context), GFP_KERNEL);
+	if (likely(ctx)) {
+		ctx->magic = magic;
+		fc->fs_private = ctx;
+		fc->ops = &pseudo_fs_context_ops;
+		fc->sb_flags |= SB_NOUSER;
+		fc->global = true;
+	}
+	return ctx;
+}
+EXPORT_SYMBOL(init_pseudo);
 
 int simple_open(struct inode *inode, struct file *file)
 {
@@ -455,8 +475,7 @@ EXPORT_SYMBOL(simple_write_begin);
 
 /**
  * simple_write_end - .write_end helper for non-block-device FSes
- * @available: See .write_end of address_space_operations
- * @file: 		"
+ * @file: See .write_end of address_space_operations
  * @mapping: 		"
  * @pos: 		"
  * @len: 		"
@@ -584,7 +603,7 @@ int simple_pin_fs(struct file_system_type *type, struct vfsmount **mount, int *c
 	spin_lock(&pin_fs_lock);
 	if (unlikely(!*mount)) {
 		spin_unlock(&pin_fs_lock);
-		mnt = vfs_kern_mount(type, MS_KERNMOUNT, type->name, NULL);
+		mnt = vfs_kern_mount(type, SB_KERNMOUNT, type->name, NULL);
 		if (IS_ERR(mnt))
 			return PTR_ERR(mnt);
 		spin_lock(&pin_fs_lock);
@@ -870,7 +889,7 @@ ssize_t simple_attr_write(struct file *file, const char __user *buf,
 			  size_t len, loff_t *ppos)
 {
 	struct simple_attr *attr;
-	u64 val;
+	unsigned long long val;
 	size_t size;
 	ssize_t ret;
 
@@ -888,7 +907,9 @@ ssize_t simple_attr_write(struct file *file, const char __user *buf,
 		goto out;
 
 	attr->set_buf[size] = '\0';
-	val = simple_strtoll(attr->set_buf, NULL, 0);
+	ret = kstrtoull(attr->set_buf, 0, &val);
+	if (ret)
+		goto out;
 	ret = attr->set(attr->data, val);
 	if (ret == 0)
 		ret = len; /* on success, claim we got the whole input */
@@ -1068,6 +1089,45 @@ int noop_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 }
 EXPORT_SYMBOL(noop_fsync);
 
+int noop_set_page_dirty(struct page *page)
+{
+	/*
+	 * Unlike __set_page_dirty_no_writeback that handles dirty page
+	 * tracking in the page object, dax does all dirty tracking in
+	 * the inode address_space in response to mkwrite faults. In the
+	 * dax case we only need to worry about potentially dirty CPU
+	 * caches, not dirty page cache pages to write back.
+	 *
+	 * This callback is defined to prevent fallback to
+	 * __set_page_dirty_buffers() in set_page_dirty().
+	 */
+	return 0;
+}
+EXPORT_SYMBOL_GPL(noop_set_page_dirty);
+
+void noop_invalidatepage(struct page *page, unsigned int offset,
+		unsigned int length)
+{
+	/*
+	 * There is no page cache to invalidate in the dax case, however
+	 * we need this callback defined to prevent falling back to
+	 * block_invalidatepage() in do_invalidatepage().
+	 */
+}
+EXPORT_SYMBOL_GPL(noop_invalidatepage);
+
+ssize_t noop_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
+{
+	/*
+	 * iomap based filesystems support direct I/O without need for
+	 * this callback. However, it still needs to be set in
+	 * inode->a_ops so that open/fcntl know that direct I/O is
+	 * generally supported.
+	 */
+	return -EINVAL;
+}
+EXPORT_SYMBOL_GPL(noop_direct_IO);
+
 /* Because kfree isn't assignment-compatible with void(void*) ;-/ */
 void kfree_link(void *p)
 {
@@ -1084,11 +1144,6 @@ static int anon_set_page_dirty(struct page *page)
 	return 0;
 };
 
-/*
- * A single inode exists for all anon_inode files. Contrary to pipes,
- * anon_inode inodes have no associated per-instance data, so we need
- * only allocate one of them.
- */
 struct inode *alloc_anon_inode(struct super_block *s)
 {
 	static const struct address_space_operations anon_aops = {
@@ -1136,6 +1191,20 @@ simple_nosetlease(struct file *filp, long arg, struct file_lock **flp,
 }
 EXPORT_SYMBOL(simple_nosetlease);
 
+/**
+ * simple_get_link - generic helper to get the target of "fast" symlinks
+ * @dentry: not used here
+ * @inode: the symlink inode
+ * @done: not used here
+ *
+ * Generic helper for filesystems to use for symlink inodes where a pointer to
+ * the symlink target is stored in ->i_link.  NOTE: this isn't normally called,
+ * since as an optimization the path lookup code uses any non-NULL ->i_link
+ * directly, without calling ->get_link().  But ->get_link() still must be set,
+ * to mark the inode_operations as being for a symlink.
+ *
+ * Return: the symlink target
+ */
 const char *simple_get_link(struct dentry *dentry, struct inode *inode,
 			    struct delayed_call *done)
 {
@@ -1225,27 +1294,38 @@ bool is_empty_dir_inode(struct inode *inode)
 }
 
 #ifdef CONFIG_UNICODE
-bool needs_casefold(const struct inode *dir)
+/*
+ * Determine if the name of a dentry should be casefolded.
+ *
+ * Return: if names will need casefolding
+ */
+static bool needs_casefold(const struct inode *dir)
 {
-	return IS_CASEFOLDED(dir) && dir->i_sb->s_encoding &&
-			(!IS_ENCRYPTED(dir) || fscrypt_has_encryption_key(dir));
+	return IS_CASEFOLDED(dir) && dir->i_sb->s_encoding;
 }
-EXPORT_SYMBOL(needs_casefold);
 
-int generic_ci_d_compare(const struct dentry *dentry, unsigned int len,
-			  const char *str, const struct qstr *name)
+/**
+ * generic_ci_d_compare - generic d_compare implementation for casefolding filesystems
+ * @dentry:	dentry whose name we are checking against
+ * @len:	len of name of dentry
+ * @str:	str pointer to name of dentry
+ * @name:	Name to compare against
+ *
+ * Return: 0 if names match, 1 if mismatch, or -ERRNO
+ */
+static int generic_ci_d_compare(const struct dentry *dentry, unsigned int len,
+				const char *str, const struct qstr *name)
 {
 	const struct dentry *parent = READ_ONCE(dentry->d_parent);
-	const struct inode *inode = READ_ONCE(parent->d_inode);
+	const struct inode *dir = READ_ONCE(parent->d_inode);
 	const struct super_block *sb = dentry->d_sb;
 	const struct unicode_map *um = sb->s_encoding;
-	struct qstr entry = QSTR_INIT(str, len);
+	struct qstr qstr = QSTR_INIT(str, len);
 	char strbuf[DNAME_INLINE_LEN];
 	int ret;
 
-	if (!inode || !needs_casefold(inode))
+	if (!dir || !needs_casefold(dir))
 		goto fallback;
-
 	/*
 	 * If the dentry name is stored in-line, then it may be concurrently
 	 * modified by a rename.  If this happens, the VFS will eventually retry
@@ -1256,47 +1336,44 @@ int generic_ci_d_compare(const struct dentry *dentry, unsigned int len,
 	if (len <= DNAME_INLINE_LEN - 1) {
 		memcpy(strbuf, str, len);
 		strbuf[len] = 0;
-		entry.name = strbuf;
+		qstr.name = strbuf;
 		/* prevent compiler from optimizing out the temporary buffer */
 		barrier();
 	}
-
-	ret = utf8_strncasecmp(um, name, &entry);
+	ret = utf8_strncasecmp(um, name, &qstr);
 	if (ret >= 0)
 		return ret;
 
-	if (sb_has_enc_strict_mode(sb))
+	if (sb_has_strict_encoding(sb))
 		return -EINVAL;
 fallback:
 	if (len != name->len)
 		return 1;
 	return !!memcmp(str, name->name, len);
 }
-EXPORT_SYMBOL(generic_ci_d_compare);
 
-int generic_ci_d_hash(const struct dentry *dentry, struct qstr *str)
+/**
+ * generic_ci_d_hash - generic d_hash implementation for casefolding filesystems
+ * @dentry:	dentry of the parent directory
+ * @str:	qstr of name whose hash we should fill in
+ *
+ * Return: 0 if hash was successful or unchanged, and -EINVAL on error
+ */
+static int generic_ci_d_hash(const struct dentry *dentry, struct qstr *str)
 {
-	const struct inode *inode = READ_ONCE(dentry->d_inode);
+	const struct inode *dir = READ_ONCE(dentry->d_inode);
 	struct super_block *sb = dentry->d_sb;
 	const struct unicode_map *um = sb->s_encoding;
 	int ret = 0;
 
-	if (!inode || !needs_casefold(inode))
+	if (!dir || !needs_casefold(dir))
 		return 0;
 
 	ret = utf8_casefold_hash(um, dentry, str);
-	if (ret < 0)
-		goto err;
-
+	if (ret < 0 && sb_has_strict_encoding(sb))
+		return -EINVAL;
 	return 0;
-err:
-	if (sb_has_enc_strict_mode(sb))
-		ret = -EINVAL;
-	else
-		ret = 0;
-	return ret;
 }
-EXPORT_SYMBOL(generic_ci_d_hash);
 
 static const struct dentry_operations generic_ci_dentry_ops = {
 	.d_hash = generic_ci_d_hash,
@@ -1310,7 +1387,7 @@ static const struct dentry_operations generic_encrypted_dentry_ops = {
 };
 #endif
 
-#if IS_ENABLED(CONFIG_UNICODE) && IS_ENABLED(CONFIG_FS_ENCRYPTION)
+#if defined(CONFIG_FS_ENCRYPTION) && defined(CONFIG_UNICODE)
 static const struct dentry_operations generic_encrypted_ci_dentry_ops = {
 	.d_hash = generic_ci_d_hash,
 	.d_compare = generic_ci_d_compare,
@@ -1320,28 +1397,48 @@ static const struct dentry_operations generic_encrypted_ci_dentry_ops = {
 
 /**
  * generic_set_encrypted_ci_d_ops - helper for setting d_ops for given dentry
- * @dir:	parent of dentry whose ops to set
- * @dentry:	detnry to set ops on
+ * @dentry:	dentry to set ops on
  *
- * This function sets the dentry ops for the given dentry to handle both
- * casefolding and encryption of the dentry name.
+ * Casefolded directories need d_hash and d_compare set, so that the dentries
+ * contained in them are handled case-insensitively.  Note that these operations
+ * are needed on the parent directory rather than on the dentries in it, and
+ * while the casefolding flag can be toggled on and off on an empty directory,
+ * dentry_operations can't be changed later.  As a result, if the filesystem has
+ * casefolding support enabled at all, we have to give all dentries the
+ * casefolding operations even if their inode doesn't have the casefolding flag
+ * currently (and thus the casefolding ops would be no-ops for now).
+ *
+ * Encryption works differently in that the only dentry operation it needs is
+ * d_revalidate, which it only needs on dentries that have the no-key name flag.
+ * The no-key flag can't be set "later", so we don't have to worry about that.
+ *
+ * Finally, to maximize compatibility with overlayfs (which isn't compatible
+ * with certain dentry operations) and to avoid taking an unnecessary
+ * performance hit, we use custom dentry_operations for each possible
+ * combination rather than always installing all operations.
  */
-void generic_set_encrypted_ci_d_ops(struct inode *dir, struct dentry *dentry)
+void generic_set_encrypted_ci_d_ops(struct dentry *dentry)
 {
 #ifdef CONFIG_FS_ENCRYPTION
-	if (dentry->d_flags & DCACHE_ENCRYPTED_NAME) {
-#ifdef CONFIG_UNICODE
-		if (dir->i_sb->s_encoding) {
-			d_set_d_op(dentry, &generic_encrypted_ci_dentry_ops);
-			return;
-		}
+	bool needs_encrypt_ops = dentry->d_flags & DCACHE_NOKEY_NAME;
 #endif
+#ifdef CONFIG_UNICODE
+	bool needs_ci_ops = dentry->d_sb->s_encoding;
+#endif
+#if defined(CONFIG_FS_ENCRYPTION) && defined(CONFIG_UNICODE)
+	if (needs_encrypt_ops && needs_ci_ops) {
+		d_set_d_op(dentry, &generic_encrypted_ci_dentry_ops);
+		return;
+	}
+#endif
+#ifdef CONFIG_FS_ENCRYPTION
+	if (needs_encrypt_ops) {
 		d_set_d_op(dentry, &generic_encrypted_dentry_ops);
 		return;
 	}
 #endif
 #ifdef CONFIG_UNICODE
-	if (dir->i_sb->s_encoding) {
+	if (needs_ci_ops) {
 		d_set_d_op(dentry, &generic_ci_dentry_ops);
 		return;
 	}

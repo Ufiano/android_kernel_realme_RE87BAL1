@@ -1,5 +1,5 @@
 /*
- * copyright (C) 2018 Spreadtrum Communications Inc.
+ * copyright (C) 2020 Spreadtrum Communications Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -230,20 +230,14 @@ static int sprd_djtag_probe(struct platform_device *pdev)
 		return -ENXIO;
 	}
 
-	djtag->soft_rst = syscon_regmap_lookup_by_name(np, "soft_rst");
+	djtag->soft_rst = syscon_regmap_lookup_by_phandle_args(np, "syscon", 2,
+		args);
 	if (IS_ERR(djtag->soft_rst)) {
 		dev_err(&pdev->dev, "get the irq_clear node fail\n");
 		return PTR_ERR(djtag->soft_rst);
 	}
-
-	ret = syscon_get_args_by_name(np, "soft_rst", 2, args);
-	if (ret == 2) {
-		djtag->rst_offset = args[0];
-		djtag->rst_bit = args[1];
-	} else {
-		dev_err(djtag->dev, "get the irq_clear offset and clear bit fail\n");
-		return -EINVAL;
-	}
+	djtag->rst_offset = args[0];
+	djtag->rst_bit = args[1];
 
 	djtag->master.ops = &ops;
 	djtag->master.dev.of_node = pdev->dev.of_node;

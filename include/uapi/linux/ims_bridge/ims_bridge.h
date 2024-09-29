@@ -1,6 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
  * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
  */
 
 #ifndef _IMS_BRIDGE_H
@@ -8,7 +8,6 @@
 
 #include <linux/in.h>
 #include <linux/in6.h>
-
 /**
  * enum imsbr_call_state
  *
@@ -57,7 +56,7 @@ enum imsbr_media_types {
 	IMSBR_MEDIA_RTCP_AUDIO,
 	IMSBR_MEDIA_RTCP_VIDEO,
 	IMSBR_MEDIA_IKE,
-	IMSBR_MEDIA_SS,
+    IMSBR_MEDIA_SS,
 	__IMSBR_MEDIA_MAX
 };
 

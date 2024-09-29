@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/kernel.h>
@@ -16,33 +8,32 @@
 #include <linux/file.h>
 #include <linux/fs.h>
 #include <linux/syscalls.h>
+#include <linux/slab.h>
 #include <linux/uaccess.h>
+
 #include "gsp_debug.h"
 #include "gsp_layer.h"
 #include "gsp_sync.h"
-#include <linux/slab.h>
 
 #define GSP_FENCE_WAIT_TIMEOUT 2900/* ms */
 
 static const struct dma_fence_ops gsp_sync_fence_ops;
 
-static struct gsp_sync_timeline *gsp_sync_fence_to_timeline(
-							struct dma_fence *fence)
+static struct gsp_sync_timeline *
+gsp_sync_fence_to_timeline(struct dma_fence *fence)
 {
 	BUG_ON(fence->ops != &gsp_sync_fence_ops);
 	return container_of(fence->lock, struct gsp_sync_timeline, fence_lock);
 }
 
-static const char *gsp_sync_fence_get_driver_name(
-				struct dma_fence *fence)
+static const char *gsp_sync_fence_get_driver_name(struct dma_fence *fence)
 {
 	struct gsp_sync_timeline *tl = gsp_sync_fence_to_timeline(fence);
 
 	return tl->driver_name;
 }
 
-static const char *gsp_sync_fence_get_timeline_name(
-				struct dma_fence *fence)
+static const char *gsp_sync_fence_get_timeline_name(struct dma_fence *fence)
 {
 	struct gsp_sync_timeline *tl = gsp_sync_fence_to_timeline(fence);
 
@@ -78,13 +69,12 @@ struct gsp_sync_timeline *gsp_sync_timeline_create(const char *name)
 		return NULL;
 	}
 
-
 	obj->fence_context = dma_fence_context_alloc(1);
 	spin_lock_init(&obj->fence_lock);
-	snprintf(obj->driver_name, sizeof(obj->timeline_name),
-			 "%s", name);
-	snprintf(obj->timeline_name, sizeof(obj->timeline_name),
-			 "%s_timeline", name);
+	snprintf(obj->driver_name,
+		sizeof(obj->timeline_name), "%s", name);
+	snprintf(obj->timeline_name,
+		sizeof(obj->timeline_name), "%s_timeline", name);
 
 	return obj;
 }
@@ -117,8 +107,7 @@ static int gsp_sync_sig_fence_create(struct gsp_sync_timeline *obj,
 	return 0;
 }
 
-int gsp_sync_sig_fd_copy_to_user(struct dma_fence *fence,
-				 int32_t __user *ufd)
+int gsp_sync_sig_fd_copy_to_user(struct dma_fence *fence, int32_t __user *ufd)
 {
 	struct sync_file *sync_file = NULL;
 	int fd  = get_unused_fd_flags(O_CLOEXEC);
@@ -151,7 +140,7 @@ err:
 }
 
 int gsp_sync_wait_fence_collect(struct dma_fence **wait_fen_arr,
-				uint32_t *count, int fd)
+				u32 *count, int fd)
 {
 	struct dma_fence *fence = NULL;
 	int ret = -1;
@@ -180,16 +169,14 @@ int gsp_sync_wait_fence_collect(struct dma_fence **wait_fen_arr,
 }
 
 int gsp_sync_fence_process(struct gsp_layer *layer,
-			   struct gsp_fence_data *data,
-			   bool last)
+			struct gsp_fence_data *data, bool last)
 {
 	int ret = 0;
 	int wait_fd = -1;
 	int share_fd = -1;
 	enum gsp_layer_type type = GSP_INVAL_LAYER;
 
-	if (IS_ERR_OR_NULL(layer)
-	    || IS_ERR_OR_NULL(data)) {
+	if (IS_ERR_OR_NULL(layer) || IS_ERR_OR_NULL(data)) {
 		GSP_ERR("layer[%d] fence process params error\n",
 			gsp_layer_to_type(layer));
 		return -1;
@@ -205,7 +192,7 @@ int gsp_sync_fence_process(struct gsp_layer *layer,
 			  gsp_layer_to_type(layer));
 	} else {
 		ret = gsp_sync_wait_fence_collect(data->wait_fen_arr,
-						  &data->wait_cnt, wait_fd);
+						&data->wait_cnt, wait_fd);
 		if (ret < 0) {
 			GSP_ERR("collect layer[%d] wait fence failed\n",
 				gsp_layer_to_type(layer));
@@ -241,11 +228,10 @@ int gsp_sync_fence_process(struct gsp_layer *layer,
 }
 
 void gsp_sync_fence_data_setup(struct gsp_fence_data *data,
-				struct gsp_sync_timeline *tl,
-			       int __user *ufd)
+			struct gsp_sync_timeline *tl,
+			int __user *ufd)
 {
-	if (IS_ERR_OR_NULL(data) ||
-		IS_ERR_OR_NULL(tl)) {
+	if (IS_ERR_OR_NULL(data) || IS_ERR_OR_NULL(tl)) {
 		GSP_ERR("sync fence data set up params error\n");
 		return;
 	}
@@ -256,7 +242,7 @@ void gsp_sync_fence_data_setup(struct gsp_fence_data *data,
 
 void gsp_sync_fence_free(struct gsp_fence_data *data)
 {
-	int i = 0;
+	int i;
 
 	/* free acuqire fence array */
 	for (i = 0; i < data->wait_cnt; i++) {
@@ -278,7 +264,7 @@ void gsp_sync_fence_free(struct gsp_fence_data *data)
 int gsp_sync_fence_wait(struct gsp_fence_data *data)
 {
 	signed long ret = 0;
-	int i = 0;
+	int i;
 
 	/* wait acuqire fence array */
 	for (i = 0; i < data->wait_cnt; i++) {

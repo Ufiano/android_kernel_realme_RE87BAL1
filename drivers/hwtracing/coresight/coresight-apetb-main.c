@@ -56,13 +56,14 @@ static int apetb_probe(struct platform_device *pdev)
 	psub_node = of_parse_phandle(pnode, "apetb-sink", 0);
 	if (psub_node) {
 		of_node_put(psub_node);
-	    dev = of_coresight_get_device_by_node(psub_node);
-	    if (dev == NULL) {
-			dev_err(&pdev->dev, "%s of_coresight_get_device_by_node sink failed!!!", __func__);
+		dev = of_coresight_get_device_by_node(psub_node);
+		if (!dev) {
+			dev_err(&pdev->dev, "%s of_coresight_get_device_by_node sink failed!!!",
+				__func__);
 			return -ENODEV;
 		}
 		dbg->apetb_sink = dev;
-    } else {
+	} else {
 		dev_err(&pdev->dev, "%s of_parse_phandle sink failed!!!", __func__);
 		return -ENODEV;
 	}
@@ -70,7 +71,8 @@ static int apetb_probe(struct platform_device *pdev)
 	source_num = of_count_phandle_with_args(pnode, "apetb-source", NULL);
 
 	if (source_num > MAX_ETB_SOURCE_NUM) {
-		dev_err(&pdev->dev, "%s source_num %d exceed MAX_ETB_SOURCE_NUM!!!", __func__, source_num);
+		dev_err(&pdev->dev, "%s source_num %d exceed MAX_ETB_SOURCE_NUM!!!",
+			__func__, source_num);
 		dbg->source_num = 0;
 		return -ENODEV;
 	}
@@ -80,11 +82,12 @@ static int apetb_probe(struct platform_device *pdev)
 	for (i = 0; i < source_num; i++) {
 		psub_node = of_parse_phandle(pnode, "apetb-source", i);
 		if (psub_node) {
-		    dev = of_coresight_get_device_by_node(psub_node);
-		    if (dev == NULL) {
-				dev_err(&pdev->dev, "%s of_coresight_get_device_by_node source(%d) failed!!!", __func__, i);
+			dev = of_coresight_get_device_by_node(psub_node);
+			if (!dev) {
+				dev_err(&pdev->dev, "%s of_coresight_get_device_by_node source(%d) failed!!!",
+					__func__, i);
 				return -ENODEV;
-		    }
+			}
 			dbg->apetb_source[i] = dev;
 		} else {
 			dev_err(&pdev->dev, "%s of_parse_phandle source %d failed!!!", __func__, i);
@@ -104,9 +107,9 @@ static const struct of_device_id dt_ids[] = {
 static struct platform_driver apetb_driver = {
 	.probe = apetb_probe,
 	.driver = {
-		   .name = "ap-etb",
-		   .of_match_table = dt_ids,
-		   },
+		.name = "ap-etb",
+		.of_match_table = dt_ids,
+	},
 };
 
 module_platform_driver(apetb_driver);

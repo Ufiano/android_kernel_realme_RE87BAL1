@@ -1,14 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #ifndef _GSP_R8P0_CFG_H
@@ -38,15 +30,15 @@ struct gsp_r8p0_des_layer {
 };
 
 struct gsp_r8p0_misc_cfg {
-	uint8_t gsp_gap;
-	uint8_t core_num;
-	uint8_t co_work0;
-	uint8_t co_work1;
-	uint8_t work_mod;
-	uint8_t pmargb_en;
+	u8 gsp_gap;
+	u8 core_num;
+	u8 co_work0;
+	u8 co_work1;
+	u8 work_mod;
+	u8 pmargb_en;
 	struct gsp_rect workarea_src_rect;
 	struct gsp_pos workarea_des_pos;
-	uint8_t secure_en;
+	u8 secure_en;
 };
 
 struct gsp_r8p0_cfg {

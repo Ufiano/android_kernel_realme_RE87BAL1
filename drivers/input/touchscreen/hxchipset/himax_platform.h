@@ -22,14 +22,14 @@
 #include <linux/types.h>
 #include <linux/spi/spi.h>
 #include <linux/interrupt.h>
-#if defined(CONFIG_HMX_DB)
+#if IS_ENABLED(CONFIG_HMX_DB)
 	#include <linux/regulator/consumer.h>
 #endif
 
 #define HIMAX_SPI_FIFO_POLLING
 #define HIMAX_I2C_RETRY_TIMES 3
 
-#if defined(CONFIG_TOUCHSCREEN_HIMAX_DEBUG)
+#if IS_ENABLED(CONFIG_TOUCHSCREEN_HIMAX_DEBUG)
 #define D(x...) pr_debug("[HXTP] " x)
 #define I(x...) pr_info("[HXTP] " x)
 #define W(x...) pr_warn("[HXTP][WARNING] " x)
@@ -47,7 +47,7 @@ do { \
 #define DIF(x...)
 #endif
 
-#if defined(CONFIG_HMX_DB)
+#if IS_ENABLED(CONFIG_HMX_DB)
 	/* Analog voltage @2.7 V */
 #define HX_VTG_MIN_UV			2700000
 #define HX_VTG_MAX_UV			3300000
@@ -100,7 +100,7 @@ struct himax_i2c_platform_data {
 	struct kobj_attribute *vk2Use;
 
 	int hx_config_size;
-#if defined(CONFIG_HMX_DB)
+#if IS_ENABLED(CONFIG_HMX_DB)
 	bool i2c_pull_up;
 	bool digital_pwr_regulator;
 	int reset_gpio;

@@ -1,12 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * File:shub_core.h
- * Author:bao.yue@spreadtrum.com
  *
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published by
- * the Free Software Foundation.
+ * Copyright (C) 2015 Spreadtrum Communications Inc.
  *
  */
 
@@ -15,35 +11,36 @@
 
 #include "shub_common.h"
 
-#define SENSOR_TYPE_CALIBRATION_CFG				26
-#define SHUB_NAME                   "sprd-sensor"
-#define SHUB_RD                   "shub_rd"
-#define SHUB_RD_NWU                   "shub_rd_nwu"
-#define SHUB_SENSOR_NUM		7
-#define SHUB_NODATA                 0xff
-#define HOST_REQUEST_WRITE           0x74
-#define HOST_REQUEST_READ            0x75
-#define HOST_REQUEST_LEN             2
-#define RECEIVE_TIMEOUT_MS           100
+#define SENSOR_TYPE_CALIBRATION_CFG	26
+#define SHUB_NAME			"sprd-sensor"
+#define SHUB_RD				"shub_rd"
+#define SHUB_RD_NWU			"shub_rd_nwu"
+#define SHUB_SENSOR_NUM			7
+#define SHUB_NODATA			0xff
+#define HOST_REQUEST_WRITE		0x74
+#define HOST_REQUEST_READ		0x75
+#define HOST_REQUEST_LEN		2
+#define RECEIVE_TIMEOUT_MS		100
 #define MAX_SENSOR_LOG_CTL_FLAG_LEN	8
-#define LOG_CTL_OUTPUT_FLAG	5
-#define SIPC_PM_BUFID0             0
-#define SIPC_PM_BUFID1             1
-#define SHUB_IIO_CHN_BITS             64
+#define MAX_CALI_LEN			128
+#define LOG_CTL_OUTPUT_FLAG		5
+#define SIPC_PM_BUFID0			0
+#define SIPC_PM_BUFID1			1
+#define SHUB_IIO_CHN_BITS		64
 /* light sensor calibrate min value is 280lux */
-#define LIGHT_SENSOR_MIN_VALUE  100
+#define LIGHT_SENSOR_MIN_VALUE		100
 /* light sensor calibrate max value is 520lux */
-#define LIGHT_SENSOR_MAX_VALUE  33334
-#define LIGHT_CALI_DATA_COUNT   5
+#define LIGHT_SENSOR_MAX_VALUE		33334
+#define LIGHT_CALI_DATA_COUNT		5
 /* light sensor calibrate value is 400lux; Due to kernel seldom use
  * float data, so calibrate value multiply 10000
  */
-#define LIGHT_SENSOR_CALI_VALUE (1000 * 10000)
+#define LIGHT_SENSOR_CALI_VALUE		(1000 * 10000)
 /* prox sensor auto calibrate ground noise min value is 0 */
-#define PROX_SENSOR_MIN_VALUE   0
+#define PROX_SENSOR_MIN_VALUE		0
 
 /* ms,-1 is wait  forever */
-#define SIPC_WRITE_TIMEOUT             -1
+#define SIPC_WRITE_TIMEOUT		-1
 
 enum calib_cmd {
 	CALIB_EN,
@@ -139,6 +136,7 @@ enum shub_cmd {
 	HAL_LOG,
 	HAL_SENSOR_INFO,
 	HAL_LOG_CTL,
+	HAL_CALI_STORE,
 	SPECIAL_CMD = 192,
 	MCU_RDY,
 	COMM_DRV_RDY,
@@ -163,6 +161,14 @@ struct customer_data_get {
 	u8 length;
 };
 
+/*add for write cali data back to file node*/
+struct sensor_cali_store {
+	u8 cmd;
+	u8 length;
+	u16 type;
+	u8 udata[CALIBRATION_DATA_LENGTH];
+};
+
 struct shub_data {
 	struct platform_device *sensor_pdev;
 	enum shub_mode mcu_mode;
@@ -176,7 +182,6 @@ struct shub_data {
 	int cal_type;
 	int cal_id;
 	int golden_sample;
-	char calibrated_data[CALIBRATION_DATA_LENGTH];
 	int cal_savests;
 	s32 iio_data[6];
 	struct iio_dev *indio_dev;
@@ -213,11 +218,10 @@ struct shub_data {
 				  u8 *buff, u32 len);
 	void (*dynamic_read)(struct shub_data *sensor);
 	struct sensor_log_control log_control;
+	struct sensor_cali_store cali_store;
 	struct workqueue_struct *driver_wq;
 	struct delayed_work time_sync_work;
 	atomic_t delay;
-	struct work_struct download_cali_data_work;
-	struct work_struct savecalifile_work;
 	struct notifier_block early_suspend;
 	struct notifier_block shub_reboot_notifier;
 	int is_sensorhub;
@@ -225,8 +229,7 @@ struct shub_data {
 	struct customer_data_get dynamic_data_get;
 };
 
-extern struct shub_data *g_sensor;
-/*hw sensor id*/
+/* hw sensor id */
 enum _id_status {
 	_IDSTA_NOT = 0,
 	_IDSTA_OK  = 1,
@@ -234,13 +237,13 @@ enum _id_status {
 };
 
 enum show_order {
-	ORDER_ACC = 1,
-	ORDER_MAG = 2,
-	ORDER_GYRO = 4,
-	ORDER_LIGHT = 5,
-	ORDER_PRS = 6,
-	ORDER_PROX = 8,
-	ORDER_COLOR_TEMP = 121,
+	ORDER_ACC = SENSOR_ACCELEROMETER,
+	ORDER_MAG = SENSOR_GEOMAGNETIC_FIELD,
+	ORDER_GYRO = SENSOR_GYROSCOPE,
+	ORDER_LIGHT = SENSOR_LIGHT,
+	ORDER_PRS = SENSOR_PRESSURE,
+	ORDER_PROX = SENSOR_PROXIMITY,
+	ORDER_COLOR_TEMP = SENSOR_COLOR_TEMP,
 };
 
 #define _HW_SENSOR_TOTAL 7
@@ -249,6 +252,7 @@ struct hw_sensor_id_tag {
 	u8 id_status;
 	u8 vendor_id;
 	u8 chip_id;
+	int sensor_type;
 	char pname[128];
 };
 
@@ -273,10 +277,12 @@ struct prox_cali_data {
 	int low_threshold;
 	u8 cali_flag;
 };
+
 #pragma pack()
 
 #define ACC_MAX_X_Y_BIAS_VALUE 20000 /* units: (1/10000) m/s^2 */
 #define ACC_MAX_Z_BIAS_VALUE 25000 /* units: (1/10000) m/s^2 */
 #define GYRO_MAX_X_Y_Z_BIAS_VALUE 4000 /* units: (1/10000) rad/s */
 
+extern struct shub_data *g_sensor;
 #endif

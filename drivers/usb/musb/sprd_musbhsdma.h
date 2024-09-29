@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
+ * Copyright (C) 2020 Spreadtrum Communications Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -14,13 +14,20 @@
 #ifndef __SPRD_MUSBHSDMA_H__
 #define __SPRD_MUSBHSDMA_H__
 
-#define MUSB_DMA_PAUSE		0x1000
-#define MUSB_DMA_FRAG_WAIT	0x1004
+/* UNISOC externd control and status registers*/
+#define MUSB_OTG_EXT_CSR	0x34b
+#define MUSB_HOST_FORCE_EN	0x01
+#define MUSB_CLEAR_TXBUFF	0x10
+#define MUSB_CLEAR_RXBUFF	0x20
+#define MUSB_TX_CMPL_MODE	0x40
+
+#define MUSB_DMA_PAUSE			0x1000
+#define MUSB_DMA_FRAG_WAIT		0x1004
 #define MUSB_DMA_INTR_RAW_STATUS	0x1008
 #define MUSB_DMA_INTR_MASK_STATUS	0x100C
-#define MUSB_DMA_REQ_STATUS	0x1010
-#define MUSB_DMA_EN_STATUS	0x1014
-#define MUSB_DMA_DEBUG_STATUS	0x1018
+#define MUSB_DMA_REQ_STATUS		0x1010
+#define MUSB_DMA_EN_STATUS		0x1014
+#define MUSB_DMA_DEBUG_STATUS		0x1018
 
 /* multi LL which is supported by r4p0 */
 #define MUSB_DMA_MULT_LL_Q_CTRL_STATUS	0x1080
@@ -60,10 +67,10 @@
 #define BIT_NG_RX			BIT(0)
 
 #define MUSB_AUDIO_IIS_CLKM		0x1420
-#define BIT_IIS_CLKM(x)		((x) & GENMASK(21, 0))
+#define BIT_IIS_CLKM(x)			((x) & GENMASK(21, 0))
 
 #define MUSB_AUDIO_IIS_CLKN		0x1424
-#define BIT_IIS_CLKN(x)		((x) & GENMASK(21, 0))
+#define BIT_IIS_CLKN(x)			((x) & GENMASK(21, 0))
 
 #define MUSB_AUDIO_IIS_DMA_INS		0x1428
 #define BIT_TX_FIFO_DEPTH(x)		(((x) & 0x3) << 30)
@@ -98,7 +105,7 @@
  * Usb audio clk_i2s is same as clk_utmi. clk_utmi is 30M when
  * configured 16bit data width and 60M when configured 8bit.
  */
-#define MUSB_IIS_CLKN	30000
+#define MUSB_IIS_CLKN			30000
 
 #define musb_read_dma_addr(mbase, bchannel)	\
 	musb_readl(mbase,	\
@@ -109,52 +116,52 @@
 		    MUSB_DMA_CHN_ADDR(bchannel), \
 		    addr)
 
-#define CHN_EN	BIT(0)
-#define CHN_LLIST_INT_EN	BIT(2)
-#define CHN_START_INT_EN	BIT(3)
-#define CHN_USBRX_INT_EN	BIT(4)
-#define CHN_CLEAR_INT_EN	BIT(5)
+#define CHN_EN				BIT(0)
+#define CHN_LLIST_INT_EN		BIT(2)
+#define CHN_START_INT_EN		BIT(3)
+#define CHN_USBRX_INT_EN		BIT(4)
+#define CHN_CLEAR_INT_EN		BIT(5)
 
 #define CHN_LLIST_INT_MASK_STATUS	BIT(18)
 #define CHN_START_INT_MASK_STATUS	BIT(19)
 #define CHN_USBRX_INT_MASK_STATUS	BIT(20)
 #define CHN_CLEAR_INT_MASK_STATUS	BIT(21)
 
-#define CHN_CLR	BIT(15)
-#define CHN_CLR_STATUS		BIT(31)
+#define CHN_CLR				BIT(15)
+#define CHN_CLR_STATUS			BIT(31)
 
-#define CHN_FRAG_INT_CLR	BIT(24)
-#define CHN_BLK_INT_CLR	BIT(25)
-#define CHN_LLIST_INT_CLR	BIT(26)
-#define CHN_START_INT_CLR	BIT(27)
-#define CHN_USBRX_LAST_INT_CLR	BIT(28)
+#define CHN_FRAG_INT_CLR		BIT(24)
+#define CHN_BLK_INT_CLR			BIT(25)
+#define CHN_LLIST_INT_CLR		BIT(26)
+#define CHN_START_INT_CLR		BIT(27)
+#define CHN_USBRX_LAST_INT_CLR		BIT(28)
 
-#define LISTNODE_NUM	2048
-#define LISTNODE_MASK	(LISTNODE_NUM - 1)
+#define LISTNODE_NUM			2048
+#define LISTNODE_MASK			(LISTNODE_NUM - 1)
 
-#define MUSB_DMA_CHANNELS	30
+#define MUSB_DMA_CHANNELS		30
 
 /* MUSB_DMA_MULT_LL_Q_CTRL_STATUS bit defines */
-#define BIT_TX_CMD_DEPTH_MASK	GENMASK(23, 20)
-#define BIT_TX_CMPLT_DEPTH_MASK	GENMASK(19, 16)
-#define BIT_TX_CMD_FULL		BIT(15)
-#define BIT_TX_CMPLT_EMPTY	BIT(14)
-#define BIT_TX_CMD_CLR		BIT(13)
-#define BIT_TX_CMPLT_CLR	BIT(12)
-#define BIT_RX_CMD_DEPTH_MASK	GENMASK(11, 8)
-#define BIT_RX_CMPLT_DEPTH_MASK	GENMASK(7, 4)
-#define BIT_RX_CMD_FULL		BIT(3)
-#define BIT_RX_CMPLT_EMPTY	BIT(2)
-#define BIT_RX_CMD_CLR		BIT(1)
-#define BIT_RX_CMPLT_CLR	BIT(0)
+#define BIT_TX_CMD_DEPTH_MASK		GENMASK(23, 20)
+#define BIT_TX_CMPLT_DEPTH_MASK		GENMASK(19, 16)
+#define BIT_TX_CMD_FULL			BIT(15)
+#define BIT_TX_CMPLT_EMPTY		BIT(14)
+#define BIT_TX_CMD_CLR			BIT(13)
+#define BIT_TX_CMPLT_CLR		BIT(12)
+#define BIT_RX_CMD_DEPTH_MASK		GENMASK(11, 8)
+#define BIT_RX_CMPLT_DEPTH_MASK		GENMASK(7, 4)
+#define BIT_RX_CMD_FULL			BIT(3)
+#define BIT_RX_CMPLT_EMPTY		BIT(2)
+#define BIT_RX_CMD_CLR			BIT(1)
+#define BIT_RX_CMPLT_CLR		BIT(0)
 
 /* MUSB_DMA_MULT_LL_CTRL bit defines */
-#define BIT_TX_CMD_QUEUE_WR	BIT(11)
-#define BIT_TX_CMPLT_QUEUE_RD	BIT(10)
-#define BIT_RX_CMD_QUEUE_WR	BIT(9)
-#define BIT_RX_CMPLT_QUEUE_RD	BIT(8)
-#define BIT_TX_IPA_CHN_MASK	GENMASK(7, 4)
-#define BIT_RX_IPA_CHN_MASK	GENMASK(3, 0)
+#define BIT_TX_CMD_QUEUE_WR		BIT(11)
+#define BIT_TX_CMPLT_QUEUE_RD		BIT(10)
+#define BIT_RX_CMD_QUEUE_WR		BIT(9)
+#define BIT_RX_CMPLT_QUEUE_RD		BIT(8)
+#define BIT_TX_IPA_CHN_MASK		GENMASK(7, 4)
+#define BIT_RX_IPA_CHN_MASK		GENMASK(3, 0)
 
 enum {
 	IIS_WIDTH_16BIT,
@@ -221,5 +228,5 @@ irqreturn_t sprd_dma_interrupt(struct musb *musb, u32 int_hsdma);
 struct dma_controller *sprd_musb_dma_controller_create(struct musb *musb,
 							void __iomem *base);
 void sprd_musb_dma_controller_destroy(struct dma_controller *c);
-#endif /* __SPRD_MUSBHSDMA_H__ */
 
+#endif	/* __SPRD_MUSBHSDMA_H__ */

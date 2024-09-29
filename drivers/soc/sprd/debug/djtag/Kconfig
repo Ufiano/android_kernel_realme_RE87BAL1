@@ -1,7 +1,8 @@
 config SPRD_DJTAG_CORE
-	bool
+	tristate "Spreadtrum DJTAG Core Support"
+	depends on SPRD_DEBUG
 	help
-	  Say Y here to support the dmc mpu core.
+	  Say Y here to support the djtag core.
 
 config SPRD_DJTAG
 	tristate "Spreadtrum DJTAG Support"

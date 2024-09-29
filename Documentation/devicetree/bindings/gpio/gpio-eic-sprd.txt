@@ -33,23 +33,20 @@ Required properties:
   "sprd,sc9860-eic-latch",
   "sprd,sc9860-eic-async",
   "sprd,sc9860-eic-sync",
-  "sprd,sharkle-eic-debounce",
-  "sprd,sharkle-eic-latch",
-  "sprd,sharkle-eic-async",
-  "sprd,sharkle-eic-sync",
-  "sprd,pike2-eic-debounce",
-  "sprd,pike2-eic-latch",
-  "sprd,pike2-eic-async",
-  "sprd,pike2-eic-sync",
-  "sprd,sharkl5pro-eic-debounce",
-  "sprd,sharkl5pro-eic-latch",
-  "sprd,sharkl5pro-eic-async",
-  "sprd,sharkl5pro-eic-sync",
+  "sprd,sc2731-eic",
+  "sprd,sc2721-eic",
+  "sprd,sharkl3-eic-debounce",
+  "sprd,sharkl3-eic-latch",
+  "sprd,sharkl3-eic-async",
+  "sprd,sharkl3-eic-sync",
   "sprd,qogirl6-eic-debounce",
   "sprd,qogirl6-eic-latch",
   "sprd,qogirl6-eic-async",
   "sprd,qogirl6-eic-sync",
-  "sprd,sc27xx-eic".
+  "sprd,sharkl5pro-eic-debounce",
+  "sprd,sharkl5pro-eic-latch",
+  "sprd,sharkl5pro-eic-async",
+  "sprd,sharkl5pro-eic-sync".
 - reg: Define the base and range of the I/O address space containing
   the GPIO controller registers.
 - gpio-controller: Marks the device node as a GPIO controller.
@@ -102,7 +99,7 @@ Example:
 	};
 
 	pmic_eic: gpio@300 {
-		compatible = "sprd,sc27xx-eic";
+		compatible = "sprd,sc2731-eic";
 		reg = <0x300>;
 		interrupt-parent = <&sc2731_pmic>;
 		interrupts = <5 IRQ_TYPE_LEVEL_HIGH>;

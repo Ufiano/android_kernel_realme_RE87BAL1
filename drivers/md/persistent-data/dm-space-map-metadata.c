@@ -11,6 +11,7 @@
 #include <linux/list.h>
 #include <linux/slab.h>
 #include <linux/device-mapper.h>
+#include <linux/kernel.h>
 
 #define DM_MSG_PREFIX "space map metadata"
 
@@ -111,7 +112,7 @@ static bool brb_empty(struct bop_ring_buffer *brb)
 static unsigned brb_next(struct bop_ring_buffer *brb, unsigned old)
 {
 	unsigned r = old + 1;
-	return (r >= (sizeof(brb->bops) / sizeof(*brb->bops))) ? 0 : r;
+	return r >= ARRAY_SIZE(brb->bops) ? 0 : r;
 }
 
 static int brb_push(struct bop_ring_buffer *brb,
@@ -451,6 +452,14 @@ static int sm_metadata_new_block_(struct dm_space_map *sm, dm_block_t *b)
 	 * Any block we allocate has to be free in both the old and current ll.
 	 */
 	r = sm_ll_find_common_free_block(&smm->old_ll, &smm->ll, smm->begin, smm->ll.nr_blocks, b);
+	if (r == -ENOSPC) {
+		/*
+		 * There's no free block between smm->begin and the end of the metadata device.
+		 * We search before smm->begin in case something has been freed.
+		 */
+		r = sm_ll_find_common_free_block(&smm->old_ll, &smm->ll, 0, smm->begin, b);
+	}
+
 	if (r)
 		return r;
 
@@ -502,7 +511,6 @@ static int sm_metadata_commit(struct dm_space_map *sm)
 		return r;
 
 	memcpy(&smm->old_ll, &smm->ll, sizeof(smm->old_ll));
-	smm->begin = 0;
 	smm->allocated_this_transaction = 0;
 
 	return 0;

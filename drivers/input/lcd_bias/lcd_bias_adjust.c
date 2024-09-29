@@ -9,7 +9,9 @@
 //#define MAX_PARAM 2 // reg and val 
 
 static int set_reg[MAX_REG] = {0x00,0x01,0x03};
-static u8 set_val[MAX_REG] = {0x0f,0x0f,0x03};
+static u8 set_val[MAX_REG] = {0x0f,0x0f,0x03};// 1
+
+
 
 static u8 set_val_man[MAX_REG][MAX_REG] = {{0x0f,0x0f,0x03},
                                            {0x12,0x12,0x03},
@@ -40,7 +42,7 @@ int voltage_compare(void)
 {
 		int i = 0;
 		int val[3];
-		for(i; i < MAX_REG; ++i){
+		for(i = 0; i < MAX_REG; ++i){
 			regmap_read(lcd_bias_data->map,set_reg[i], &val[i]);
 			if(set_val[i] != val[i])
 				return 1;
@@ -51,7 +53,7 @@ int voltage_compare(void)
 int set_lcm_bias_voltage_for_sprd(void){
         int ret = -1;
         int i;
-
+		printk("[drm] set_lcm_bias_voltage_for_sprd enter");
 		if(voltage_compare())
 		{
         for(i = 0; i < MAX_REG; i++){
@@ -67,6 +69,7 @@ int set_lcm_bias_voltage_for_sprd(void){
 
 }
 EXPORT_SYMBOL(set_lcm_bias_voltage_for_sprd);
+
 static ssize_t lcd_bias_voltage_get(struct device *dev,
                 struct device_attribute *attr, char *buf)
 {

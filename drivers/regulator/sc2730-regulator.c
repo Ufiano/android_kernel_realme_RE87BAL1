@@ -1,4 +1,4 @@
- //SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (C) 2018 Spreadtrum Communications Inc.
  */
@@ -429,9 +429,9 @@ static void sc2730_regulator_debugfs_init(struct regulator_dev *rdev)
 		return;
 	}
 
-	debugfs_create_file("enable", S_IRUGO | S_IWUSR,
+	debugfs_create_file("enable", 0644,
 			    debugfs_root, rdev, &fops_enable);
-	debugfs_create_file("voltage", S_IRUGO | S_IWUSR,
+	debugfs_create_file("voltage", 0644,
 			    debugfs_root, rdev, &fops_ldo);
 }
 
@@ -483,9 +483,16 @@ static int sc2730_regulator_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static const struct of_device_id sc2730_regulator_match[] = {
+	{ .compatible = "sprd,sc2730-regulator" },
+	{},
+};
+MODULE_DEVICE_TABLE(of, sc2730_regulator_match);
+
 static struct platform_driver sc2730_regulator_driver = {
 	.driver = {
-		.name = "sc27xx-regulator",
+		.name = "sc2730-regulator",
+		.of_match_table = sc2730_regulator_match,
 	},
 	.probe = sc2730_regulator_probe,
 	.remove = sc2730_regulator_remove,

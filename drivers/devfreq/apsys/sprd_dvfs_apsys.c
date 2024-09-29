@@ -1,18 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include <linux/devfreq.h>
+#include <linux/devfreq-event.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/of.h>
@@ -20,47 +14,37 @@
 #include <linux/of_device.h>
 #include <linux/platform_device.h>
 
+#include "../governor.h"
 #include "sprd_dvfs_apsys.h"
 
 #define to_apsys(DEV)	container_of((DEV), struct apsys_dev, dev)
 
 LIST_HEAD(apsys_dvfs_head);
-DEFINE_MUTEX(apsys_glb_reg_lock);
 
 struct class *dvfs_class;
-struct apsys_regmap regmap_ctx;
 
-void *dvfs_ops_attach(const char *str, struct list_head *head)
+struct apsys_dev *find_apsys_device_by_name(char *name)
 {
-	struct dvfs_ops_list *list;
-	const char *ver;
+	struct device_node *np = NULL;
+	struct platform_device *pdev = NULL;
+	struct apsys_dev *apsys = NULL;
 
-	list_for_each_entry(list, head, head) {
-		ver = list->entry->ver;
-		if (!strcmp(str, ver))
-			return list->entry->ops;
+	np = of_find_node_by_name(NULL, name);
+	if (np) {
+		pdev = of_find_device_by_node(np);
+
+		if (pdev)
+			apsys = platform_get_drvdata(pdev);
+		else
+			pr_err("cannot find platform device by node with name :%s\n", name);
+	} else {
+		pr_err("cannot find node by name :%s\n", name);
 	}
 
-	pr_err("attach dvfs ops %s failed\n", str);
-
-	return NULL;
+	pr_info("find platform device by node with name :%s, address:%lx\n",
+				name, apsys->apsys_base);
+	return apsys;
 }
-EXPORT_SYMBOL_GPL(dvfs_ops_attach);
-
-int dvfs_ops_register(struct dvfs_ops_entry *entry, struct list_head *head)
-{
-	struct dvfs_ops_list *list;
-
-	list = kzalloc(sizeof(struct dvfs_ops_list), GFP_KERNEL);
-	if (!list)
-		return -ENOMEM;
-
-	list->entry = entry;
-	list_add(&list->head, head);
-
-	return 0;
-}
-EXPORT_SYMBOL_GPL(dvfs_ops_register);
 
 static ssize_t top_cur_volt_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -69,7 +53,7 @@ static ssize_t top_cur_volt_show(struct device *dev,
 	int ret, cur_volt;
 
 	if (apsys->dvfs_ops && apsys->dvfs_ops->top_cur_volt) {
-		cur_volt = apsys->dvfs_ops->top_cur_volt();
+		cur_volt = apsys->dvfs_ops->top_cur_volt(apsys);
 	} else {
 		pr_info("%s: apsys ops null\n", __func__);
 		cur_volt = -EINVAL;
@@ -98,7 +82,7 @@ static ssize_t apsys_hold_en_store(struct device *dev,
 		return -EINVAL;
 
 	if (apsys->dvfs_ops && apsys->dvfs_ops->apsys_hold_en)
-		apsys->dvfs_ops->apsys_hold_en(hold_en);
+		apsys->dvfs_ops->apsys_hold_en(apsys, hold_en);
 	else
 		pr_info("%s: apsys ops null\n", __func__);
 
@@ -116,7 +100,7 @@ static ssize_t apsys_force_en_store(struct device *dev,
 		return -EINVAL;
 
 	if (apsys->dvfs_ops && apsys->dvfs_ops->apsys_force_en)
-		apsys->dvfs_ops->apsys_force_en(force_en);
+		apsys->dvfs_ops->apsys_force_en(apsys, force_en);
 	else
 		pr_info("%s: apsys ops null\n", __func__);
 
@@ -134,7 +118,7 @@ static ssize_t apsys_auto_gate_store(struct device *dev,
 		return -EINVAL;
 
 	if (apsys->dvfs_ops && apsys->dvfs_ops->apsys_auto_gate)
-		apsys->dvfs_ops->apsys_auto_gate(gate_sel);
+		apsys->dvfs_ops->apsys_auto_gate(apsys, gate_sel);
 	else
 		pr_info("%s: apsys ops null\n", __func__);
 
@@ -152,7 +136,7 @@ static ssize_t apsys_wait_window_store(struct device *dev,
 		return -EINVAL;
 
 	if (apsys->dvfs_ops && apsys->dvfs_ops->apsys_wait_window)
-		apsys->dvfs_ops->apsys_wait_window(wait_window);
+		apsys->dvfs_ops->apsys_wait_window(apsys, wait_window);
 	else
 		pr_info("%s: apsys ops null\n", __func__);
 
@@ -170,7 +154,7 @@ static ssize_t apsys_min_volt_store(struct device *dev,
 		return -EINVAL;
 
 	if (apsys->dvfs_ops && apsys->dvfs_ops->apsys_min_volt)
-		apsys->dvfs_ops->apsys_min_volt(min_volt);
+		apsys->dvfs_ops->apsys_min_volt(apsys, min_volt);
 	else
 		pr_info("%s: apsys ops null\n", __func__);
 
@@ -255,8 +239,8 @@ static int apsys_dvfs_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct device_node *np = pdev->dev.of_node;
+	const struct sprd_apsys_dvfs_ops *pdata;
 	struct apsys_dev *apsys;
-	const char *str = NULL;
 	void __iomem *base;
 	struct resource r;
 	int ret;
@@ -265,11 +249,11 @@ static int apsys_dvfs_probe(struct platform_device *pdev)
 	if (!apsys)
 		return -ENOMEM;
 
-	str = (char *)of_device_get_match_data(dev);
-
-	apsys->dvfs_ops = apsys_dvfs_ops_attach(str);
-	if (!apsys->dvfs_ops) {
-		pr_err("attach apsys dvfs ops %s failed\n", str);
+	pdata = of_device_get_match_data(&pdev->dev);
+	if (pdata) {
+		apsys->dvfs_ops = pdata->apsys_ops;
+	} else {
+		pr_err("No matching driver data found\n");
 		return -EINVAL;
 	}
 
@@ -283,7 +267,7 @@ static int apsys_dvfs_probe(struct platform_device *pdev)
 		pr_err("ioremap apsys dvfs address failed\n");
 		return -EFAULT;
 	}
-	regmap_ctx.apsys_base = (unsigned long)base;
+	apsys->apsys_base = (unsigned long)base;
 
 	apsys_dvfs_class_init();
 	apsys_dvfs_device_create(apsys, dev);
@@ -303,7 +287,7 @@ static int apsys_dvfs_probe(struct platform_device *pdev)
 		apsys->dvfs_ops->dvfs_init(apsys);
 
 	if (apsys->dvfs_ops && apsys->dvfs_ops->top_dvfs_init)
-		apsys->dvfs_ops->top_dvfs_init();
+		apsys->dvfs_ops->top_dvfs_init(apsys);
 	pr_info("apsys module registered\n");
 
 	return 0;
@@ -313,15 +297,37 @@ static int apsys_dvfs_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static const struct sprd_apsys_dvfs_ops qogirl6_apsys_ops = {
+	.apsys_ops = &qogirl6_apsys_dvfs_ops,
+};
+
+static const struct sprd_apsys_dvfs_ops roc1_apsys_ops = {
+	.apsys_ops = &roc1_apsys_dvfs_ops,
+};
+
+static const struct sprd_apsys_dvfs_ops sharkl5pro_apsys_ops = {
+	.apsys_ops = &sharkl5pro_apsys_dvfs_ops,
+};
+
+static const struct sprd_apsys_dvfs_ops sharkl5_apsys_ops = {
+	.apsys_ops = &sharkl5_apsys_dvfs_ops,
+};
+
+/*
+static const struct sprd_apsys_dvfs_ops sharkl5pro_apsys_ops = {
+	.apsys_ops = &sharkl5pro_apsys_dvfs_ops,
+};
+*/
+
 static const struct of_device_id apsys_dvfs_of_match[] = {
 	{ .compatible = "sprd,hwdvfs-apsys-sharkl5",
-	  .data = "sharkl5" },
+	  .data = &sharkl5_apsys_ops },
 	{ .compatible = "sprd,hwdvfs-apsys-roc1",
-	  .data = "roc1" },
+	  .data = &roc1_apsys_ops },
 	{ .compatible = "sprd,hwdvfs-apsys-sharkl5pro",
-	  .data = "sharkl5pro" },
+	  .data = &sharkl5pro_apsys_ops },
 	{ .compatible = "sprd,hwdvfs-apsys-qogirl6",
-	  .data = "qogirl6" },
+	  .data = &qogirl6_apsys_ops },
 	{ },
 };
 
@@ -337,17 +343,61 @@ static struct platform_driver apsys_dvfs_driver = {
 	},
 };
 
+static struct platform_driver *sprd_apsys_dvfs_drivers[]  = {
+	&dpu_dvfs_driver,
+#ifdef CONFIG_DRM_SPRD_GSP_DVFS
+	&gsp_dvfs_driver,
+#endif
+	&vdsp_dvfs_driver,
+	&vsp_dvfs_driver,
+};
+
+static struct devfreq_governor *sprd_apsys_dvfs_governors[]  = {
+	&dpu_devfreq_gov,
+#ifdef CONFIG_DRM_SPRD_GSP_DVFS
+	&gsp_devfreq_gov,
+#endif
+	&vdsp_devfreq_gov,
+	&vsp_devfreq_gov,
+};
+
 static int __init apsys_dvfs_register(void)
 {
-	return platform_driver_register(&apsys_dvfs_driver);
+	int i, ret;
+
+	ret = platform_driver_register(&apsys_dvfs_driver);
+	if (ret)
+		return ret;
+
+	for (i = 0; i < ARRAY_SIZE(sprd_apsys_dvfs_drivers); i++) {
+		ret = devfreq_add_governor(sprd_apsys_dvfs_governors[i]);
+		if (ret) {
+			pr_err("%s: failed to add governor: %d\n", __func__, ret);
+			return ret;
+		}
+
+		ret = platform_driver_register(sprd_apsys_dvfs_drivers[i]);
+		if (ret)
+			devfreq_remove_governor(sprd_apsys_dvfs_governors[i]);
+	}
+
+	return ret;
 }
 
 static void __exit apsys_dvfs_unregister(void)
 {
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(sprd_apsys_dvfs_drivers); i++) {
+		platform_driver_unregister(sprd_apsys_dvfs_drivers[i]);
+
+		devfreq_remove_governor(sprd_apsys_dvfs_governors[i]);
+	}
+
 	platform_driver_unregister(&apsys_dvfs_driver);
 }
 
-module_init(apsys_dvfs_register);
+subsys_initcall(apsys_dvfs_register);
 module_exit(apsys_dvfs_unregister);
 
 MODULE_LICENSE("GPL v2");

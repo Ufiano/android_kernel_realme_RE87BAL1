@@ -52,7 +52,14 @@
 
 #define SC2721_CHG_CCCV_MASK			GENMASK(5, 0)
 
-#define SC2721_WAKE_UP_MS                       2000
+#define SC2721_WAKE_UP_MS				2000
+
+struct sc2721_charge_current {
+	int sdp_cur;
+	int dcp_cur;
+	int cdp_cur;
+	int unknown_cur;
+};
 
 struct sc2721_charger_info {
 	struct device *dev;
@@ -60,7 +67,7 @@ struct sc2721_charger_info {
 	struct usb_phy *usb_phy;
 	struct notifier_block usb_notify;
 	struct power_supply *psy_usb;
-	struct power_supply_charge_current cur;
+	struct sc2721_charge_current cur;
 	struct work_struct work;
 	struct mutex lock;
 	bool charging;
@@ -181,66 +188,113 @@ static int sc2721_set_termination_voltage(struct sc2721_charger_info *info,
 	return ret;
 }
 
+int sc2721_get_battery_cur(struct power_supply *psy,
+			   struct sc2721_charge_current *bat_cur)
+{
+	struct device_node *battery_np;
+	const char *value;
+	int err;
+
+	bat_cur->sdp_cur = -EINVAL;
+	bat_cur->dcp_cur = -EINVAL;
+	bat_cur->cdp_cur = -EINVAL;
+	bat_cur->unknown_cur = -EINVAL;
+
+	if (!psy->of_node) {
+		dev_warn(&psy->dev, "%s currently only supports devicetree\n",
+			 __func__);
+		return -ENXIO;
+	}
+
+	battery_np = of_parse_phandle(psy->of_node, "monitored-battery", 0);
+	if (!battery_np)
+		return -ENODEV;
+
+	err = of_property_read_string(battery_np, "compatible", &value);
+	if (err)
+		goto out_put_node;
+
+	if (strcmp("simple-battery", value)) {
+		err = -ENODEV;
+		goto out_put_node;
+	}
+
+	of_property_read_u32_index(battery_np, "charge-sdp-current-microamp", 0,
+				   &bat_cur->sdp_cur);
+	of_property_read_u32_index(battery_np, "charge-dcp-current-microamp", 0,
+				   &bat_cur->dcp_cur);
+	of_property_read_u32_index(battery_np, "charge-cdp-current-microamp", 0,
+				   &bat_cur->cdp_cur);
+	of_property_read_u32_index(battery_np, "charge-unknown-current-microamp", 0,
+				   &bat_cur->unknown_cur);
+
+out_put_node:
+	of_node_put(battery_np);
+	return err;
+}
+
 static int sc2721_charger_hw_init(struct sc2721_charger_info *info)
 {
 	struct power_supply_battery_info bat_info = { };
 	u32 voltage_max_microvolt;
 	int ret;
 
-	ret = power_supply_get_battery_info(info->psy_usb, &bat_info, 0);
+	ret = sc2721_get_battery_cur(info->psy_usb, &info->cur);
 	if (ret) {
-		dev_warn(info->dev, "no battery information is supplied\n");
+		dev_warn(info->dev, "no battery current information is supplied\n");
+
 		info->cur.sdp_cur = 500000;
 		info->cur.dcp_cur = 500000;
 		info->cur.cdp_cur = 1500000;
 		info->cur.unknown_cur = 500000;
-		ret = 0;
-	} else {
-		info->cur.sdp_cur = bat_info.cur.sdp_cur;
-		info->cur.dcp_cur = bat_info.cur.dcp_cur;
-		info->cur.cdp_cur = bat_info.cur.cdp_cur;
-		info->cur.unknown_cur = bat_info.cur.unknown_cur;
+	}
 
+	ret = power_supply_get_battery_info(info->psy_usb, &bat_info);
+	if (ret) {
+		dev_warn(info->dev, "no battery information is supplied\n");
+		voltage_max_microvolt = 4440;
+	} else {
 		voltage_max_microvolt =
 			bat_info.constant_charge_voltage_max_uv / 1000;
 		power_supply_put_battery_info(info->psy_usb, &bat_info);
-
-		ret = regmap_update_bits(info->regmap,
-					 info->base + SC2721_CHG_CFG0,
-					 SC2721_CHG_CC_MODE,
-					 SC2721_CHG_CC_MODE);
-		if (ret) {
-			dev_err(info->dev, "failed to enable charger cc\n");
-			return ret;
-		}
-
-		ret = regmap_update_bits(info->regmap,
-					 info->base + SC2721_CHG_CFG0,
-					 SC2721_CHG_DPM_MASK,
-					 0x3 << SC2721_CHG_DPM_MASK_SHIT);
-		if (ret) {
-			dev_err(info->dev, "failed to set charger dpm\n");
-			return ret;
-		}
-
-		/* Set charge termination voltage */
-		ret = sc2721_set_termination_voltage(info,
-						     voltage_max_microvolt);
-		if (ret) {
-			dev_err(info->dev, "failed to set termination voltage\n");
-			return ret;
-		}
-
-		/* Set charge over voltage protection value 6500mv */
-		ret = regmap_update_bits(info->regmap,
-					 info->base + SC2721_CHG_CFG1,
-					 SC2721_CHG_OVP_MASK,
-					 0x09);
-		if (ret) {
-			dev_err(info->dev, "failed to set charger ovp\n");
-			return ret;
-		}
 	}
+
+	ret = regmap_update_bits(info->regmap,
+				 info->base + SC2721_CHG_CFG0,
+				 SC2721_CHG_CC_MODE,
+				 SC2721_CHG_CC_MODE);
+	if (ret) {
+		dev_err(info->dev, "failed to enable charger cc\n");
+		return ret;
+	}
+
+	ret = regmap_update_bits(info->regmap,
+				 info->base + SC2721_CHG_CFG0,
+				 SC2721_CHG_DPM_MASK,
+				 0x3 << SC2721_CHG_DPM_MASK_SHIT);
+	if (ret) {
+		dev_err(info->dev, "failed to set charger dpm\n");
+		return ret;
+	}
+
+	/* Set charge termination voltage */
+	ret = sc2721_set_termination_voltage(info,
+					     voltage_max_microvolt);
+	if (ret) {
+		dev_err(info->dev, "failed to set termination voltage\n");
+		return ret;
+	}
+
+	/* Set charge over voltage protection value 6500mv */
+	ret = regmap_update_bits(info->regmap,
+				 info->base + SC2721_CHG_CFG1,
+				 SC2721_CHG_OVP_MASK,
+				 0x09);
+	if (ret) {
+		dev_err(info->dev, "failed to set charger ovp\n");
+		return ret;
+	}
+
 	return ret;
 }
 
@@ -415,6 +469,7 @@ static int sc2721_charger_usb_change(struct notifier_block *nb,
 
 	info->limit = limit;
 
+	pm_wakeup_event(info->dev, SC2721_WAKE_UP_MS);
 	schedule_work(&info->work);
 	return NOTIFY_OK;
 }

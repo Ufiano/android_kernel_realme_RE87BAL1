@@ -1,20 +1,23 @@
+/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
- * Copyright (C) 2012--2015 Spreadtrum Communications Inc.
+ * Unisoc UMS512 VSP driver
  *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2019 Unisoc, Inc.
  */
+
 #ifndef _SPRD_VSP_H
 #define _SPRD_VSP_H
 
+#ifdef __KERNEL__
+#include <linux/types.h>
 #include <linux/ioctl.h>
+#ifdef CONFIG_COMPAT
 #include <linux/compat.h>
+#endif
+#else // Not __KERNEL__
+#include <stdio.h>
+#include <sys/ioctl.h>
+#endif
 
 #define SPRD_VSP_MAP_SIZE 0xA000
 #define SPRD_VSP_CLK_LEVEL_NUM 5
@@ -39,6 +42,7 @@
 #define VSP_GET_SCENE                _IO(SPRD_VSP_IOCTL_MAGIC, 17)
 #define VSP_SYNC_GSP                _IO(SPRD_VSP_IOCTL_MAGIC, 18)
 
+#ifdef __KERNEL__
 #ifdef CONFIG_COMPAT
 #define COMPAT_VSP_GET_IOVA    _IOWR(SPRD_VSP_IOCTL_MAGIC, 11, struct compat_vsp_iommu_map_data)
 #define COMPAT_VSP_FREE_IOVA   _IOW(SPRD_VSP_IOCTL_MAGIC, 12, struct compat_vsp_iommu_map_data)
@@ -49,6 +53,8 @@ struct compat_vsp_iommu_map_data {
 	compat_ulong_t iova_addr;
 };
 #endif
+#endif
+
 enum sprd_vsp_frequency_e {
 	VSP_FREQENCY_LEVEL_0 = 0,
 	VSP_FREQENCY_LEVEL_1 = 1,
@@ -69,7 +75,7 @@ enum {
 	VSP_CODEC_INSTANCE_COUNT_MAX
 };
 
-typedef enum {
+enum vsp_version_e {
 	SHARK = 0,
 	DOLPHIN = 1,
 	TSHARK = 2,
@@ -90,9 +96,10 @@ typedef enum {
 	SHARKL5 = 17,
 	ROC1 = 18,
 	SHARKL5Pro  = 19,
-	QOGIRL6  = 20,
+	SHARKL6 = 20,
+	QOGIRN6PRO = 21,
 	MAX_VERSIONS,
-} VSP_VERSION_E;
+};
 
 struct vsp_iommu_map_data {
 	int fd;
@@ -101,16 +108,16 @@ struct vsp_iommu_map_data {
 };
 
 /*
-VSP_ACQUAIRE:aquaire the hw module mutex lock
-VSP_RELEASE:release the hw module mutex lock
-all other commands must be sent only when the VSP user has acquaired the lock
-VSP_ENABLE:enable vsp clock
-VSP_DISABLE:disable vsp clock
-VSP_COMPLETE:all the preparing work is done and start the vsp, the vsp finishes
-its job after this command retruns.
-VSP_RESET:reset vsp hardware
-VSP_CONFIG_FREQ/VSP_GET_FREQ:set/get vsp frequency,the parameter is of
-type sprd_vsp_frequency_e, the larger the faster
-*/
+ * VSP_ACQUAIRE:aquaire the hw module mutex lock
+ * VSP_RELEASE:release the hw module mutex lock
+ * all other commands must be sent only when the VSP user has acquaired the lock
+ * VSP_ENABLE:enable vsp clock
+ * VSP_DISABLE:disable vsp clock
+ * VSP_COMPLETE:all the preparing work is done and start the vsp, the vsp finishes
+ * its job after this command retruns.
+ * VSP_RESET:reset vsp hardware
+ * VSP_CONFIG_FREQ/VSP_GET_FREQ:set/get vsp frequency,the parameter is of
+ * type sprd_vsp_frequency_e, the larger the faster
+ */
 
 #endif

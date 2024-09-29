@@ -17,6 +17,7 @@
 #include <linux/cpufreq.h>
 #include <linux/jiffies.h>
 #include <linux/kernel.h>
+#include <linux/cpumask.h>
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
@@ -25,7 +26,6 @@
 #include <linux/slab.h>
 #include <linux/types.h>
 #include <linux/of_platform.h>
-#include <linux/soc/sprd/hwfeature.h>
 
 /* Default voltage_tolerance */
 #define DEF_VOLT_TOL			0
@@ -40,7 +40,7 @@
 /*0-cluster0; 1-custer1*/
 #define SPRD_CPUFREQ_MAX_CLUSTER	2
 #define SPRD_MAX_CPUS_EACH_CLUSTER	4
-#define SPRD_CPUFREQ_MAX_FREQ_VOLT	16
+#define SPRD_CPUFREQ_MAX_FREQ_VOLT	10
 #define SPRD_CPUFREQ_MAX_TEMP		4
 #define SPRD_CPUFREQ_TEMP_FALL_HZ	(2 * HZ)
 #define SPRD_CPUFREQ_TEMP_UPDATE_HZ	(HZ / 2)
@@ -85,7 +85,7 @@ struct sprd_cpufreq_driver_data {
 	unsigned int volt_tol;
 	unsigned int volt_tol_var;
 	/*BitX = 1 means sub_cluster exits*/
-	unsigned long sub_cluster_bits;
+	unsigned int sub_cluster_bits;
 	/*Volt requested by this cluster*/
 	unsigned long volt_req;/*uv*/
 	unsigned int volt_share_hosts_bits;
@@ -107,9 +107,12 @@ struct sprd_cpufreq_driver_data {
 	/*cpufreq points to hotplug notify*/
 	int (*cpufreq_online)(unsigned int cpu);
 	int (*cpufreq_offline)(unsigned int cpu);
-
+	/*CUFREQ points to update opp by temp*/
+	unsigned int (*update_opp)(int cpu, int temp_now);
 	/* judge soc version */
 	bool version_judge;
+
+	cpumask_t cluster_cpumask;
 };
 
 #define CPUFREQHW_NAME_LEN			30
@@ -117,9 +120,10 @@ struct sprd_cpufreq_driver_data {
 struct sprd_cpudvfs_ops {
 	bool (*probed)(void *drvdata, int cluster);
 	bool (*enable)(void *drvdata, int cluster, bool en);
-	int (*opp_add)(void *drvdata, int cluster, unsigned long hz_freq,
-			unsigned long u_volt, int opp_idx);
-	int (*set)(void *drvdata, int cluster, u32 opp_idx);
+	int (*opp_add)(void *drvdata, unsigned int cluster,
+		       unsigned long hz_freq, unsigned long u_volt,
+		       int opp_idx);
+	int (*set)(void *drvdata, u32 cluster, u32 opp_idx);
 	unsigned int (*get)(void *drvdata, int cluster);
 	int (*udelay_update)(void *drvdata, int cluster);
 	int (*index_tbl_update)(void *drvdata, char *opp_name, int cluster);
@@ -142,5 +146,7 @@ int dev_pm_opp_of_add_table_binning(int cluster,
 				struct sprd_cpufreq_driver_data *cpufreq_data);
 
 int sprd_cpufreq_cpuhp_setup(void);
+
+unsigned int sprd_cpufreq_update_opp_common(int cpu, int temp_now);
 
 #endif

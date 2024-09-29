@@ -29,6 +29,7 @@
 #include <asm/fixmap.h>
 #include <asm/pgalloc.h>
 #include <linux/slab.h>
+#include <linux/mod_devicetable.h>
 
 #define ADI_15BIT_OFFSET		0x20000
 #define ADI_OFFSET			0x8000
@@ -141,7 +142,7 @@ static int sprd_read_pa(unsigned long preg, unsigned long *val)
 			regmap_read(lookat_desc.regmap, (unsigned int)vaddr,
 				    (unsigned int *)val);
 		else {
-			io_addr = ioremap_nocache(preg, PAGE_SIZE);
+			io_addr = ioremap(preg, PAGE_SIZE);
 			if (!io_addr) {
 				pr_warn("unable to map i/o region\n");
 				return -ENOMEM;
@@ -172,7 +173,7 @@ static int sprd_write_pa(unsigned long paddr, const unsigned long or_val,
 			regmap_write(lookat_desc.regmap, (unsigned int)vaddr,
 				     (unsigned int)or_val);
 		else {
-			io_addr = ioremap_nocache(paddr, PAGE_SIZE);
+			io_addr = ioremap(paddr, PAGE_SIZE);
 			if (!io_addr) {
 				pr_warn("unable to map i/o region\n");
 				return -ENOMEM;
@@ -324,14 +325,26 @@ static int __init debug_add(struct sprd_lookat *lookat, struct dentry *parent)
 	return 0;
 }
 
+struct sprd_lookat_variant_data {
+	u32 slave_offset;
+};
+
+static const struct sprd_lookat_variant_data ump962x_data = {
+	.slave_offset = ADI_15BIT_OFFSET,
+};
+
+static const struct sprd_lookat_variant_data sc27xx_data = {
+	.slave_offset = ADI_OFFSET,
+};
+
 static const struct of_device_id sprd_lookat_of_match[] = {
 	{
 		.compatible = "sprd,ump962x-syscon",
-		.data = (void *)ADI_15BIT_OFFSET,
+		.data = &ump962x_data,
 	},
 	{
 		.compatible = "sprd,sc27xx-syscon",
-		.data = (void *)ADI_OFFSET,
+		.data = &sc27xx_data,
 	},
 	{},
 };
@@ -361,14 +374,15 @@ static int __init lookat_debug_init(void)
 	INIT_LIST_HEAD(&lookat_desc.request_list);
 
 	regmap_np = of_find_matching_node_and_match(NULL, sprd_lookat_of_match,
-						&lookat_id);
+						    &lookat_id);
 	if (!regmap_np)
 		goto error_pmic_node;
 
 	if (of_device_is_compatible(regmap_np->parent, "sprd,sc2730"))
 		lookat_desc.slave_offset = ADI_15BIT_OFFSET;
 	else
-		lookat_desc.slave_offset = (u32)lookat_id->data;
+		lookat_desc.slave_offset = ((struct sprd_lookat_variant_data *)
+					    (lookat_id->data))->slave_offset;
 
 	pdev_regmap = of_find_device_by_node(regmap_np);
 	if (!pdev_regmap)

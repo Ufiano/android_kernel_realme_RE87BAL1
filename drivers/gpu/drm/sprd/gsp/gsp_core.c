@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/io.h>
@@ -46,8 +38,7 @@ int gsp_core_verify(struct gsp_core *core)
 	return ret;
 }
 
-void gsp_core_state_set(struct gsp_core *core,
-			 enum gsp_core_state st)
+void gsp_core_state_set(struct gsp_core *core, enum gsp_core_state st)
 {
 	atomic_set(&core->state, st);
 }
@@ -58,7 +49,7 @@ enum gsp_core_state gsp_core_state_get(struct gsp_core *core)
 }
 
 void gsp_core_suspend_state_set(struct gsp_core *core,
-			 enum gsp_core_suspend_state state)
+			enum gsp_core_suspend_state state)
 {
 	atomic_set(&core->suspend_state, state);
 }
@@ -241,7 +232,7 @@ int gsp_core_suspend_wait(struct gsp_core *core)
 		err++;
 	} else if (time > 0) {
 		GSP_DEBUG("core[%d] suspend wait success\n",
-			  gsp_core_to_id(core));
+			gsp_core_to_id(core));
 	}
 
 	if (err)
@@ -268,7 +259,7 @@ int gsp_core_release_wait(struct gsp_core *core)
 		err++;
 	} else if (time > 0) {
 		GSP_DEBUG("core[%d] release wait success\n",
-			  gsp_core_to_id(core));
+			gsp_core_to_id(core));
 	}
 
 	if (err)
@@ -329,8 +320,7 @@ void gsp_core_dump(struct gsp_core *core)
 
 	gsp = gsp_core_to_parent(core);
 	interface = gsp_dev_to_interface(gsp);
-	if (interface->ops
-	    && interface->ops->dump)
+	if (interface->ops && interface->ops->dump)
 		interface->ops->dump(interface);
 	core->ops->dump(core);
 }
@@ -345,8 +335,7 @@ void gsp_core_trigger(struct kthread_work *work)
 
 	core = container_of(work, struct gsp_core, trigger);
 	if (gsp_core_verify(core)) {
-		GSP_ERR("core[%d] trigger params error\n",
-			core->id);
+		GSP_ERR("core[%d] trigger params error\n", core->id);
 		goto done;
 	}
 	gsp = gsp_core_to_parent(core);
@@ -360,8 +349,7 @@ void gsp_core_trigger(struct kthread_work *work)
 	pm_runtime_mark_last_busy(core->parent->dev);
 
 	if (!core->ops->trigger) {
-		GSP_ERR("core[%d] has no trigger func\n",
-			core->id);
+		GSP_ERR("core[%d] has no trigger func\n", core->id);
 		goto done;
 	}
 
@@ -442,8 +430,7 @@ void gsp_core_release(struct kthread_work *work)
 
 	core = container_of(work, struct gsp_core, release);
 	if (gsp_core_verify(core)) {
-		GSP_ERR("core[%d] release params error\n",
-			core->id);
+		GSP_ERR("core[%d] release params error\n", core->id);
 		return;
 	}
 	gsp = gsp_core_to_parent(core);
@@ -453,8 +440,7 @@ void gsp_core_release(struct kthread_work *work)
 		gsp_core_dump(core);
 
 	GSP_DEBUG("gsp core[%d] start release\n", gsp_core_to_id(core));
-	if (gsp_core_is_irq_handled(core)
-	    || gsp_core_is_suspend(core)
+	if (gsp_core_is_irq_handled(core) || gsp_core_is_suspend(core)
 	    || gsp_core_is_irq_error(core)) {
 		kcfg = core->current_kcfg;
 	} else {
@@ -504,17 +490,16 @@ void gsp_core_release(struct kthread_work *work)
 		return;
 	}
 
+	pm_runtime_mark_last_busy(core->parent->dev);
+	pm_runtime_put_autosuspend(core->parent->dev);
+	if (gsp_core_suspend_state_get(core) ==
+			 CORE_STATE_SUSPEND_WAIT) {
+		complete(&core->suspend_done);
+	}
+
 	if (!gsp_workqueue_is_filled(core->wq)) {
 		gsp_core_state_set(core, CORE_STATE_IDLE);
-		if (!gsp_workqueue_is_filled(core->wq)) {
-			pm_runtime_mark_last_busy(core->parent->dev);
-			pm_runtime_put_autosuspend(core->parent->dev);
-			if (gsp_core_suspend_state_get(core) ==
-					 CORE_STATE_SUSPEND_WAIT) {
-				complete(&core->suspend_done);
-			}
-			return;
-		}
+		return;
 	}
 
 	gsp_core_state_set(core, CORE_STATE_TRIGGER);
@@ -541,7 +526,7 @@ void gsp_core_recover(struct kthread_work *work)
 	}
 
 	GSP_INFO("enter gsp core recover, with state: %d\n",
-		 gsp_core_state_get(core));
+		gsp_core_state_get(core));
 
 	if (!gsp_core_is_err(core)) {
 		GSP_ERR("there is nothing wrong with core\n");
@@ -630,6 +615,9 @@ void gsp_core_recover(struct kthread_work *work)
 
 	core->current_kcfg = NULL;
 
+	pm_runtime_mark_last_busy(core->parent->dev);
+	pm_runtime_put_autosuspend(core->parent->dev);
+
 	if (gsp_core_suspend_state_get(core))
 		complete(&core->suspend_done);
 	else {
@@ -673,13 +661,13 @@ int gsp_core_alloc(struct gsp_core **core,
 {
 	int ret = -1;
 	u32 tmp = 0;
-	int i = 0;
+	int i;
 	struct gsp_kcfg *kcfg = NULL;
 	struct gsp_workqueue *wq = NULL;
 
 	if (IS_ERR_OR_NULL(core)
-	    || IS_ERR_OR_NULL(ops)
-	    || IS_ERR_OR_NULL(node)) {
+	|| IS_ERR_OR_NULL(ops)
+	|| IS_ERR_OR_NULL(node)) {
 		GSP_ERR("core alloc params error\n");
 		return ret;
 	}
@@ -704,7 +692,7 @@ int gsp_core_alloc(struct gsp_core **core,
 
 	/* assign core name with core-id here */
 	snprintf((*core)->name, sizeof((*core)->name), "gsp-core[%d]",
-			(*core)->id);
+		(*core)->id);
 
 	/* read max kcfg number possessed by core*/
 	ret = of_property_read_u32(node, "kcfg-num", &tmp);
@@ -803,11 +791,10 @@ struct gsp_core *gsp_core_select(struct gsp_dev *gsp)
 	return result;
 }
 
-void gsp_core_hang_handler(unsigned long data)
+void gsp_core_hang_handler(struct timer_list *time)
 {
-	struct gsp_core *core = NULL;
+	struct gsp_core *core = from_timer(core, time, timer);
 
-	core = (struct gsp_core *)data;
 	gsp_core_state_set(core, CORE_STATE_HW_HANG_ERR);
 	kthread_queue_work(&core->kworker, &core->recover);
 }
@@ -818,12 +805,11 @@ void gsp_core_reset(struct gsp_core *core)
 	struct gsp_interface *interface = NULL;
 
 	GSP_ERR("core[%d] need reset because of hung\n",
-			 gsp_core_state_get(core));
+		gsp_core_state_get(core));
 
 	gsp = gsp_core_to_parent(core);
 	interface = gsp_dev_to_interface(gsp);
-	if (core->ops->reset
-	    && interface->ops->reset) {
+	if (core->ops->reset && interface->ops->reset) {
 		core->ops->reset(core);
 		interface->ops->reset(interface);
 	}
@@ -892,7 +878,7 @@ int gsp_core_init(struct gsp_core *core)
 		return ret;
 	}
 
-	setup_timer(&core->timer, gsp_core_hang_handler, (unsigned long)core);
+	timer_setup(&core->timer, gsp_core_hang_handler, 0);
 
 	gsp_core_state_set(core, CORE_STATE_IDLE);
 	gsp_core_suspend_state_set(core, CORE_STATE_SUSPEND_EXIT);
@@ -908,7 +894,7 @@ int gsp_core_init(struct gsp_core *core)
 	kthread_init_work(&core->recover, gsp_core_recover);
 
 	task = kthread_run(kthread_worker_fn, &core->kworker,
-			   "gsp-core[%d]", core->id);
+			  "gsp-core[%d]", core->id);
 	if (task)
 		core->work_thread = task;
 	else
@@ -995,8 +981,7 @@ int gsp_core_stop(struct gsp_core *core)
 	return 0;
 }
 
-struct gsp_capability *
-gsp_core_get_capability(struct gsp_core *core)
+struct gsp_capability *gsp_core_get_capability(struct gsp_core *core)
 {
 	return core->capa;
 }

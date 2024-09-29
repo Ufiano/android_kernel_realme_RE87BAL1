@@ -25,16 +25,9 @@ struct sprd_time_sync_device {
 #if IS_ENABLED(CONFIG_SPRD_TIME_SYNC)
 extern int sprd_send_ap_time(void);
 extern int sprd_time_sync_register_notifier(struct notifier_block *nb);
-extern int sprd_time_sync_fn(struct notifier_block *nb, unsigned long action, void *data);
 #else
 static inline int sprd_send_ap_time(void) { return 0; }
 static inline int sprd_time_sync_register_notifier(struct notifier_block *nb) { return 0; }
-static inline int sprd_time_sync_fn(struct notifier_block *nb, unsigned long action, void *data) { return 0; }
 #endif
-
-/* define a notifier_block */
-static struct notifier_block sprd_time_sync_notifier = {
-	.notifier_call = sprd_time_sync_fn,
-};
 
 #endif /* _SPRD_TIME_SYNC_H */

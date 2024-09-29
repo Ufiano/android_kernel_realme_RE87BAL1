@@ -77,7 +77,7 @@ static void kevent_tp_idx(enum ktp_event_type ktp_type, void *data, int idx)
 		break;
 	case KTP_IRQ:
 		snprintf(start + 23, PER_ITEM_SIZE - 23,
-			 "irq: interrupt %d handler(gic-v3)", (int)data);
+			 "irq: interrupt %d handler(gic-v3)", (long)data);
 		break;
 	default:
 		break;

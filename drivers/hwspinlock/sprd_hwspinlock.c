@@ -1,15 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Spreadtrum hardware spinlock driver
  * Copyright (C) 2017 Spreadtrum  - http://www.spreadtrum.com
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
  */
 
 #include <linux/bitops.h>
@@ -117,7 +109,7 @@ static int sprd_hwspinlock_probe(struct platform_device *pdev)
 
 	ret = clk_prepare_enable(sprd_hwlock->clk);
 	if (ret) {
-		dev_err(&pdev->dev, "hwspinlock clock enable failed\n");
+		dev_err(&pdev->dev, "clock enable failed!\n");
 		return ret;
 	}
 
@@ -155,9 +147,6 @@ static int sprd_hwspinlock_remove(struct platform_device *pdev)
 
 static const struct of_device_id sprd_hwspinlock_of_match[] = {
 	{ .compatible = "sprd,hwspinlock-r3p0", },
-	{ .compatible = "sprd,sharkl5-hwspinlock", },
-	{ .compatible = "sprd,roc1-hwspinlock", },
-	{ .compatible = "sprd,orca-hwspinlock", },
 	{ /* sentinel */ }
 };
 MODULE_DEVICE_TABLE(of, sprd_hwspinlock_of_match);

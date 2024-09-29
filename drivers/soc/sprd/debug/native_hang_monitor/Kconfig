@@ -1,5 +1,0 @@
-config SPRD_NATIVE_HANG_MONITOR
-	bool "Enable SPRD android native hang detect handler"
-	help
-		This option enables Spreatrum android native hang detect which prepare debug info
-		for the case to debug.

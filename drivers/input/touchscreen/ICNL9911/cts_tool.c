@@ -567,7 +567,7 @@ static ssize_t cts_tool_write(struct file *file,
 
     return ret ? 0 : cmd->data_len + CTS_TOOL_CMD_HEADER_LENGTH;
 }
-
+#if 0
 static int cts_ioctl_test(struct cts_device *cts_dev,
     u32 ntests, struct cts_test_param *tests)
 {
@@ -610,9 +610,9 @@ static int cts_ioctl_test(struct cts_device *cts_dev,
         cts_info("ioctl test item %d: %d(%s) flags: %08x priv param size: %d",
             i, tests[i].test_item, cts_test_item_str(tests[i].test_item),
             tests[i].flags, tests[i].priv_param_size);
-        /*
-         * Validate arguement
-         */
+		/*
+		*Validate arguement
+		*/
         validate_data =
             !!(tests[i].flags & CTS_TEST_FLAG_VALIDATE_DATA);
         validate_data_per_node =
@@ -1005,7 +1005,7 @@ store_result:
 
     return ret;
 }
-
+#endif
 static int cts_ioctl_rdwr_reg(struct cts_device *cts_dev,
     u8 reg_type, u32 nregs, struct cts_rdwr_reg *regs)
 {
@@ -1132,7 +1132,7 @@ unlock_device:
 
     return ret;
 }
-
+#if 0
 static int cts_ioctl_upgrade_fw(struct cts_device *cts_dev,
     struct cts_upgrade_fw_ioctl_data *ioctl_data)
 {
@@ -1258,7 +1258,7 @@ static int cts_ioctl_upgrade_fw(struct cts_device *cts_dev,
         return -EINVAL;
     }
 }
-
+#endif
 static long cts_tool_ioctl(struct file *file, unsigned int cmd,
         unsigned long arg)
 {
@@ -1316,8 +1316,8 @@ static long cts_tool_ioctl(struct file *file, unsigned int cmd,
             cts_err("Memdump test param to kernel failed %d", ret);
             return ret;
         }
-
-        return cts_ioctl_test(cts_dev, test_arg.ntests, tests_pa);
+		return 0;
+        //return cts_ioctl_test(cts_dev, test_arg.ntests, tests_pa);
     }
     case CTS_TOOL_IOCTL_RDWR_REG:{
         struct cts_rdwr_reg_ioctl_data ioctl_data;
@@ -1357,7 +1357,8 @@ static long cts_tool_ioctl(struct file *file, unsigned int cmd,
             return -EFAULT;
         }
 
-        return cts_ioctl_upgrade_fw(cts_dev, &ioctl_data);
+		return 0;
+        //return cts_ioctl_upgrade_fw(cts_dev, &ioctl_data);
     }
     default:
         cts_err("Unsupported ioctl cmd=0x%08x, arg=0x%08lx", cmd, arg);

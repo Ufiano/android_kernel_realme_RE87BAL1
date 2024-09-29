@@ -9,7 +9,7 @@ dtbo	:= $(addprefix $(obj)/,$(dtbo))
 
 ifneq ($(DTC_OVERLAY_TEST_EXT),)
 DTC_OVERLAY_TEST = $(DTC_OVERLAY_TEST_EXT)
-quiet_cmd_dtbo_verify	= VERIFY  $@
+quiet_cmd_dtbo_verify   = VERIFY  $@
 cmd_dtbo_verify = $(foreach m,\
 	$(addprefix $(obj)/,$($(@F)-base)),\
 		$(if $(m),\
@@ -32,8 +32,8 @@ else
 cmd_dtbo_vts = true
 endif
 
-$(obj)/%.dtbo: $(src)/%.dts FORCE
-	$(call if_changed_dep,dtc)
+$(obj)/%.dtbo: $(src)/%.dts $(DTC) FORCE
+	$(call if_changed_dep,dtc,dtb)
 	$(call if_changed,dtbo_verify)
 	$(call if_changed,dtbo_vts)
 

@@ -17,6 +17,8 @@
 #define __HIMAX_MODULAR_TABLE_H__
 
 #include "himax_ic_core.h"
+#include <linux/kallsyms.h>
+//extern unsigned long kallsyms_lookup_name(const char *name);
 
 #define TO_STR(VAR)	#VAR
 
@@ -65,7 +67,7 @@ static const char * const himax_ksym_lookup[] = {
 	#endif
 	NULL
 };
-
+#if 0
 static struct himax_chip_entry *get_chip_entry_by_index(int32_t idx)
 {
 	return  (void *)kallsyms_lookup_name(himax_ksym_lookup[idx]);
@@ -74,6 +76,7 @@ static struct himax_chip_entry *get_chip_entry_by_index(int32_t idx)
 /*
  * Return 1 when specified entry is empty, 0 when not, -1 when index error
  */
+
 static int32_t isEmpty(int32_t idx)
 {
 	int32_t size = sizeof(himax_ksym_lookup) / sizeof(char *);
@@ -93,6 +96,7 @@ static int32_t isEmpty(int32_t idx)
  * Search for created entry, if not existed, return 1st
  * Return index of himax_ksym_lookup
  */
+
 static int32_t himax_get_ksym_idx(void)
 {
 	int32_t i, first = -1;
@@ -118,7 +122,7 @@ static int32_t himax_get_ksym_idx(void)
 	/*incorrect use state, means no ic defined*/
 	return MODULE_NOT_FOUND;
 }
-
+#endif
 #else
 #define DECLARE(sym)
 extern struct himax_chip_entry himax_ksym_lookup;

@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2012 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/kernel.h>
@@ -27,7 +19,7 @@ static int dphy_wait_pll_locked(struct sprd_dphy *dphy)
 	}
 
 	pr_err("error: dphy pll can not be locked\n");
-	return -1;
+	return -ETIMEDOUT;
 }
 
 static int dphy_wait_datalane_stop_state(struct sprd_dphy *dphy, u8 mask)
@@ -41,7 +33,7 @@ static int dphy_wait_datalane_stop_state(struct sprd_dphy *dphy, u8 mask)
 	}
 
 	pr_err("wait datalane stop-state time out\n");
-	return -1;
+	return -ETIMEDOUT;
 }
 
 static int dphy_wait_datalane_ulps_active(struct sprd_dphy *dphy, u8 mask)
@@ -55,7 +47,7 @@ static int dphy_wait_datalane_ulps_active(struct sprd_dphy *dphy, u8 mask)
 	}
 
 	pr_err("wait datalane ulps-active time out\n");
-	return -1;
+	return -ETIMEDOUT;
 }
 
 static int dphy_wait_clklane_stop_state(struct sprd_dphy *dphy)
@@ -69,7 +61,7 @@ static int dphy_wait_clklane_stop_state(struct sprd_dphy *dphy)
 	}
 
 	pr_err("wait clklane stop-state time out\n");
-	return -1;
+	return -ETIMEDOUT;
 }
 
 static int dphy_wait_clklane_ulps_active(struct sprd_dphy *dphy)
@@ -83,13 +75,14 @@ static int dphy_wait_clklane_ulps_active(struct sprd_dphy *dphy)
 	}
 
 	pr_err("wait clklane ulps-active time out\n");
-	return -1;
+	return -ETIMEDOUT;
 }
 
-int sprd_dphy_configure(struct sprd_dphy *dphy)
+int sprd_dphy_init(struct sprd_dphy *dphy)
 {
-	struct dphy_pll_ops *pll = dphy->pll;
+	const struct dphy_pll_ops *pll = dphy->pll;
 	struct dphy_context *ctx = &dphy->ctx;
+	int ret;
 
 	pr_info("lanes : %d\n", ctx->lanes);
 	pr_info("freq : %d\n", ctx->freq);
@@ -111,8 +104,9 @@ int sprd_dphy_configure(struct sprd_dphy *dphy)
 	dphy_hal_clklane_en(dphy, 1);
 	dphy_hal_datalane_en(dphy);
 
-	if (dphy_wait_pll_locked(dphy))
-		return -1;
+	ret = dphy_wait_pll_locked(dphy);
+	if (ret)
+		return ret;
 
 	return 0;
 }
@@ -133,7 +127,7 @@ void sprd_dphy_shutdown(struct sprd_dphy *dphy)
 
 int sprd_dphy_hop_config(struct sprd_dphy *dphy, int delta, int period)
 {
-	struct dphy_pll_ops *pll = dphy->pll;
+	const struct dphy_pll_ops *pll = dphy->pll;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (pll->hop_config)
@@ -144,7 +138,7 @@ int sprd_dphy_hop_config(struct sprd_dphy *dphy, int delta, int period)
 
 int sprd_dphy_ssc_en(struct sprd_dphy *dphy, bool en)
 {
-	struct dphy_pll_ops *pll = dphy->pll;
+	const struct dphy_pll_ops *pll = dphy->pll;
 	struct dphy_context *ctx = &dphy->ctx;
 
 	if (pll->ssc_en)
@@ -153,76 +147,43 @@ int sprd_dphy_ssc_en(struct sprd_dphy *dphy, bool en)
 	return 0;
 }
 
-int sprd_dphy_close(struct sprd_dphy *dphy)
+void sprd_dphy_fini(struct sprd_dphy *dphy)
 {
-	if (!dphy)
-		return -1;
-
 	dphy_hal_rstz(dphy, 0);
 	dphy_hal_shutdownz(dphy, 0);
 	dphy_hal_rstz(dphy, 1);
-
-	return 0;
 }
 
-int sprd_dphy_data_ulps_enter(struct sprd_dphy *dphy)
+void sprd_dphy_data_ulps_enter(struct sprd_dphy *dphy)
 {
 	u8 lane_mask = (1 << dphy->ctx.lanes) - 1;
 
 	dphy_hal_datalane_ulps_rqst(dphy, 1);
-
 	dphy_wait_datalane_ulps_active(dphy, lane_mask);
-
-	/*
-	 * WARNING:
-	 * Don't clear ulps_request signal here, otherwise the
-	 * Mark-1 patten could not be generated when ULPS exit.
-	 */
-
-	return 0;
+	dphy_hal_datalane_ulps_rqst(dphy, 0);
 }
 
-int sprd_dphy_data_ulps_exit(struct sprd_dphy *dphy)
+void sprd_dphy_data_ulps_exit(struct sprd_dphy *dphy)
 {
 	u8 lane_mask = (1 << dphy->ctx.lanes) - 1;
 
 	dphy_hal_datalane_ulps_exit(dphy, 1);
-
-	dphy_hal_datalane_ulps_rqst(dphy, 0);
-
 	dphy_wait_datalane_stop_state(dphy, lane_mask);
-
 	dphy_hal_datalane_ulps_exit(dphy, 0);
-
-	return 0;
 }
 
-int sprd_dphy_clk_ulps_enter(struct sprd_dphy *dphy)
+void sprd_dphy_clk_ulps_enter(struct sprd_dphy *dphy)
 {
 	dphy_hal_clklane_ulps_rqst(dphy, 1);
-
 	dphy_wait_clklane_ulps_active(dphy);
-
-	/*
-	 * WARNING:
-	 * Don't clear ulps_request signal here, otherwise the
-	 * Mark-1 patten could not be generated when ULPS exit.
-	 */
-
-	return 0;
+	dphy_hal_clklane_ulps_rqst(dphy, 0);
 }
 
-int sprd_dphy_clk_ulps_exit(struct sprd_dphy *dphy)
+void sprd_dphy_clk_ulps_exit(struct sprd_dphy *dphy)
 {
 	dphy_hal_clklane_ulps_exit(dphy, 1);
-
-	dphy_hal_clklane_ulps_rqst(dphy, 0);
-
 	dphy_wait_clklane_stop_state(dphy);
-
 	dphy_hal_clklane_ulps_exit(dphy, 0);
-
-	return 0;
 }
 
 void sprd_dphy_force_pll(struct sprd_dphy *dphy, bool enable)
@@ -270,5 +231,17 @@ u8 sprd_dphy_test_read(struct sprd_dphy *dphy, u8 address)
 	return dphy_hal_test_dout(dphy);
 }
 
+void sprd_dphy_ulps_enter(struct sprd_dphy *dphy)
+{
+	sprd_dphy_hs_clk_en(dphy, false);
+	sprd_dphy_data_ulps_enter(dphy);
+	sprd_dphy_clk_ulps_enter(dphy);
+}
 
-
+void sprd_dphy_ulps_exit(struct sprd_dphy *dphy)
+{
+	sprd_dphy_force_pll(dphy, true);
+	sprd_dphy_clk_ulps_exit(dphy);
+	sprd_dphy_data_ulps_exit(dphy);
+	sprd_dphy_force_pll(dphy, false);
+}

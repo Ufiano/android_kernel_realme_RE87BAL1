@@ -1,23 +1,14 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2019 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/module.h>
 #include "sprd_corner.h"
 
-#define USE_EXTERNAL_SOURCE 0
+#define STEP (256)
 
-static unsigned int *layer_top;
-static unsigned int *layer_bottom;
+#define USE_EXTERNAL_SOURCE 0
 
 #if (USE_EXTERNAL_SOURCE)
 static unsigned char layer_top_header[] = {
@@ -28,7 +19,7 @@ static unsigned char layer_bottom_header[] = {
 };
 #endif
 
-struct sprd_dpu_layer corner_layer_top = {
+struct sprd_layer_state corner_layer_top = {
 	.planes = 1,
 	.xfbc = 0,
 	.format = DRM_FORMAT_ABGR8888,
@@ -36,7 +27,7 @@ struct sprd_dpu_layer corner_layer_top = {
 	.alpha = 0xff,
 };
 
-struct sprd_dpu_layer corner_layer_bottom = {
+struct sprd_layer_state corner_layer_bottom = {
 	.planes = 1,
 	.xfbc = 0,
 	.format = DRM_FORMAT_ABGR8888,
@@ -44,25 +35,27 @@ struct sprd_dpu_layer corner_layer_bottom = {
 	.alpha = 0xff,
 };
 
-static int sprd_corner_create(int width, int radius)
+static int sprd_corner_create(struct dpu_context *ctx)
 {
 	int buf_size;
 
-	buf_size = width * radius * 4;
-	layer_top = (u32 *)__get_free_pages(GFP_KERNEL |
+	buf_size = ctx->vm.vactive * ctx->vm.hactive * 4;
+	ctx->layer_top = (u32 *)__get_free_pages(GFP_KERNEL |
 		GFP_DMA | __GFP_ZERO, get_order(buf_size));
-	layer_bottom = (u32 *)__get_free_pages(GFP_KERNEL |
+	ctx->layer_bottom = (u32 *)__get_free_pages(GFP_KERNEL |
 		GFP_DMA | __GFP_ZERO, get_order(buf_size));
-	if (NULL == layer_top || NULL == layer_bottom)
-		return CORNER_ERR;
+	if (NULL == ctx->layer_top || NULL == ctx->layer_bottom) {
+		DRM_ERROR("%s(): get_free_pages is NULL\n", __func__);
+		return -ENOMEM;
+	}
 
-	return CORNER_DONE;
+	return 0;
 }
 
-void sprd_corner_destroy(void)
+void sprd_corner_destroy(struct dpu_context *ctx)
 {
-	kfree(layer_top);
-	kfree(layer_bottom);
+	kfree(ctx->layer_top);
+	kfree(ctx->layer_bottom);
 }
 
 static unsigned int gdi_sqrt(unsigned int x)
@@ -166,39 +159,44 @@ void sprd_corner_x_mirrored(unsigned int *dst, unsigned int *src,
 	}
 }
 
-int sprd_corner_hwlayer_init(int panel_height, int panel_width, int corner_radius)
+int sprd_corner_hwlayer_init(struct dpu_context *ctx)
 {
 	int ret;
+	int corner_radius = ctx->sprd_corner_radius;
+	unsigned int *layer_top = ctx->layer_top;
+	unsigned int *layer_bottom = ctx->layer_bottom;
 
-	ret = sprd_corner_create(panel_width, corner_radius);
-	if (ret < 0)
-		return CORNER_ERR;
+	ret = sprd_corner_create(ctx);
+	if (ret < 0) {
+		DRM_ERROR("%s(): sprd_corner_create failed\n", __func__);
+		return -ENOMEM;
+	}
 
 #if USE_EXTERNAL_SOURCE
-	memcpy(layer_top, layer_top_header, panel_width * corner_radius * 4);
-	memcpy(layer_bottom, layer_bottom_header, panel_width * corner_radius * 4);
+	memcpy(layer_top, layer_top_header, ctx->vm.hactive * corner_radius * 4);
+	memcpy(layer_bottom, layer_bottom_header, ctx->vm.hactive * corner_radius * 4);
 #else
-	sprd_corner_draw(layer_bottom, corner_radius, panel_width);
-	sprd_corner_x_mirrored(layer_top, layer_bottom, panel_width, corner_radius);
+	sprd_corner_draw(layer_bottom, corner_radius, ctx->vm.hactive);
+	sprd_corner_x_mirrored(layer_top, layer_bottom, ctx->vm.hactive, corner_radius);
 #endif
 
 	corner_layer_top.dst_x = 0;
 	corner_layer_top.dst_y = 0;
-	corner_layer_top.dst_w = panel_width;
+	corner_layer_top.dst_w = ctx->vm.hactive;
 	corner_layer_top.dst_h = corner_radius;
-	corner_layer_top.pitch[0] = panel_width * 4;
+	corner_layer_top.pitch[0] = ctx->vm.hactive * 4;
 	corner_layer_top.addr[0] = (u32)virt_to_phys(layer_top);
 
 	corner_layer_bottom.dst_x = 0;
-	corner_layer_bottom.dst_y = panel_height - corner_radius;
-	corner_layer_bottom.dst_w = panel_width;
+	corner_layer_bottom.dst_y = ctx->vm.vactive - corner_radius;
+	corner_layer_bottom.dst_w = ctx->vm.hactive;
 	corner_layer_bottom.dst_h = corner_radius;
-	corner_layer_bottom.pitch[0] = panel_width * 4;
+	corner_layer_bottom.pitch[0] = ctx->vm.hactive * 4;
 	corner_layer_bottom.addr[0] = (u32)virt_to_phys(layer_bottom);
 
-	return CORNER_DONE;
+	return 0;
 }
 
 MODULE_LICENSE("GPL v2");
-MODULE_AUTHOR("infi.chen <infi.chen@spreadtrum.com>");
-MODULE_AUTHOR("shenhui.sun <shenhui.sun@spreadtrum.com>");
+MODULE_AUTHOR("infi.chen <infi.chen@unisoc.com>");
+MODULE_AUTHOR("shenhui.sun <shenhui.sun@unisoc.com>");

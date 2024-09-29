@@ -17,8 +17,7 @@ struct cts_proc_data {
 
 struct cts_proc_data *proc_data;
 
-static ssize_t cts_set_tp_direction_switch(struct cts_device *cts_dev,
-		uint8_t tp_direction_switch)
+static ssize_t cts_set_tp_direction_switch(struct cts_device *cts_dev, uint8_t tp_direction_switch)
 {
 	int ret;
 
@@ -26,30 +25,25 @@ static ssize_t cts_set_tp_direction_switch(struct cts_device *cts_dev,
 
 	msleep(30);
 
-	ret = cts_fw_reg_writeb_retry(&proc_data->cts_data->cts_dev,
-				      CTS_DEVICE_TP_DIRECTION_SWITCH, tp_direction_switch, 3, 0);
-
+	ret = cts_fw_reg_writeb_retry(&proc_data->cts_data->cts_dev, CTS_DEVICE_TP_DIRECTION_SWITCH, tp_direction_switch, 3, 0);
 	if (ret) {
 		cts_err("set tp direction switch failed %d(%s)",
 			ret, cts_strerror(ret));
 		return ret;
 	}
-
+	
 	return ret;
 }
 
-static int32_t cts_get_tp_direction_switch(struct cts_device *cts_dev,
-		uint8_t *tp_direction_switch)
+static int32_t cts_get_tp_direction_switch(struct cts_device *cts_dev, uint8_t *tp_direction_switch)
 {
 	int ret = 0;
-
+	
 	cts_info("get tp direction swtich");
-
+	
 	msleep(30);
 
-	ret = cts_fw_reg_readb_retry(&proc_data->cts_data->cts_dev,
-				     CTS_DEVICE_TP_DIRECTION_SWITCH, tp_direction_switch, 3, 0);
-
+	ret = cts_fw_reg_readb_retry(&proc_data->cts_data->cts_dev, CTS_DEVICE_TP_DIRECTION_SWITCH, tp_direction_switch, 3, 0);
 	if (ret) {
 		cts_err("set tp direction switch failed %d(%s)",
 			ret, cts_strerror(ret));
@@ -58,11 +52,10 @@ static int32_t cts_get_tp_direction_switch(struct cts_device *cts_dev,
 
 	cts_info("tp_direction_switch = %d", *tp_direction_switch);
 
-	return ret;
+	return ret;	
 }
 
-static ssize_t cts_tp_direction_proc_read(struct file *filp, char __user *buf,
-		size_t count, loff_t *f_pos)
+static ssize_t cts_tp_direction_proc_read(struct file *filp, char __user *buf, size_t count, loff_t *f_pos) 
 {
 	struct cts_device *cts_dev = &proc_data->cts_data->cts_dev;
 
@@ -78,7 +71,6 @@ static ssize_t cts_tp_direction_proc_read(struct file *filp, char __user *buf,
 		finished = 0;
 		return 0;
 	}
-
 	finished = 1;
 
 	cts_lock_device(cts_dev);
@@ -87,23 +79,19 @@ static ssize_t cts_tp_direction_proc_read(struct file *filp, char __user *buf,
 
 	cts_unlock_device(cts_dev);
 
-	cnt = snprintf(tmp_buf, sizeof(tmp_buf), "tp_direction_switch: %d\n",
-		       tp_direction_switch);
+	cnt = snprintf(tmp_buf, sizeof(tmp_buf), "tp_direction_switch: %d\n", tp_direction_switch);
 	ret = copy_to_user(buf, tmp_buf, sizeof(tmp_buf));
-
 	if (ret) {
 		cts_err("copy_to_user() failed %d", ret);
 		return ret;
 	}
-
 	buf += cnt;
 	len += cnt;
 
 	return len;
 }
 
-static ssize_t cts_tp_direction_proc_write(struct file *filp,
-		const char __user *buf, size_t count, loff_t *f_pos)
+static ssize_t cts_tp_direction_proc_write(struct file *filp, const char __user *buf, size_t count, loff_t *f_pos) 
 {
 	struct cts_device *cts_dev = &proc_data->cts_data->cts_dev;
 
@@ -120,7 +108,6 @@ static ssize_t cts_tp_direction_proc_write(struct file *filp,
 	}
 
 	tmp_buf = kzalloc((count + 1), GFP_KERNEL);
-
 	if (!tmp_buf) {
 		cts_err("alloc tmp_buf failed");
 		ret = -ENOMEM;
@@ -128,14 +115,12 @@ static ssize_t cts_tp_direction_proc_write(struct file *filp,
 	}
 
 	ret = copy_from_user(tmp_buf, buf, count);
-
 	if (ret) {
 		cts_err("copy_from_user() failed %d(%s)", ret, cts_strerror(ret));
 		goto tp_direction_err;
 	}
 
 	ret = sscanf(tmp_buf, "%d", &tmp);
-
 	if (ret != 1) {
 		cts_err("Invalid value! tmp = %d", tmp);
 		ret = -EINVAL;
@@ -157,13 +142,11 @@ static ssize_t cts_tp_direction_proc_write(struct file *filp,
 
 	cts_unlock_device(cts_dev);
 
-	ret = count;
+	ret = count;	
 
 tp_direction_err:
-
 	if (tmp_buf)
 		kfree(tmp_buf);
-
 	return ret;
 }
 
@@ -175,72 +158,70 @@ static const struct file_operations cts_tp_direction_proc_fops = {
 
 int32_t cts_proc_init(struct chipone_ts_data *cts_data)
 {
-	int ret;
+    int ret;
 
-	if (cts_data == NULL) {
-		cts_err("Init with cts_data = NULL");
-		return -EINVAL;
-	}
+    if (cts_data == NULL) {
+        cts_err("Init with cts_data = NULL");
+        return -EINVAL;
+    }
+	
+    cts_info("Init");
 
-	cts_info("Init");
-
-	cts_data->proc_data = NULL;
-
-	proc_data = kzalloc(sizeof(*proc_data), GFP_KERNEL);
-
-	if (proc_data == NULL) {
-		cts_err("Alloc proc data failed");
-		return -ENOMEM;
-	}
+    cts_data->proc_data = NULL;
+	
+    proc_data = kzalloc(sizeof(*proc_data), GFP_KERNEL);
+    if (proc_data == NULL) {
+        cts_err("Alloc proc data failed");
+        return -ENOMEM;
+    }
 
 	cts_data->proc_data = proc_data;
 	proc_data->cts_data = cts_data;
 
-	cts_info(" - Create '/proc/touchpanel/"TP_DIRECTION_PROC_FILENAME"'");
+    cts_info(" - Create '/proc/touchpanel/"TP_DIRECTION_PROC_FILENAME"'");
+  
+    proc_data->tp_direction_proc_entry =
+        proc_create_data(TP_DIRECTION_PROC_FILENAME,
+            S_IRUGO, CTS_proc_touchpanel_dir, &cts_tp_direction_proc_fops, cts_data);
+    if (proc_data->tp_direction_proc_entry == NULL) {
+        cts_err("Create '/proc/touchpanel/"TP_DIRECTION_PROC_FILENAME"' failed");
+        ret = -EFAULT;
+        goto free_proc_data;
+    }
 
-	proc_data->tp_direction_proc_entry =
-		proc_create_data(TP_DIRECTION_PROC_FILENAME,
-				 S_IRUGO, CTS_proc_touchpanel_dir, &cts_tp_direction_proc_fops, cts_data);
-
-	if (proc_data->tp_direction_proc_entry == NULL) {
-		cts_err("Create '/proc/touchpanel/"TP_DIRECTION_PROC_FILENAME"' failed");
-		ret = -EFAULT;
-		goto free_proc_data;
-	}
-
-	return 0;
+    return 0;
 
 free_proc_data:
-	kfree(proc_data);
-	return ret;
+    kfree(proc_data);
+    return ret;
 }
 
 int cts_proc_deinit(struct chipone_ts_data *cts_data)
 {
-	struct cts_proc_data *proc_data = NULL;
+    struct cts_proc_data *proc_data = NULL;
 
-	if (cts_data == NULL) {
-		cts_err("Deinit with cts_data = NULL");
-		return -EINVAL;
-	}
+    if (cts_data == NULL) {
+        cts_err("Deinit with cts_data = NULL");
+        return -EINVAL;
+    }
 
-	if (cts_data->proc_data == NULL) {
-		cts_warn("Deinit with proc_data = NULL");
-		return 0;
-	}
+    if (cts_data->proc_data == NULL) {
+        cts_warn("Deinit with proc_data = NULL");
+        return 0;
+    }
 
-	cts_info("Deinit");
+    cts_info("Deinit");
 
-	proc_data = cts_data->proc_data;
+    proc_data = cts_data->proc_data;
 
-	if (proc_data->tp_direction_proc_entry) {
-		cts_info("  Remove '/proc/touchpanel/"TP_DIRECTION_PROC_FILENAME"'");
-		remove_proc_entry(TP_DIRECTION_PROC_FILENAME, NULL);
-	}
+    if (proc_data->tp_direction_proc_entry) {
+        cts_info("  Remove '/proc/touchpanel/"TP_DIRECTION_PROC_FILENAME"'");
+        remove_proc_entry(TP_DIRECTION_PROC_FILENAME, NULL);
+    }
 
-	kfree(cts_data->proc_data);
-	cts_data->proc_data = NULL;
+    kfree(cts_data->proc_data);
+    cts_data->proc_data = NULL;
 
-	return 0;
+    return 0;
 }
 

@@ -1,10 +1,9 @@
-
 menu "SPRD IQ modules"
 
 config SPRD_IQ
-	bool "Sprd IQ"
+	tristate "Sprd IQ"
 	default n
 	help
-	  capture the iq data.
+	  Sprd IQ module, capture the iq data.
 
 endmenu

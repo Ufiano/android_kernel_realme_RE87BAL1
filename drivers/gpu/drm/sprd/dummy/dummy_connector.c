@@ -1,28 +1,22 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- *Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- *This software is licensed under the terms of the GNU General Public
- *License version 2, as published by the Free Software Foundation, and
- *may be copied, distributed, and modified under those terms.
- *
- *This program is distributed in the hope that it will be useful,
- *but WITHOUT ANY WARRANTY; without even the implied warranty of
- *MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
-#include <drm/drmP.h>
+#include <linux/component.h>
+#include <linux/module.h>
+#include <linux/of_platform.h>
+#include <video/of_display_timing.h>
+
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_connector.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_encoder.h>
 #include <drm/drm_of.h>
 #include <drm/drm_panel.h>
-#include <linux/component.h>
-#include <linux/of_platform.h>
-#include <video/of_display_timing.h>
+#include <drm/drm_probe_helper.h>
 
-#include "sprd_dpu.h"
+#include "sprd_crtc.h"
 
 struct dummy_connector {
 	struct drm_encoder encoder;
@@ -35,32 +29,14 @@ struct dummy_connector {
 #define connector_to_dummy(connector) \
 	container_of(connector, struct dummy_connector, connector)
 
-__weak int sprd_dpu_run(struct sprd_dpu *dpu) { return 0; }
-__weak int sprd_dpu_stop(struct sprd_dpu *dpu) { return 0; }
-
 static void sprd_dummy_encoder_enable(struct drm_encoder *encoder)
 {
-
 	DRM_INFO("%s()\n", __func__);
-
-	/* special case for dpu crtc */
-	if (strcmp(encoder->crtc->name, "dummy-crtc")) {
-		struct sprd_dpu *dpu = crtc_to_dpu(encoder->crtc);
-
-		sprd_dpu_run(dpu);
-	}
 }
 
 static void sprd_dummy_encoder_disable(struct drm_encoder *encoder)
 {
 	DRM_INFO("%s()\n", __func__);
-
-	/* special case for dpu crtc */
-	if (strcmp(encoder->crtc->name, "dummy-crtc")) {
-		struct sprd_dpu *dpu = crtc_to_dpu(encoder->crtc);
-
-		sprd_dpu_stop(dpu);
-	}
 }
 
 static const struct drm_encoder_helper_funcs dummy_encoder_helper_funcs = {
@@ -82,7 +58,7 @@ static int sprd_dummy_encoder_init(struct drm_device *drm,
 	ret = drm_encoder_init(drm, encoder, &dummy_encoder_funcs,
 			       DRM_MODE_ENCODER_DPI, NULL);
 	if (ret) {
-		DRM_ERROR("failed to init dummy encoder\n");
+		DRM_ERROR("failed to initialize dummy encoder\n");
 		return ret;
 	}
 
@@ -156,7 +132,7 @@ static int sprd_dummy_connector_init(struct drm_device *drm,
 	drm_connector_helper_add(connector,
 				 &dummy_connector_helper_funcs);
 
-	drm_mode_connector_attach_encoder(connector, encoder);
+	drm_connector_attach_encoder(connector, encoder);
 
 	return 0;
 }
@@ -243,12 +219,12 @@ static int sprd_dummy_connector_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id dummy_connector_of_match[] = {
-	{.compatible = "sprd,dummy-connector"},
-	{ }
+	{ .compatible = "sprd,dummy-connector" },
+	{ /* sentinel */ },
 };
 MODULE_DEVICE_TABLE(of, dummy_connector_of_match);
 
-static struct platform_driver sprd_dummy_connector_driver = {
+struct platform_driver sprd_dummy_connector_driver = {
 	.probe = sprd_dummy_connector_probe,
 	.remove = sprd_dummy_connector_remove,
 	.driver = {
@@ -256,8 +232,7 @@ static struct platform_driver sprd_dummy_connector_driver = {
 		.of_match_table = dummy_connector_of_match,
 	},
 };
-module_platform_driver(sprd_dummy_connector_driver);
 
 MODULE_AUTHOR("Leon He <leon.he@unisoc.com>");
-MODULE_DESCRIPTION("Dummy Connector Driver for SPRD SoC");
+MODULE_DESCRIPTION("Dummy Connector Driver for Unisoc");
 MODULE_LICENSE("GPL v2");

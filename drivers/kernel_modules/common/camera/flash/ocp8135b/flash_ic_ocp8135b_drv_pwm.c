@@ -55,7 +55,7 @@ struct flash_driver_data {
     int gpio_139_ENF;
     int torch_led_index;
     struct pwm_device *pwm_chip;
-    struct wakeup_source pd_wake_lock;
+    struct wakeup_source *pd_wake_lock;
 };
 
 void pwm_set_ocp8135b_config( struct pwm_device *pwm, int duty_cycle)
@@ -130,7 +130,7 @@ static int sprd_flash_ocp8135b_open_torch(void *drvd, uint8_t idx)
             pwm_set_ocp8135b_config(drv_data->pwm_chip, drv_data->torch_led_index);
         #endif
     }
-    __pm_stay_awake(&drv_data->pd_wake_lock);
+    __pm_stay_awake(drv_data->pd_wake_lock);
     pr_info("X\n");
     return ret;
 }
@@ -157,7 +157,7 @@ static int sprd_flash_ocp8135b_close_torch(void *drvd, uint8_t idx)
         pwm_set_ocp8135b_config(drv_data->pwm_chip, 0);
         udelay(5 * 1000);
      }
-    __pm_relax(&drv_data->pd_wake_lock);
+    __pm_relax(drv_data->pd_wake_lock);
     pr_info("X");
     return ret;
 }
@@ -394,7 +394,8 @@ static int sprd_flash_ocp8135b_probe(struct platform_device *pdev)
     if (ret)
           goto exit;
 
-    wakeup_source_init(&drv_data->pd_wake_lock, "flash_pwm");
+	drv_data->pd_wake_lock = wakeup_source_create("flash_pwm");
+    wakeup_source_add(drv_data->pd_wake_lock);
 exit:
     pr_err("x\n");
     return ret;

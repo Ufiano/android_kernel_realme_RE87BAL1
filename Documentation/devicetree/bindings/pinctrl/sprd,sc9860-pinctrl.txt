@@ -18,7 +18,7 @@ Optional properties:
 - bias-disable: Disable pin bias.
 - bias-pull-down: Pull down on pin.
 - bias-pull-up: Pull up on pin. Supported values: 1 for pull-up resistor
-  is 20K, 2 for pull-up resistor is 4.7K and 3 for pull-up registor is 1.8k.
+  is 20K, 2 for pull-up resistor is 4.7K and 3 for pull-up resistor is 1.8k
 - input-enable: Enable pin input.
 - input-disable: Enable pin output.
 - output-high: Set the pin as an output level high.

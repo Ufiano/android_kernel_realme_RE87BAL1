@@ -154,7 +154,7 @@ static long rpmb_ioctl_seq_cmd(struct rpmb_dev *rdev,
 			       struct rpmb_ioc_seq_cmd __user *ptr)
 {
 	__u64 ncmds;
-	struct rpmb_cmd *cmds;
+	struct rpmb_cmd *cmds = NULL;
 	struct rpmb_ioc_cmd __user *ucmds;
 
 	int i;
@@ -300,6 +300,7 @@ void rpmb_cdev_prepare(struct rpmb_dev *rdev)
 	rdev->cdev.owner = THIS_MODULE;
 	cdev_init(&rdev->cdev, &rpmb_fops);
 }
+EXPORT_SYMBOL_GPL(rpmb_cdev_prepare);
 
 void rpmb_cdev_add(struct rpmb_dev *rdev)
 {
@@ -309,12 +310,14 @@ void rpmb_cdev_add(struct rpmb_dev *rdev)
 	if (ret)
 		dev_err(&rdev->dev, "cdev_add failed ret =%d\n", ret);
 }
+EXPORT_SYMBOL_GPL(rpmb_cdev_add);
 
 void rpmb_cdev_del(struct rpmb_dev *rdev)
 {
 	if (rdev->dev.devt)
 		cdev_del(&rdev->cdev);
 }
+EXPORT_SYMBOL_GPL(rpmb_cdev_del);
 
 int __init rpmb_cdev_init(void)
 {
@@ -326,9 +329,12 @@ int __init rpmb_cdev_init(void)
 
 	return ret;
 }
+EXPORT_SYMBOL_GPL(rpmb_cdev_init);
 
 void __exit rpmb_cdev_exit(void)
 {
 	if (rpmb_devt)
 		unregister_chrdev_region(rpmb_devt, RPMB_MAX_DEVS);
 }
+EXPORT_SYMBOL_GPL(rpmb_cdev_exit);
+

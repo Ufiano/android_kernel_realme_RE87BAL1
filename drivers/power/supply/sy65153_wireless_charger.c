@@ -434,7 +434,8 @@ static bool sy65153_wl_charger_get_current_limit_status(struct sy65153_wl_charge
 		return status;
 	}
 
-	val = (val & SY65153_REG_CURRENT_LIMIT_STATUS_MASK) >> SY65153_REG_CURRENT_LIMIT_STATUS_SHIFT;
+	val = (val & SY65153_REG_CURRENT_LIMIT_STATUS_MASK)
+		>> SY65153_REG_CURRENT_LIMIT_STATUS_SHIFT;
 
 	if (val)
 		status = true;
@@ -442,7 +443,8 @@ static bool sy65153_wl_charger_get_current_limit_status(struct sy65153_wl_charge
 	return status;
 }
 
-static int sy65153_wl_charger_get_batt_charge_status(struct sy65153_wl_charger_info *info, u32 *value)
+static int
+sy65153_wl_charger_get_batt_charge_status(struct sy65153_wl_charger_info *info, u32 *value)
 {
 	int ret;
 
@@ -455,7 +457,8 @@ static int sy65153_wl_charger_get_batt_charge_status(struct sy65153_wl_charger_i
 	return ret;
 }
 
-static int sy65153_wl_charger_get_ept_code_status(struct sy65153_wl_charger_info *info, u32 *ept_code)
+static int
+sy65153_wl_charger_get_ept_code_status(struct sy65153_wl_charger_info *info, u32 *ept_code)
 {
 	int ret;
 
@@ -664,14 +667,14 @@ static int sy65153_wl_charger_toggle_ldo_on_off(struct sy65153_wl_charger_info *
 }
 
 static enum power_supply_property sy65153_wireless_properties[] = {
+	POWER_SUPPLY_PROP_TYPE,
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_ONLINE,
-	POWER_SUPPLY_PROP_CHARGE_ENABLED,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE,
 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE_MAX,
-	POWER_SUPPLY_PROP_WIRELESS_TYPE,
 	POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT,
+	POWER_SUPPLY_PROP_CALIBRATE,
 };
 
 static int sy65153_wl_charger_set_property(struct power_supply *psy,
@@ -691,7 +694,7 @@ static int sy65153_wl_charger_set_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
 		ret = sy65153_wl_charger_set_rx_ilim(info, val->intval);
 		break;
-	case POWER_SUPPLY_PROP_CHARGE_ENABLED:
+	case POWER_SUPPLY_PROP_CALIBRATE:
 		ret = sy65153_wl_charger_toggle_ldo_on_off(info, val->intval);
 		break;
 	default:
@@ -725,14 +728,14 @@ static int sy65153_wl_charger_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
 		ret = sy65153_wl_charger_get_vout(info, &val->intval);
 		break;
-	case POWER_SUPPLY_PROP_WIRELESS_TYPE:
+	case POWER_SUPPLY_PROP_TYPE:
 		rpp_type = sy65153_wl_charger_get_rx_rpp_type(info);
 		if (rpp_type == SY65153_RPP_TYPE_BPP || rpp_type == SY65153_RPP_TYPE_10W)
-			val->intval = POWER_SUPPLY_WIRELESS_TYPE_BPP;
+			val->intval = POWER_SUPPLY_WIRELESS_CHARGER_TYPE_BPP;
 		else if (rpp_type == SY65153_RPP_TYPE_EPP)
-			val->intval = POWER_SUPPLY_WIRELESS_TYPE_EPP;
+			val->intval = POWER_SUPPLY_WIRELESS_CHARGER_TYPE_EPP;
 		else
-			val->intval = POWER_SUPPLY_WIRELESS_TYPE_UNKNOWN;
+			val->intval = POWER_SUPPLY_CHARGER_TYPE_UNKNOWN;
 		break;
 	default:
 		ret =  -EINVAL;
@@ -753,7 +756,7 @@ static int sy65153_wl_charger_prop_is_writeable(struct power_supply *psy,
 	int ret;
 
 	switch (psp) {
-	case POWER_SUPPLY_PROP_CHARGE_ENABLED:
+	case POWER_SUPPLY_PROP_CALIBRATE:
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE:
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_LIMIT:
 		ret = 1;
@@ -891,7 +894,7 @@ static ssize_t sy65153_register_table_show(struct device *dev,
 		attr_sy65153_lookup_reg);
 	struct sy65153_wl_charger_info *info = sy65153_sysfs->info;
 	int i, len, idx = 0;
-	char reg_tab_buf[2048];
+	char reg_tab_buf[2000];
 
 	if (!info)
 		return snprintf(buf, PAGE_SIZE, "%s sy65153_sysfs->info is null\n", __func__);

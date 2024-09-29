@@ -1,10 +1,10 @@
 #
 # Makefile for kernel Silead Fingerprint drivers.
 #
-obj-y += jiiov_netlink.o
-obj-y += jiiov_platform.o
+jiiov-y += jiiov_netlink.o
+jiiov-y += jiiov_platform.o
 
-
+obj-m += jiiov.o
 
 
 

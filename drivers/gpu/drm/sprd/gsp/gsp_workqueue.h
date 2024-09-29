@@ -1,15 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
+
 #ifndef _GSP_WORKQUEUE_H
 #define _GSP_WORKQUEUE_H
 
@@ -48,13 +41,11 @@ struct gsp_workqueue {
 };
 
 
-int gsp_workqueue_init(struct gsp_workqueue *wq,
-		       struct gsp_core *core);
+int gsp_workqueue_init(struct gsp_workqueue *wq, struct gsp_core *core);
 
 struct gsp_kcfg *gsp_workqueue_pull(struct gsp_workqueue *wq);
 
-int gsp_workqueue_push(struct gsp_kcfg *kcfg,
-		       struct gsp_workqueue *const wq);
+int gsp_workqueue_push(struct gsp_kcfg *kcfg, struct gsp_workqueue *const wq);
 
 struct gsp_kcfg *gsp_workqueue_acquire(struct gsp_workqueue *wq);
 
@@ -62,11 +53,9 @@ int gsp_workqueue_is_exhausted(struct gsp_workqueue *wq);
 
 void gsp_workqueue_filled_invalidate(struct gsp_workqueue *wq);
 
-void gsp_workqueue_put(struct gsp_kcfg *kcfg,
-		       struct gsp_workqueue *wq);
+void gsp_workqueue_put(struct gsp_kcfg *kcfg, struct gsp_workqueue *wq);
 
-void gsp_workqueue_cancel(struct gsp_kcfg *kcfg,
-		       struct gsp_workqueue *wq);
+void gsp_workqueue_cancel(struct gsp_kcfg *kcfg, struct gsp_workqueue *wq);
 
 int gsp_workqueue_is_filled(struct gsp_workqueue *wq);
 

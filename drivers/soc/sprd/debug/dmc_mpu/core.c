@@ -575,5 +575,5 @@ void sprd_dmc_mpu_unregister(struct sprd_dmpu_core *core)
 }
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Lanqing Liu <lanqing.liu@spreadtrum.com>");
-MODULE_DESCRIPTION("Spreadtrum platform dmc mpu driver");
+MODULE_AUTHOR("Bobs Wang <bobs.wang@unisoc.com>");
+MODULE_DESCRIPTION("Unisoc platform dmc mpu driver");

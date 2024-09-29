@@ -24,6 +24,8 @@
 			compatible = "sprd,ump9622-tsensor";
 			#thermal-sensor-cells = <1>;
 			reg = <0x20f8>;
+			#address-cells = <1>;
+			#size-cells = <0>;
 
 			osc_tsensor: osc-tsensor@0{
 				reg = <0>;

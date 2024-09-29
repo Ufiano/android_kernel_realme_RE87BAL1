@@ -1,1 +1,1 @@
-obj-y     +=  nico_fp_common.o
+obj-m     +=  nico_fp_common.o

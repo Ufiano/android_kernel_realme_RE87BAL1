@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -23,42 +15,34 @@
 
 #include "sprd_dvfs_apsys.h"
 #include "sprd_dvfs_dpu.h"
-#include "apsys_dvfs_qogirn6pro.h"
-
-enum {
-	V55 = 0, //0.55v
-	V60 = 1, //0.60v
-	V65 = 2, //0.65v
-	V70 = 3, //0.70v
-	V75 = 4, //0.75v
-};
+#include "../sys/apsys_dvfs_qogirn6pro.h"
 
 static struct ip_dvfs_map_cfg map_table[] = {
-	{0, V65, DPU_CLK_INDEX_256M, DPU_CLK256M},
-	{1, V70, DPU_CLK_INDEX_307M2, DPU_CLK307M2},
-	{2, V70, DPU_CLK_INDEX_384M, DPU_CLK384M},
-	{3, V75, DPU_CLK_INDEX_409M6, DPU_CLK409M6},
-	{4, V75, DPU_CLK_INDEX_512M,  DPU_CLK512M},
-	{5, V75, DPU_CLK_INDEX_614M4, DPU_CLK614M4},
+	{0, VOLT70, DPU_CLK_INDEX_256M, DPU_CLK256M},
+	{1, VOLT70, DPU_CLK_INDEX_307M2, DPU_CLK307M2},
+	{2, VOLT70, DPU_CLK_INDEX_384M, DPU_CLK384M},
+	{3, VOLT70, DPU_CLK_INDEX_409M6, DPU_CLK409M6},
+	{4, VOLT70, DPU_CLK_INDEX_512M,  DPU_CLK512M},
+	{5, VOLT70, DPU_CLK_INDEX_614M4, DPU_CLK614M4},
 };
 
-static void dpu_hw_dfs_en(bool dfs_en)
+static void dpu_hw_dfs_en(struct dpu_dvfs *dpu, bool dfs_en)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)dpu->apsys->apsys_base;
 
-	mutex_lock(&apsys_glb_reg_lock);
+	mutex_lock(&dpu->apsys->reg_lock);
 	if (dfs_en)
-		reg->dpu_vsp_dfs_en_ctrl |= BIT(0);
+		reg->ap_dfs_en_ctrl |= BIT(0);
 	else
-		reg->dpu_vsp_dfs_en_ctrl &= ~BIT(0);
-	mutex_unlock(&apsys_glb_reg_lock);
+		reg->ap_dfs_en_ctrl &= ~BIT(0);
+	mutex_unlock(&dpu->apsys->reg_lock);
 }
 
-static void dpu_dvfs_map_cfg(void)
+static void dpu_dvfs_map_cfg(struct dpu_dvfs *dpu)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)dpu->apsys->apsys_base;
 
 	reg->dispc_index0_map = map_table[0].clk_level |
 		map_table[0].volt_level << 3;
@@ -70,18 +54,12 @@ static void dpu_dvfs_map_cfg(void)
 		map_table[3].volt_level << 3;
 	reg->dispc_index4_map = map_table[4].clk_level |
 		map_table[4].volt_level << 3;
-	reg->dispc_index5_map = map_table[5].clk_level |
-		map_table[5].volt_level << 3;
-	reg->dispc_index6_map = map_table[5].clk_level |
-		map_table[5].volt_level << 3;
-	reg->dispc_index7_map = map_table[5].clk_level |
-		map_table[5].volt_level << 3;
 }
 
-static void set_dpu_work_freq(u32 freq)
+static void set_dpu_work_freq(struct dpu_dvfs *dpu, u32 freq)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)dpu->apsys->apsys_base;
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(map_table); i++) {
@@ -92,10 +70,10 @@ static void set_dpu_work_freq(u32 freq)
 	}
 }
 
-static u32 get_dpu_work_freq(void)
+static u32 get_dpu_work_freq(struct dpu_dvfs *dpu)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)dpu->apsys->apsys_base;
 	u32 freq = 0;
 	int i;
 
@@ -110,10 +88,10 @@ static u32 get_dpu_work_freq(void)
 	return freq;
 }
 
-static void set_dpu_idle_freq(u32 freq)
+static void set_dpu_idle_freq(struct dpu_dvfs *dpu, u32 freq)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)dpu->apsys->apsys_base;
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(map_table); i++) {
@@ -124,10 +102,10 @@ static void set_dpu_idle_freq(u32 freq)
 	}
 }
 
-static u32 get_dpu_idle_freq(void)
+static u32 get_dpu_idle_freq(struct dpu_dvfs *dpu)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)dpu->apsys->apsys_base;
 	u32 freq = 0;
 	int i;
 
@@ -142,101 +120,101 @@ static u32 get_dpu_idle_freq(void)
 	return freq;
 }
 
-static void set_dpu_work_index(int index)
+static void set_dpu_work_index(struct dpu_dvfs *dpu, int index)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)dpu->apsys->apsys_base;
 
 	reg->dispc_dvfs_index_cfg = index;
 }
 
-static int get_dpu_work_index(void)
+static int get_dpu_work_index(struct dpu_dvfs *dpu)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)dpu->apsys->apsys_base;
 
 	return reg->dispc_dvfs_index_cfg;
 }
 
-static void set_dpu_idle_index(int index)
+static void set_dpu_idle_index(struct dpu_dvfs *dpu, int index)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)dpu->apsys->apsys_base;
 
 	reg->dispc_dvfs_index_idle_cfg = index;
 }
 
-static int get_dpu_idle_index(void)
+static int get_dpu_idle_index(struct dpu_dvfs *dpu)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)dpu->apsys->apsys_base;
 
 	return reg->dispc_dvfs_index_idle_cfg;
 }
 
-static void set_dpu_gfree_wait_delay(u32 para)
+static void set_dpu_gfree_wait_delay(struct dpu_dvfs *dpu, u32 para)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)dpu->apsys->apsys_base;
 	u32 temp;
 
-	mutex_lock(&apsys_glb_reg_lock);
-	temp = reg->dpu_vsp_gfree_wait_delay_cfg0;
+	mutex_lock(&dpu->apsys->reg_lock);
+	temp = reg->ap_gfree_wait_delay_cfg;
 	temp &= GENMASK(9, 0);
-	reg->dpu_vsp_gfree_wait_delay_cfg0 = para << 10 | temp;
-	mutex_unlock(&apsys_glb_reg_lock);
+	reg->ap_gfree_wait_delay_cfg = para << 10 | temp;
+	mutex_unlock(&dpu->apsys->reg_lock);
 }
 
-static void set_dpu_freq_upd_en_byp(bool enable)
+static void set_dpu_freq_upd_en_byp(struct dpu_dvfs *dpu, bool enable)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)dpu->apsys->apsys_base;
 
-	mutex_lock(&apsys_glb_reg_lock);
+	mutex_lock(&dpu->apsys->reg_lock);
 	if (enable)
-		reg->dpu_vsp_freq_update_bypass |= BIT(0);
+		reg->ap_freq_update_bypass |= BIT(0);
 	else
-		reg->dpu_vsp_freq_update_bypass &= ~BIT(0);
-	mutex_unlock(&apsys_glb_reg_lock);
+		reg->ap_freq_update_bypass &= ~BIT(0);
+	mutex_unlock(&dpu->apsys->reg_lock);
 }
 
-static void set_dpu_freq_upd_delay_en(bool enable)
+static void set_dpu_freq_upd_delay_en(struct dpu_dvfs *dpu, bool enable)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)dpu->apsys->apsys_base;
 
-	mutex_lock(&apsys_glb_reg_lock);
+	mutex_lock(&dpu->apsys->reg_lock);
 	if (enable)
-		reg->dpu_vsp_freq_upd_type_cfg |= BIT(5);
+		reg->ap_freq_upd_type_cfg |= BIT(5);
 	else
-		reg->dpu_vsp_freq_upd_type_cfg &= ~BIT(5);
-	mutex_unlock(&apsys_glb_reg_lock);
+		reg->ap_freq_upd_type_cfg &= ~BIT(5);
+	mutex_unlock(&dpu->apsys->reg_lock);
 }
 
-static void set_dpu_freq_upd_hdsk_en(bool enable)
+static void set_dpu_freq_upd_hdsk_en(struct dpu_dvfs *dpu, bool enable)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)dpu->apsys->apsys_base;
 
-	mutex_lock(&apsys_glb_reg_lock);
+	mutex_lock(&dpu->apsys->reg_lock);
 	if (enable)
-		reg->dpu_vsp_freq_upd_type_cfg |= BIT(4);
+		reg->ap_freq_upd_type_cfg |= BIT(4);
 	else
-		reg->dpu_vsp_freq_upd_type_cfg &= ~BIT(4);
-	mutex_unlock(&apsys_glb_reg_lock);
+		reg->ap_freq_upd_type_cfg &= ~BIT(4);
+	mutex_unlock(&dpu->apsys->reg_lock);
 }
 
-static void set_dpu_dvfs_swtrig_en(bool enable)
+static void set_dpu_dvfs_swtrig_en(struct dpu_dvfs *dpu, bool enable)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)dpu->apsys->apsys_base;
 
-	mutex_lock(&apsys_glb_reg_lock);
+	mutex_lock(&dpu->apsys->reg_lock);
 	if (enable)
-		reg->dpu_vsp_sw_trig_ctrl |= BIT(0);
+		reg->ap_sw_trig_ctrl |= BIT(0);
 	else
-		reg->dpu_vsp_sw_trig_ctrl &= ~BIT(0);
-	mutex_unlock(&apsys_glb_reg_lock);
+		reg->ap_sw_trig_ctrl &= ~BIT(0);
+	mutex_unlock(&dpu->apsys->reg_lock);
 }
 
 static void set_dpu_dvfs_table(struct ip_dvfs_map_cfg *dvfs_table)
@@ -259,25 +237,26 @@ static int get_dpu_dvfs_table(struct ip_dvfs_map_cfg *dvfs_table)
 	return i;
 }
 
-static void get_dpu_dvfs_status(struct ip_dvfs_status *dvfs_status)
+static void get_dpu_dvfs_status(struct dpu_dvfs *dpu, struct ip_dvfs_status *dvfs_status)
 {
 	struct dpu_vspsys_dvfs_reg *reg =
-		(struct dpu_vspsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct dpu_vspsys_dvfs_reg *)dpu->apsys->apsys_base;
 
-	mutex_lock(&apsys_glb_reg_lock);
+	mutex_lock(&dpu->apsys->reg_lock);
 	dvfs_status->apsys_cur_volt =
-		qogirn6pro_apsys_val_to_volt(reg->dpu_vsp_dvfs_voltage_dbg >> 12 & 0x7);
+		qogirn6pro_apsys_val_to_volt(reg->ap_dvfs_voltage_dbg >> 12 & 0x7);
 	dvfs_status->vsp_vote_volt =
-		qogirn6pro_apsys_val_to_volt(reg->dpu_vsp_dvfs_voltage_dbg >> 6 & 0x7);
+		qogirn6pro_apsys_val_to_volt(reg->ap_dvfs_voltage_dbg >> 6 & 0x7);
 	dvfs_status->dpu_vote_volt =
-		qogirn6pro_apsys_val_to_volt(reg->dpu_vsp_dvfs_voltage_dbg >> 3 & 0x7);
+		qogirn6pro_apsys_val_to_volt(reg->ap_dvfs_voltage_dbg >> 3 & 0x7);
 	dvfs_status->vdsp_vote_volt = "N/A";
 
-	dvfs_status->vsp_cur_freq = "N/A";
+	dvfs_status->vsp_cur_freq =
+		qogirn6pro_vsp_val_to_freq(reg->ap_dvfs_cgm_cfg_dbg >> 3);
 	dvfs_status->dpu_cur_freq =
-		qogirn6pro_dpu_val_to_freq(reg->dpu_vsp_dispc0_dvfs_cgm_cfg_dbg & 0x7);
+		qogirn6pro_dpu_val_to_freq(reg->ap_dvfs_cgm_cfg_dbg & 0x7);
 	dvfs_status->vdsp_cur_freq = "N/A";
-	mutex_unlock(&apsys_glb_reg_lock);
+	mutex_unlock(&dpu->apsys->reg_lock);
 }
 
 static int dpu_dvfs_parse_dt(struct dpu_dvfs *dpu,
@@ -317,28 +296,26 @@ static int dpu_dvfs_parse_dt(struct dpu_dvfs *dpu,
 
 static int dpu_dvfs_init(struct dpu_dvfs *dpu)
 {
-	char chip_type[HWFEATURE_STR_SIZE_LIMIT];
-
 	pr_info("%s()\n", __func__);
 
-	dpu_dvfs_map_cfg();
-	set_dpu_gfree_wait_delay(dpu->dvfs_coffe.gfree_wait_delay);
-	set_dpu_freq_upd_hdsk_en(dpu->dvfs_coffe.freq_upd_hdsk_en);
-	set_dpu_freq_upd_delay_en(dpu->dvfs_coffe.freq_upd_delay_en);
-	set_dpu_freq_upd_en_byp(dpu->dvfs_coffe.freq_upd_en_byp);
-	set_dpu_work_index(dpu->dvfs_coffe.work_index_def);
-	set_dpu_idle_index(dpu->dvfs_coffe.idle_index_def);
+	dpu_dvfs_map_cfg(dpu);
+	set_dpu_gfree_wait_delay(dpu, dpu->dvfs_coffe.gfree_wait_delay);
+	set_dpu_freq_upd_hdsk_en(dpu, dpu->dvfs_coffe.freq_upd_hdsk_en);
+	set_dpu_freq_upd_delay_en(dpu, dpu->dvfs_coffe.freq_upd_delay_en);
+	set_dpu_freq_upd_en_byp(dpu, dpu->dvfs_coffe.freq_upd_en_byp);
+	set_dpu_work_index(dpu, dpu->dvfs_coffe.work_index_def);
+	set_dpu_idle_index(dpu, dpu->dvfs_coffe.idle_index_def);
 
 	sprd_kproperty_get("auto/chipid", chip_type, "-1");
 
 	dpu->dvfs_coffe.hw_dfs_en = 1;
 
-	dpu_hw_dfs_en(dpu->dvfs_coffe.hw_dfs_en);
+	dpu_hw_dfs_en(dpu, dpu->dvfs_coffe.hw_dfs_en);
 
 	return 0;
 }
 
-static struct dpu_dvfs_ops dpu_dvfs_ops = {
+const struct dpu_dvfs_ops qogirn6pro_dpu_dvfs_ops = {
 	.parse_dt = dpu_dvfs_parse_dt,
 	.dvfs_init = dpu_dvfs_init,
 	.hw_dfs_en = dpu_hw_dfs_en,
@@ -360,15 +337,3 @@ static struct dpu_dvfs_ops dpu_dvfs_ops = {
 	.set_freq_upd_hdsk_en = set_dpu_freq_upd_hdsk_en,
 	.set_dvfs_swtrig_en = set_dpu_dvfs_swtrig_en,
 };
-
-static struct dvfs_ops_entry dpu_dvfs_entry = {
-	.ver = "qogirn6pro",
-	.ops = &dpu_dvfs_ops,
-};
-
-static int __init dpu_dvfs_register(void)
-{
-	return dpu_dvfs_ops_register(&dpu_dvfs_entry);
-}
-
-subsys_initcall(dpu_dvfs_register);

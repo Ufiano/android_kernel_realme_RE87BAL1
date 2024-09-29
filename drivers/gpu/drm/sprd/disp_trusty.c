@@ -1,17 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
-#include <linux/device.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
@@ -135,7 +126,7 @@ int disp_ca_connect(void)
 
 static void disp_ca_free_msg_buf_list(struct list_head *list)
 {
-	struct tipc_msg_buf *mb = NULL;
+	struct tipc_msg_buf *mb;
 
 	mb = list_first_entry_or_null(list, struct tipc_msg_buf, node);
 	while (mb) {
@@ -165,15 +156,15 @@ void disp_ca_disconnect(void)
 	pr_info("disp ca disconnect\n");
 }
 
-ssize_t disp_ca_read(void *buf, size_t max_len)
+ssize_t disp_ca_read(void *buf, size_t len)
 {
 	struct tipc_msg_buf *mb;
-	ssize_t	len;
+	ssize_t avail;
 	struct disp_ca *ca = &disp_ca;
 
 	if (!ca->chan) {
 		pr_err("ca tipc chan null!\n");
-		return -1;
+		return -EINVAL;
 	}
 
 	if (!wait_event_interruptible_timeout(ca->readq,
@@ -185,44 +176,44 @@ ssize_t disp_ca_read(void *buf, size_t max_len)
 
 	mb = list_first_entry(&ca->rx_msg_queue, struct tipc_msg_buf, node);
 
-	len = mb_avail_data(mb);
-	if (len > max_len)
-		len = max_len;
+	avail = mb_avail_data(mb);
+	if (avail > len)
+		avail = len;
 
-	memcpy(buf, mb_get_data(mb, len), len);
+	memcpy(buf, mb_get_data(mb, avail), avail);
 
 	list_del(&mb->node);
 	tipc_chan_put_rxbuf(ca->chan, mb);
 
-	return len;
+	return avail;
 }
 
 ssize_t disp_ca_write(void *buf, size_t len)
 {
-	int ret = -1;
-	int avail;
-	struct tipc_msg_buf *txbuf = NULL;
+	int ret;
+	ssize_t avail;
+	struct tipc_msg_buf *txbuf;
 	struct disp_ca *ca = &disp_ca;
 	long timeout = 1000; /*1sec */
 
 	if (!ca) {
 		pr_err("kcademo tipc context null!\n");
-		return ret;
+		return -EINVAL;
 	}
 
 	if (!ca->chan) {
 		pr_err("ca tipc chan null!\n");
-		return ret;
+		return -EINVAL;
 	}
 
 	txbuf = tipc_chan_get_txbuf_timeout(ca->chan, timeout);
 	if (IS_ERR(txbuf))
-		return	PTR_ERR(txbuf);
+		return PTR_ERR(txbuf);
 
 	avail = mb_avail_space(txbuf);
 	if (len > avail) {
-		pr_err("write no buffer space, len = %d, avail = %d\n",
-			(int)len, (int)avail);
+		pr_err("write no buffer space, len = %zu, avail = %zu\n",
+			len, avail);
 		ret = -EMSGSIZE;
 		goto err;
 	}
@@ -235,7 +226,7 @@ ssize_t disp_ca_write(void *buf, size_t len)
 		goto err;
 	}
 
-	return ret;
+	return len;
 
 err:
 	tipc_chan_put_txbuf(ca->chan, txbuf);

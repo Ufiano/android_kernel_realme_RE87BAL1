@@ -12,7 +12,9 @@
 #include <linux/interrupt.h>
 #include <drm/drm_dp_helper.h>
 #include <drm/drm_fixed.h>
+#include <drm/drm_print.h>
 #include <drm/drm_crtc_helper.h>
+#include <linux/extcon.h>
 
 #include "drm_dp_helper_additions.h"
 #include "dp_video.h"
@@ -31,6 +33,13 @@
 /* The default rate and lanes to use for link training */
 #define DPTX_DEFAULT_LINK_RATE DPTX_MAX_LINK_RATE
 #define DPTX_DEFAULT_LINK_LANES DPTX_MAX_LINK_LANES
+
+enum sprd_dp_hpd_status {
+	DP_HOT_UNPLUG = 0,
+	DP_HOT_PLUG,
+	DP_HPD_IRQ,
+	DP_TYPE_DISCONNECT,
+};
 
 /**
  * struct dptx_link - The link state.
@@ -103,6 +112,7 @@ struct dptx {
 	struct device *dev;
 	struct drm_device *drm_dev;
 	struct drm_connector connector;
+	struct extcon_dev *edev;
 	struct drm_bridge *bridge;
 	struct drm_dp_aux aux_dev;
 	struct dptx_aux aux;
@@ -137,6 +147,8 @@ struct dptx {
 
 	struct sdp_full_data sdp_list[DPTX_SDP_NUM];
 	struct dptx_link link;
+
+	bool active;
 };
 
 /*
@@ -223,6 +235,6 @@ void dptx_audio_timestamp_sdp_en(struct dptx *dptx);
 
 int handle_automated_test_request(struct dptx *dptx);
 
-void dptx_en_dis_hdcp13(struct dptx *dptx, u8 enable);
+//void dptx_en_dis_hdcp13(struct dptx *dptx, u8 enable);
 
 #endif

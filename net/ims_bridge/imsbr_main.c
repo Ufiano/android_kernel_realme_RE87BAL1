@@ -1,5 +1,5 @@
-/*
- * Copyright (C) 2016 Spreadtrum Communications Inc.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (C) 2016 Spreadtrum Communications Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -11,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-#define pr_fmt(fmt) "imsbr: " fmt
+#define pr_fmt(fmt) "sprd-imsbr: " fmt
 
 #include <linux/init.h>
 #include <linux/module.h>
@@ -34,6 +34,9 @@ static int __init imsbr_init(void)
 	/* Prevent the control message size from being too large! */
 	BUILD_BUG_ON(IMSBR_CTRL_BLKSZ > 512);
 
+	err = imsbr_hooks_init();
+	if (err)
+		goto err_hooks;
 	err = imsbr_core_init();
 	if (err)
 		goto err_core;
@@ -56,15 +59,18 @@ err_netlink:
 err_sipc:
 	imsbr_core_exit();
 err_core:
+	imsbr_hooks_exit();
+err_hooks:
 	return err;
 }
 
-void __exit imsbr_exit(void)
+static void __exit imsbr_exit(void)
 {
 	imsbr_test_exit();
 	imsbr_netlink_exit();
 	imsbr_sipc_exit();
 	imsbr_core_exit();
+	imsbr_hooks_exit();
 }
 
 module_init(imsbr_init);

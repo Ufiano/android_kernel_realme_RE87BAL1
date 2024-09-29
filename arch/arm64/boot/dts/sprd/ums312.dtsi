@@ -5,13 +5,14 @@
  * Copyright (C) 2018, Spreadtrum Communications Inc.
  */
 
-#include <dt-bindings/clock/sprd,sharkl5-clk.h>
 #include <dt-bindings/interrupt-controller/arm-gic.h>
 #include "sharkl5.dtsi"
 #include "ums312-modem.dtsi"
 #include "ums312-qos.dtsi"
 / {
 	cpuinfo_hardware = "Unisoc T310";
+	soc-module = "T310";
+	soc-manufacturer = "Spreadtrum";
 
 	cpus {
 		#address-cells = <2>;
@@ -43,8 +44,8 @@
 			enable-method = "psci";
 			cpu-idle-states = <&LIT_CORE_PD>;
 			cpufreq-data-v1 = <&cpufreq_clus0>;
-			sched-energy-costs = <&CPU_COST_0 &CLUSTER_COST_0>;
 			capacity-dmips-mhz = <544>;
+			dynamic-power-coefficient = <102>;
 		};
 		CPU1: cpu@100 {
 			device_type = "cpu";
@@ -53,8 +54,8 @@
 			enable-method = "psci";
 			cpu-idle-states = <&LIT_CORE_PD>;
 			cpufreq-data-v1 = <&cpufreq_clus0>;
-			sched-energy-costs = <&CPU_COST_0 &CLUSTER_COST_0>;
 			capacity-dmips-mhz = <544>;
+			dynamic-power-coefficient = <102>;
 		};
 		CPU2: cpu@200 {
 			device_type = "cpu";
@@ -63,8 +64,8 @@
 			enable-method = "psci";
 			cpu-idle-states = <&LIT_CORE_PD>;
 			cpufreq-data-v1 = <&cpufreq_clus0>;
-			sched-energy-costs = <&CPU_COST_0 &CLUSTER_COST_0>;
 			capacity-dmips-mhz = <544>;
+			dynamic-power-coefficient = <102>;
 		};
 		CPU3: cpu@300 {
 			device_type = "cpu";
@@ -73,77 +74,8 @@
 			enable-method = "psci";
 			cpu-idle-states = <&BIG_CORE_PD>;
 			cpufreq-data-v1 = <&cpufreq_clus1>;
-			sched-energy-costs = <&CPU_COST_1 &CLUSTER_COST_1>;
 			capacity-dmips-mhz = <1024>;
-		};
-	};
-
-	energy-costs {
-		CPU_COST_0: core-cost0 {
-			busy-cost-data = <
-				166	30		//614MHz
-				208	42		//768MHz
-				261	56	        //962MHz
-				310	70		//1144MHz
-				333	85		//1229MHz
-				402	115		//1482MHz
-				417	134		//1536MHz
-				466	166		//1716MHz
-				494	194		//1820MHz
-			>;
-			idle-cost-data = <
-				6		/* ACTIVE-IDLE */
-				6		/* WFI */
-				0		/* CORE_PD */
-			>;
-		};
-		CPU_COST_1: core-cost1 {
-			busy-cost-data = <
-				628	331		//1229MHz
-				758	454		//1482MHz
-				785	540		//1536MHz
-				891	683		//1742MHz
-				957	820		//1872MHz
-				1024	984		//2002MHz
-			>;
-			idle-cost-data = <
-				37		/* ACTIVE-IDLE */
-				37		/* WFI */
-				0		/* CORE_PD */
-			>;
-		};
-		CLUSTER_COST_0: cluster-cost0 {
-			busy-cost-data = <
-				166	1		//614MHz
-				208	2		//768MHz
-				261	3		//962MHz
-				310	4		//1144MHz
-				333	5		//1229MHz
-				402	6		//1482MHz
-				417	7		//1536MHz
-				466	8		//1716MHz
-				494	9		//1820MHz
-			>;
-			idle-cost-data = <
-				0		/* ACTIVE-IDLE */
-				0		/* WFI */
-				0		/* CORE_PD */
-			>;
-		};
-		CLUSTER_COST_1: cluster-cost1 {
-			busy-cost-data = <
-				628	13		//1229MHz
-				758	17		//1482MHz
-				785	21		//1536MHz
-				891	25		//1742MHz
-				957	30		//1872MHz
-				1024	35		//2002MHz
-			>;
-			idle-cost-data = <
-				23		/* ACTIVE-IDLE */
-				23		/* WFI */
-				23		/* CORE_PD */
-			>;
+			dynamic-power-coefficient = <501>;
 		};
 	};
 
@@ -721,113 +653,114 @@
 
 	soc {
 		pmu_gate: pmu-gate {
-			compatible = "sprd,sharkl5-pmu-gate";
+			compatible = "sprd,ums312-pmu-gate";
 			sprd,syscon = <&pmu_apb_regs>; /* 0x327e0000 */
 			clocks = <&ext_26m>;
+			clock-names = "ext-26m";
 			#clock-cells = <1>;
 		};
 
 		dpll0: dpll0 {
-			compatible = "sprd,sharkl5-g0-pll";
+			compatible = "sprd,ums312-g0-pll";
 			sprd,syscon = <&anlg_phy_g0_regs>; /* 0x32390000 */
-			clocks = <&pmu_gate CLK_DPLL0_GATE>;
 			#clock-cells = <1>;
 		};
 
 		mpll1: mpll1 {
-			compatible = "sprd,sharkl5-g2-pll";
+			compatible = "sprd,ums312-g2-pll";
 			sprd,syscon = <&anlg_phy_g2_regs>; /* 0x323b0000 */
-			clocks = <&pmu_gate CLK_MPLL1>;
 			#clock-cells = <1>;
 		};
 
 		pll1: pll1 {
-			compatible = "sprd,sharkl5-g3-pll";
+			compatible = "sprd,ums312-g3-pll";
 			sprd,syscon = <&anlg_phy_g3_regs>; /* 0x323c0000 */
-			clocks = <&pmu_gate 0>;
+			clocks = <&ext_26m>;
+			clock-names = "ext-26m";
 			#clock-cells = <1>;
 		};
 
 		pll2: pll2 {
-			compatible = "sprd,sharkl5-gc-pll";
+			compatible = "sprd,ums312-gc-pll";
 			sprd,syscon = <&anlg_phy_gc_regs>; /* 0x323e0000 */
-			clocks = <&pmu_gate 0>;
+			clocks = <&ext_26m>;
+			clock-names = "ext-26m";
 			#clock-cells = <1>;
 		};
 
 		apahb_gate: apahb-gate {
-			compatible = "sprd,sharkl5-apahb-gate";
+			compatible = "sprd,ums312-apahb-gate";
 			sprd,syscon = <&ap_ahb_regs>; /* 0x20100000 */
-			clocks = <&aonapb_gate CLK_AP_AXI_EN>;
+			clocks = <&ext_26m>;
+			clock-names = "ext-26m";
 			#clock-cells = <1>;
 		};
 
 		ap_clk: clock-controller@20200000 {
-			compatible = "sprd,sharkl5-ap-clk";
+			compatible = "sprd,ums312-ap-clk";
 			reg = <0 0x20200000 0 0x1000>;
-			clocks = <&apapb_gate CLK_APB_REG_EB>;
+			clocks = <&ext_26m>;
+			clock-names = "ext-26m";
 			#clock-cells = <1>;
 		};
 
 		aon_clk: clock-controller@32080000 {
-			compatible = "sprd,sharkl5-aonapb-clk";
+			compatible = "sprd,ums312-aonapb-clk";
 			reg = <0 0x32080000 0 0x1000>;
-			clocks = <&ext_26m>;
+			clocks = <&ext_26m>, <&rco_100m>, <&ext_32k>,
+				 <&ext_4m>;
+			clock-names = "ext-26m", "rco-100m", "ext-32k",
+				      "ext-4m";
 			#clock-cells = <1>;
 		};
 
 		aonapb_gate: aonapb-gate {
-			compatible = "sprd,sharkl5-aon-gate";
+			compatible = "sprd,ums312-aon-gate";
 			sprd,syscon = <&aon_apb_regs>; /* 0x327d0000 */
 			clocks = <&ext_26m>;
+			clock-names = "ext-26m";
 			#clock-cells = <1>;
 		};
 
 		mm_clk: clock-controller@62100000 {
-			compatible = "sprd,sharkl5-mm-clk";
+			compatible = "sprd,ums312-mm-clk";
 			reg = <0 0x62100000 0 0x1000>;
-			clocks = <&aonapb_gate CLK_MM_EB>;
+			clocks = <&ext_26m>;
+			clock-names = "ext-26m";
 			#clock-cells = <1>;
 		};
 
 		gpu_clk: gpu-clk {
-			compatible = "sprd,sharkl5-gpu-clk";
+			compatible = "sprd,ums312-gpu-clk";
 			sprd,syscon = <&gpu_apb_regs>;
-			syscons = <&aon_apb_regs REG_AON_APB_APB_EB0 MASK_AON_APB_GPU_EB>,
-				  <&pmu_apb_regs REG_PMU_APB_PD_GPU_TOP_CFG0 MASK_PMU_APB_PD_GPU_TOP_FORCE_SHUTDOWN>;
-			syscon-names = "enable", "power";
-			clocks = <&aon_clk CLK_AP_MM>;
+			clocks = <&ext_26m>;
+			clock-names = "ext-26m";
 			#clock-cells = <1>;
 		};
 
 		mm_gate: clock-controller@62200000 {
-			compatible = "sprd,sharkl5-mm-gate-clk";
+			compatible = "sprd,ums312-mm-gate-clk";
 			sprd,syscon = <&mm_ahb_regs>;
-			syscons = <&aon_apb_regs REG_AON_APB_APB_EB0 MASK_AON_APB_MM_EB>,
-				  <&pmu_apb_regs REG_PMU_APB_PD_MM_TOP_CFG MASK_PMU_APB_PD_MM_TOP_FORCE_SHUTDOWN>;
-			syscon-names = "enable", "power";
-			clocks = <&aonapb_gate CLK_MM_EB>;
 			#clock-cells = <1>;
 		};
 
 		apapb_gate: apapb-gate {
-			compatible = "sprd,sharkl5-apapb-gate";
+			compatible = "sprd,ums312-apapb-gate";
 			sprd,syscon = <&ap_apb_regs>; /* 0x71000000 */
 			clocks = <&ext_26m>;
+			clock-names = "ext-26m";
 			#clock-cells = <1>;
 		};
 
 		audcpapb_gate: audcpapb-gate {
-			compatible = "sprd,sharkl5-audcpapb-gate";
+			compatible = "sprd,ums312-audcpapb-gate";
 			sprd,syscon = <&audcp_apb_regs>; /* 0x3350d000 */
-			clocks = <&ext_26m>;
 			#clock-cells = <1>;
 		};
 
 		audcpahb_gate: audcpahb-gate {
-			compatible = "sprd,sharkl5-audcpahb-gate";
+			compatible = "sprd,ums312-audcpahb-gate";
 			sprd,syscon = <&audcp_ahb_regs>; /* 0x335e0000 */
-			clocks = <&ext_26m>;
 			#clock-cells = <1>;
 		};
 
@@ -1002,6 +935,68 @@
 			};
 		};
 
+		ap-apb {
+			compatible = "simple-bus";
+			#address-cells = <2>;
+			#size-cells = <2>;
+			ranges;
+
+			sdio3: sdio@71400000 {
+				compatible = "sprd,sdhci-r11";
+				reg = <0 0x71400000 0 0x1000>;
+				interrupts = <GIC_SPI 10 IRQ_TYPE_LEVEL_HIGH>;
+				clock-names = "sdio","enable";
+				clocks = <&ap_clk CLK_EMMC_2X>,
+					<&apapb_gate CLK_EMMC_EB>;
+				assigned-clocks = <&ap_clk CLK_EMMC_2X>;
+				assigned-clock-parents = <&pll1 CLK_RPLL>;
+				status = "disabled";
+			};
+
+			sdio0: sdio@71100000 {
+				compatible = "sprd,sdhci-r11";
+				reg = <0 0x71100000 0 0x1000>;
+				interrupts = <GIC_SPI 19 IRQ_TYPE_LEVEL_HIGH>;
+				sd-detect-pol-syscon = <&aon_apb_regs
+					REG_AON_APB_AP_SDIO0_PHY_CTRL
+					MASK_AON_APB_AP_SDIO0_CARD_PRESENT_32K>;
+				sd-hotplug-protect-en-syscon = <&aon_apb_regs
+					REG_AON_APB_AP_SDIO0_PHY_CTRL
+					MASK_AON_APB_AP_SDIO0_CARD_PROTECT_32K>;
+				sd-hotplug-debounce-en-syscon = <&aon_apb_regs
+					REG_AON_APB_AP_SDIO0_PHY_CTRL
+					MASK_AON_APB_AP_SDIO0_CARDDET_DBNC_EN_32K>;
+				sd-hotplug-debounce-cn-syscon = <&aon_apb_regs
+					REG_AON_APB_AP_SDIO0_PHY_CTRL
+					MASK_AON_APB_AP_SDIO0_CARDDET_DBNC_THD_32K>;
+				clock-names = "sdio","enable";
+				clocks = <&ap_clk  CLK_SDIO0_2X>,
+					<&apapb_gate CLK_SDIO0_EB>;
+				assigned-clocks = <&ap_clk CLK_SDIO0_2X>;
+				assigned-clock-parents = <&pll1 CLK_RPLL>;
+				status = "disabled";
+			};
+
+			sdio1: sdio@71200000 {
+				compatible = "sprd,sdhci-r11";
+				reg = <0 0x71200000 0 0x1000>;
+				interrupts = <GIC_SPI 20 IRQ_TYPE_LEVEL_HIGH>;
+				clock-names = "sdio", "enable";
+				clocks = <&ap_clk CLK_SDIO1_2X>,
+					 <&apapb_gate CLK_SDIO1_EB>;
+				assigned-clocks = <&ap_clk CLK_SDIO1_2X>;
+				assigned-clock-parents = <&pll2 CLK_LPLL_409M6>;
+				status = "disabled";
+			};
+
+			sdio2: sdio@71300000 {
+				compatible = "sprd,sdhci-r11";
+				reg = <0 0x71300000 0 0x1000>;
+				interrupts = <GIC_SPI 21 IRQ_TYPE_LEVEL_HIGH>;
+				status = "disabled";
+			};
+		};
+
 		ap_etb: apetb {
 			compatible = "sprd,apetb";
 		    apetb-source = <&etm0 &etm1	&etm2 &etm3>;
@@ -1010,46 +1005,6 @@
 	};
 };
 
-&sdio0 {
-	clock-names = "sdio_clk", "sdio_clk_source",
-		"sdio_ahb_enable", "sdio_hp_det_clk";
-	clocks = <&ap_clk CLK_SDIO0_2X>,
-		<&pll1 CLK_RPLL>,
-		<&apapb_gate CLK_SDIO0_EB>,
-		<&apapb_gate CLK_SDIO0_32K_EB>;
-};
-
-&sdio1 {
-	clock-names = "sdio_clk","sdio_clk_source","sdio_ahb_enable";
-	clocks = <&ap_clk CLK_SDIO1_2X>,
-		 <&pll2 CLK_LPLL_409M6>,
-		 <&apapb_gate CLK_SDIO1_EB>;
-};
-
-&sdio3 {
-	clock-names = "sdio_clk","sdio_clk_source","sdio_ahb_enable";
-	clocks = <&ap_clk CLK_EMMC_2X>,
-		 <&pll1 CLK_RPLL>,
-		 <&apapb_gate CLK_EMMC_EB>;
-};
-
-&uart0 {
-	clock-names = "enable", "uart", "source";
-	clocks = <&apapb_gate CLK_UART0_EB>,
-		 <&ap_clk CLK_AP_UART0>, <&ext_26m>;
-};
-
-&uart1 {
-	clock-names = "enable", "uart", "source";
-	clocks = <&apapb_gate CLK_UART1_EB>,
-		 <&ap_clk CLK_AP_UART1>, <&ext_26m>;
-};
-
-&uart2 {
-	clock-names = "enable", "uart", "source";
-	clocks = <&apapb_gate CLK_UART2_EB>,
-		 <&ap_clk CLK_AP_UART2>, <&ext_26m>;
-};
 
 &i2c0 {
 	clock-names ="enable", "i2c", "source";

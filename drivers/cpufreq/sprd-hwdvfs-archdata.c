@@ -19,6 +19,7 @@
 #include "sprd-hwdvfs-archdata.h"
 
 extern int temp_value;
+
 static int default_dcdc_volt_update(struct regmap *map, struct reg_info *regs,
 				    void *data, unsigned long u_volt, int index,
 				    int count)
@@ -53,6 +54,7 @@ static int default_dcdc_volt_update(struct regmap *map, struct reg_info *regs,
 
 	return regmap_update_bits(map, reg, msk << off, val << off);
 }
+
 #if 0
 static int ext_dcdc_volt_update(struct regmap *map, struct reg_info *regs,
 				    void *data, unsigned long u_volt, int index,
@@ -85,6 +87,7 @@ static int ext_dcdc_volt_update(struct regmap *map, struct reg_info *regs,
 	return regmap_update_bits(map, reg, msk << off, val << off);
 }
 #endif
+
 static u32 default_cycle_calculate(u32 max_val_uV, u32 slew_rate,
 				   u32 module_clk_hz, u32 margin_us)
 {

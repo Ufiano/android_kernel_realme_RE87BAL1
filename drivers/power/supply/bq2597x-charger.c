@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0:
+// Copyright (c) 2021 unisoc.
+
 /*
  * Driver for the TI Solutions BQ2597x charger.
  *
@@ -218,6 +221,7 @@ struct bq2597x_charger_info {
 	struct bq2597x_platform_data *platform_data;
 
 	struct delayed_work monitor_work;
+	struct delayed_work wdt_work;
 
 	struct dentry *debug_root;
 
@@ -1453,6 +1457,7 @@ static int bq2597x_set_present(struct bq2597x_charger_info *bq, bool present)
 		bq2597x_init_device(bq);
 		bq2597x_enable_wdt(bq, true);
 		bq2597x_set_wdt(bq, bq->cfg->wdt_timer);
+		schedule_delayed_work(&bq->wdt_work, 0);
 	}
 	return 0;
 }
@@ -1498,7 +1503,7 @@ static ssize_t bq2597x_store_register(struct device *dev,
 	return count;
 }
 
-static DEVICE_ATTR(registers, 0660, bq2597x_show_registers, bq2597x_store_register);
+static DEVICE_ATTR(registers, 0644, bq2597x_show_registers, bq2597x_store_register);
 
 static struct attribute *bq2597x_attributes[] = {
 	&dev_attr_registers.attr,
@@ -1510,14 +1515,12 @@ static const struct attribute_group bq2597x_attr_group = {
 };
 
 static enum power_supply_property bq2597x_charger_props[] = {
-	POWER_SUPPLY_PROP_CHARGE_ENABLED,
+	POWER_SUPPLY_PROP_CALIBRATE,
 	POWER_SUPPLY_PROP_STATUS,
-	POWER_SUPPLY_PROP_FEED_WATCHDOG,
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_TEMP,
-	POWER_SUPPLY_PROP_INPUT_CURRENT_NOW,
 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE,
 	POWER_SUPPLY_PROP_CONSTANT_CHARGE_VOLTAGE_MAX,
 	POWER_SUPPLY_PROP_HEALTH,
@@ -1581,6 +1584,19 @@ static int bq2597x_get_temperature(struct bq2597x_charger_info *bq, int *intval)
 	return ret;
 }
 
+static void bq2597x_charger_watchdog_work(struct work_struct *work)
+{
+	struct delayed_work *dwork = to_delayed_work(work);
+	struct bq2597x_charger_info *bq = container_of(dwork,
+						       struct bq2597x_charger_info,
+						       wdt_work);
+
+	if (bq2597x_set_wdt(bq, bq->cfg->wdt_timer) < 0)
+		dev_err(bq->dev, "Fail to feed watchdog\n");
+
+	schedule_delayed_work(&bq->wdt_work, HZ * 15);
+}
+
 static int bq2597x_charger_get_property(struct power_supply *psy,
 				enum power_supply_property psp,
 				union power_supply_propval *val)
@@ -1594,7 +1610,7 @@ static int bq2597x_charger_get_property(struct power_supply *psy,
 		return -EINVAL;
 
 	switch (psp) {
-	case POWER_SUPPLY_PROP_CHARGE_ENABLED:
+	case POWER_SUPPLY_PROP_CALIBRATE:
 		bq2597x_check_charge_enabled(bq, &bq->charge_enabled);
 		val->intval = bq->charge_enabled;
 		break;
@@ -1618,11 +1634,24 @@ static int bq2597x_charger_get_property(struct power_supply *psy,
 		val->intval = bq->vbat_volt * 1000;
 		break;
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
-		ret = bq2597x_get_adc_data(bq, ADC_IBAT, &result);
-		if (!ret)
-			bq->ibat_curr = result;
+		if (val->intval == CM_IBAT_CURRENT_NOW_CMD) {
+			ret = bq2597x_get_adc_data(bq, ADC_IBAT, &result);
+			if (!ret)
+				bq->ibat_curr = result;
 
-		val->intval = bq->ibat_curr * 1000;
+			val->intval = bq->ibat_curr * 1000;
+			break;
+		}
+
+		bq2597x_check_charge_enabled(bq, &bq->charge_enabled);
+		if (!bq->charge_enabled) {
+			val->intval = 0;
+		} else {
+			ret = bq2597x_get_adc_data(bq, ADC_IBUS, &result);
+			if (!ret)
+				bq->ibus_curr = result;
+			val->intval = bq->ibus_curr * 1000;
+		}
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
 		cmd = val->intval;
@@ -1670,17 +1699,6 @@ static int bq2597x_charger_get_property(struct power_supply *psy,
 		else
 			val->intval = bq->cfg->bus_ocp_alm_th  * 1000;
 		break;
-	case POWER_SUPPLY_PROP_INPUT_CURRENT_NOW:
-		bq2597x_check_charge_enabled(bq, &bq->charge_enabled);
-		if (!bq->charge_enabled) {
-			val->intval = 0;
-		} else {
-			ret = bq2597x_get_adc_data(bq, ADC_IBUS, &result);
-			if (!ret)
-				bq->ibus_curr = result;
-			val->intval = bq->ibus_curr * 1000;
-		}
-		break;
 	case POWER_SUPPLY_PROP_CONSTANT_CHARGE_CURRENT:
 		bq2597x_check_charge_enabled(bq, &bq->charge_enabled);
 		if (!bq->charge_enabled)
@@ -1707,18 +1725,15 @@ static int bq2597x_charger_set_property(struct power_supply *psy,
 		return -EINVAL;
 
 	switch (prop) {
-	case POWER_SUPPLY_PROP_CHARGE_ENABLED:
-		if (!val->intval)
+	case POWER_SUPPLY_PROP_CALIBRATE:
+		if (!val->intval) {
 			bq2597x_enable_adc(bq, false);
+			cancel_delayed_work_sync(&bq->wdt_work);
+		}
 		bq2597x_enable_charge(bq, val->intval);
 		bq2597x_check_charge_enabled(bq, &bq->charge_enabled);
 		dev_info(bq->dev, "POWER_SUPPLY_PROP_CHARGING_ENABLED: %s\n",
 			 val->intval ? "enable" : "disable");
-		break;
-
-	case POWER_SUPPLY_PROP_FEED_WATCHDOG:
-		if (bq2597x_set_wdt(bq, val->intval * 1000) < 0)
-			dev_err(bq->dev, "Fail to feed watchdog\n");
 		break;
 
 	case POWER_SUPPLY_PROP_PRESENT:
@@ -1749,8 +1764,7 @@ static int bq2597x_charger_is_writeable(struct power_supply *psy,
 	int ret;
 
 	switch (prop) {
-	case POWER_SUPPLY_PROP_CHARGE_ENABLED:
-	case POWER_SUPPLY_PROP_FEED_WATCHDOG:
+	case POWER_SUPPLY_PROP_CALIBRATE:
 	case POWER_SUPPLY_PROP_PRESENT:
 		ret = 1;
 		break;
@@ -2039,6 +2053,7 @@ static int bq2597x_charger_probe(struct i2c_client *client,
 		return ret;
 	}
 
+	INIT_DELAYED_WORK(&bq->wdt_work, bq2597x_charger_watchdog_work);
 	ret = bq2597x_psy_register(bq);
 	if (ret)
 		return ret;
@@ -2092,6 +2107,7 @@ static int bq2597x_charger_remove(struct i2c_client *client)
 
 
 	bq2597x_enable_adc(bq, false);
+	cancel_delayed_work_sync(&bq->wdt_work);
 
 	power_supply_unregister(bq->bq2597x_psy);
 
@@ -2111,6 +2127,7 @@ static void bq2597x_charger_shutdown(struct i2c_client *client)
 
 	bq2597x_enable_adc(bq, false);
 	bq2597x_enable_charge(bq, false);
+	cancel_delayed_work_sync(&bq->wdt_work);
 }
 
 static const struct i2c_device_id bq2597x_charger_id[] = {

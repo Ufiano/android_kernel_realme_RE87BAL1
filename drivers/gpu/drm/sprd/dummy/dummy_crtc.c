@@ -1,26 +1,20 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- *Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- *This software is licensed under the terms of the GNU General Public
- *License version 2, as published by the Free Software Foundation, and
- *may be copied, distributed, and modified under those terms.
- *
- *This program is distributed in the hope that it will be useful,
- *but WITHOUT ANY WARRANTY; without even the implied warranty of
- *MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
-#include <drm/drmP.h>
+#include <linux/component.h>
+#include <linux/hrtimer.h>
+#include <linux/module.h>
+#include <linux/of.h>
+#include <linux/of_platform.h>
+#include <linux/time.h>
+
 #include <drm/drm_atomic_helper.h>
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_fourcc.h>
 #include <drm/drm_plane_helper.h>
 #include <drm/drm_vblank.h>
-#include <linux/component.h>
-#include <linux/hrtimer.h>
-#include <linux/of.h>
-#include <linux/time.h>
 
 #include "sprd_drm.h"
 
@@ -256,11 +250,11 @@ static int sprd_dummy_crtc_remove(struct platform_device *pdev)
 }
 
 static const struct of_device_id dummy_crtc_match_table[] = {
-	{ .compatible = "sprd,dummy-crtc",},
-	{},
+	{ .compatible = "sprd,dummy-crtc", },
+	{ /* sentinel */ },
 };
 
-static struct platform_driver sprd_dummy_crtc_driver = {
+struct platform_driver sprd_dummy_crtc_driver = {
 	.probe = sprd_dummy_crtc_probe,
 	.remove = sprd_dummy_crtc_remove,
 	.driver = {
@@ -268,8 +262,7 @@ static struct platform_driver sprd_dummy_crtc_driver = {
 		.of_match_table = dummy_crtc_match_table,
 	},
 };
-module_platform_driver(sprd_dummy_crtc_driver);
 
 MODULE_AUTHOR("Leon He <leon.he@unisoc.com>");
-MODULE_DESCRIPTION("Dummy CRTC Driver for SPRD SoC");
+MODULE_DESCRIPTION("Dummy CRTC Driver for Unisoc");
 MODULE_LICENSE("GPL v2");

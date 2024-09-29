@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/clk.h>
@@ -35,7 +27,6 @@ static struct dpu_glb_context {
 	u32 reg;
 	u32 mask;
 } dpu_glb_ctx;
-
 
 static const u32 dpu_core_clk[] = {
 	153600000,
@@ -147,11 +138,11 @@ static u32 calc_dpi_clk_src(u32 pclk)
 
 static int dpu_clk_init(struct dpu_context *ctx)
 {
-	int ret;
+	struct dpu_clk_context *clk_ctx = &dpu_clk_ctx;
+	struct clk *clk_src;
 	u32 dpu_core_val;
 	u32 dpi_src_val;
-	struct clk *clk_src;
-	struct dpu_clk_context *clk_ctx = &dpu_clk_ctx;
+	int ret;
 
 	dpu_core_val = calc_dpu_core_clk();
 	dpi_src_val = calc_dpi_clk_src(ctx->vm.pixelclock);
@@ -179,8 +170,8 @@ static int dpu_clk_init(struct dpu_context *ctx)
 
 static int dpu_clk_enable(struct dpu_context *ctx)
 {
-	int ret;
 	struct dpu_clk_context *clk_ctx = &dpu_clk_ctx;
+	int ret;
 
 	ret = clk_prepare_enable(clk_ctx->clk_dpu_core);
 	if (ret) {
@@ -216,20 +207,16 @@ static int dpu_glb_parse_dt(struct dpu_context *ctx,
 {
 	struct dpu_glb_context *glb_ctx = &dpu_glb_ctx;
 	u32 args[2];
-	int ret;
 
-	glb_ctx->aon_apb = syscon_regmap_lookup_by_name(np, "reset");
+	glb_ctx->aon_apb = syscon_regmap_lookup_by_phandle_args(np,
+			"reset-syscon", 2, args);
 	if (IS_ERR(glb_ctx->aon_apb)) {
-		pr_warn("failed to get syscon-name: reset\n");
+		pr_warn("failed to get reset syscon\n");
 		return PTR_ERR(glb_ctx->aon_apb);
-	}
-
-	ret = syscon_get_args_by_name(np, "reset", 2, args);
-	if (ret == 2) {
+	} else {
 		glb_ctx->reg = args[0];
 		glb_ctx->mask = args[1];
-	} else
-		pr_warn("failed to get syscon args for reset\n");
+	}
 
 	glb_ctx->clk_aon_apb_disp_eb =
 		of_clk_get_by_name(np, "clk_aon_apb_disp_eb");
@@ -243,8 +230,8 @@ static int dpu_glb_parse_dt(struct dpu_context *ctx,
 
 static void dpu_glb_enable(struct dpu_context *ctx)
 {
-	int ret;
 	struct dpu_glb_context *glb_ctx = &dpu_glb_ctx;
+	int ret;
 
 	ret = clk_prepare_enable(glb_ctx->clk_aon_apb_disp_eb);
 	if (ret) {
@@ -276,14 +263,14 @@ static void dpu_power_domain(struct dpu_context *ctx, int enable)
 	/* The dpu power domain code is in drivers/soc/sprd/domain/. */
 }
 
-static struct dpu_clk_ops dpu_clk_ops = {
+const struct dpu_clk_ops sharkl3_dpu_clk_ops = {
 	.parse_dt = dpu_clk_parse_dt,
 	.init = dpu_clk_init,
 	.enable = dpu_clk_enable,
 	.disable = dpu_clk_disable,
 };
 
-static struct dpu_glb_ops dpu_glb_ops = {
+const struct dpu_glb_ops sharkl3_dpu_glb_ops = {
 	.parse_dt = dpu_glb_parse_dt,
 	.reset = dpu_reset,
 	.enable = dpu_glb_enable,
@@ -291,25 +278,6 @@ static struct dpu_glb_ops dpu_glb_ops = {
 	.power = dpu_power_domain,
 };
 
-static struct ops_entry clk_entry = {
-	.ver = "sharkl3",
-	.ops = &dpu_clk_ops,
-};
-
-static struct ops_entry glb_entry = {
-	.ver = "sharkl3",
-	.ops = &dpu_glb_ops,
-};
-
-static int __init dpu_glb_register(void)
-{
-	dpu_clk_ops_register(&clk_entry);
-	dpu_glb_ops_register(&glb_entry);
-	return 0;
-}
-
-subsys_initcall(dpu_glb_register);
-
+MODULE_AUTHOR("Leon He <leon.he@unisoc.com>");
+MODULE_DESCRIPTION("Unisoc SharkL3 DPU global and clk regs config");
 MODULE_LICENSE("GPL v2");
-MODULE_AUTHOR("leon.he@spreadtrum.com");
-MODULE_DESCRIPTION("sprd sharkl3 dpu global and clk regs config");

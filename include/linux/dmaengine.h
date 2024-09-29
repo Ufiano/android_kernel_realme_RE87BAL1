@@ -1,18 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
 /*
  * Copyright(c) 2004 - 2006 Intel Corporation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the Free
- * Software Foundation; either version 2 of the License, or (at your option)
- * any later version.
- *
- * This program is distributed in the hope that it will be useful, but WITHOUT
- * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
- * more details.
- *
- * The full GNU General Public License is included in this distribution in the
- * file called COPYING.
  */
 #ifndef LINUX_DMAENGINE_H
 #define LINUX_DMAENGINE_H
@@ -24,6 +12,7 @@
 #include <linux/scatterlist.h>
 #include <linux/bitmap.h>
 #include <linux/types.h>
+#include <linux/android_kabi.h>
 #include <asm/page.h>
 
 /**
@@ -314,37 +303,6 @@ enum dma_slave_buswidth {
 };
 
 /**
- * enum dma_transfer_data_format - defines dma transfer data format
- * dma controller could reverse input data from source to destination
- * in bytes.
- *
- * @DMA_DATA_REVERSE_NONE: do not reverse data
- * @DMA_DATA_REVERSE_1_BYTE: reverse 1 byte per 2 bytes
- * @DMA_DATA_REVERSE_2_BYTES: reverse 2 byte per 4 bytes
- * @DMA_DATA_REVERSE_4_BYTES: reserse 4 byte per 8 bytes
- * For example:
- * source data                format             destination data
- * 0x0102              DMA_DATA_REVERSE_NONE        0x0102
- * 0x0102              DMA_DATA_REVERSE_1_BYTE      0x0201
- * 0x01020304          DMA_DATA_REVERSE_1_BYTE      0x02010403
- * 0x01020304          DMA_DATA_REVERSE_2_BYTES     0x03040102
- * 0x01020304          DMA_DATA_REVERSE_2_BYTES |   0x04030201
- *                     DMA_DATA_REVERSE_1_BYTE
- * 0x0102030405060708  DMA_DATA_REVERSE_4_BYTES     0x0506070801020304
- * 0x0102030405060708  DMA_DATA_REVERSE_4_BYTES |   0x0708050603040102
- *                     DMA_DATA_REVERSE_2_BYTES
- * 0x0102030405060708  DMA_DATA_REVERSE_4_BYTES |   0x0807060504030201
- *                     DMA_DATA_REVERSE_2_BYTES |
- *                     DMA_DATA_REVERSE_1_BYTE
- */
-enum dma_transfer_data_format {
-	DMA_DATA_REVERSE_NONE,
-	DMA_DATA_REVERSE_1_BYTE = BIT(0),
-	DMA_DATA_REVERSE_2_BYTES = BIT(1),
-	DMA_DATA_REVERSE_4_BYTES = BIT(2),
-};
-
-/**
  * struct dma_slave_config - dma slave channel runtime config
  * @direction: whether the data shall go in or out on this slave
  * channel, right now. DMA_MEM_TO_DEV and DMA_DEV_TO_MEM are
@@ -360,7 +318,7 @@ enum dma_transfer_data_format {
  * @src_addr_width: this is the width in bytes of the source (RX)
  * register where DMA data shall be read. If the source
  * is memory this may be ignored depending on architecture.
- * Legal values: 1, 2, 4, 8.
+ * Legal values: 1, 2, 3, 4, 8, 16, 32, 64.
  * @dst_addr_width: same as src_addr_width but for destination
  * target (TX) mutatis mutandis.
  * @src_maxburst: the maximum number of words (note: words, as in
@@ -376,9 +334,6 @@ enum dma_transfer_data_format {
  * loops in this area in order to transfer the data.
  * @dst_port_window_size: same as src_port_window_size but for the destination
  * port.
- * @step: The step that controller will skip after one buswidth data transfer
- * done.
- * @data_format: It is data reverse format, refer to @dma_transfer_data_format.
  * @device_fc: Flow Controller Settings. Only valid for slave channels. Fill
  * with 'true' if peripheral should be flow controller. Direction will be
  * selected at Runtime.
@@ -404,12 +359,10 @@ struct dma_slave_config {
 	phys_addr_t dst_addr;
 	enum dma_slave_buswidth src_addr_width;
 	enum dma_slave_buswidth dst_addr_width;
-	enum dma_slave_buswidth step;
 	u32 src_maxburst;
 	u32 dst_maxburst;
 	u32 src_port_window_size;
 	u32 dst_port_window_size;
-	u32 data_format;
 	bool device_fc;
 	unsigned int slave_id;
 };
@@ -440,16 +393,20 @@ enum dma_residue_granularity {
 	DMA_RESIDUE_GRANULARITY_BURST = 2,
 };
 
-/* struct dma_slave_caps - expose capabilities of a slave channel only
- *
- * @src_addr_widths: bit mask of src addr widths the channel supports
- * @dst_addr_widths: bit mask of dstn addr widths the channel supports
- * @directions: bit mask of slave direction the channel supported
- * 	since the enum dma_transfer_direction is not defined as bits for each
- * 	type of direction, the dma controller should fill (1 << <TYPE>) and same
- * 	should be checked by controller as well
+/**
+ * struct dma_slave_caps - expose capabilities of a slave channel only
+ * @src_addr_widths: bit mask of src addr widths the channel supports.
+ *	Width is specified in bytes, e.g. for a channel supporting
+ *	a width of 4 the mask should have BIT(4) set.
+ * @dst_addr_widths: bit mask of dst addr widths the channel supports
+ * @directions: bit mask of slave directions the channel supports.
+ *	Since the enum dma_transfer_direction is not defined as bit flag for
+ *	each type, the dma controller should set BIT(<TYPE>) and same
+ *	should be checked by controller as well
  * @max_burst: max burst capability per-transfer
- * @cmd_pause: true, if pause and thereby resume is supported
+ * @cmd_pause: true, if pause is supported (i.e. for reading residue or
+ *	       for resume later)
+ * @cmd_resume: true, if resume is supported
  * @cmd_terminate: true, if terminate cmd is supported
  * @residue_granularity: granularity of the reported transfer residue
  * @descriptor_reuse: if a descriptor can be reused by client and
@@ -461,6 +418,7 @@ struct dma_slave_caps {
 	u32 directions;
 	u32 max_burst;
 	bool cmd_pause;
+	bool cmd_resume;
 	bool cmd_terminate;
 	enum dma_residue_granularity residue_granularity;
 	bool descriptor_reuse;
@@ -504,7 +462,11 @@ typedef void (*dma_async_tx_callback_result)(void *dma_async_param,
 				const struct dmaengine_result *result);
 
 struct dmaengine_unmap_data {
+#if IS_ENABLED(CONFIG_DMA_ENGINE_RAID)
+	u16 map_cnt;
+#else
 	u8 map_cnt;
+#endif
 	u8 to_cnt;
 	u8 from_cnt;
 	u8 bidi_cnt;
@@ -715,11 +677,13 @@ struct dma_filter {
  * @dev: struct device reference for dma mapping api
  * @owner: owner module (automatically set based on the provided dev)
  * @src_addr_widths: bit mask of src addr widths the device supports
+ *	Width is specified in bytes, e.g. for a device supporting
+ *	a width of 4 the mask should have BIT(4) set.
  * @dst_addr_widths: bit mask of dst addr widths the device supports
- * @directions: bit mask of slave direction the device supports since
- * 	the enum dma_transfer_direction is not defined as bits for
- * 	each type of direction, the dma controller should fill (1 <<
- * 	<TYPE>) and same should be checked by controller as well
+ * @directions: bit mask of slave directions the device supports.
+ *	Since the enum dma_transfer_direction is not defined as bit flag for
+ *	each type, the dma controller should set BIT(<TYPE>) and same
+ *	should be checked by controller as well
  * @max_burst: max burst capability per-transfer
  * @residue_granularity: granularity of the transfer residue reported
  *	by tx_status
@@ -839,6 +803,11 @@ struct dma_device {
 					    dma_cookie_t cookie,
 					    struct dma_tx_state *txstate);
 	void (*device_issue_pending)(struct dma_chan *chan);
+
+	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
+	ANDROID_KABI_RESERVE(3);
+	ANDROID_KABI_RESERVE(4);
 };
 
 static inline int dmaengine_slave_config(struct dma_chan *chan,
@@ -1341,7 +1310,8 @@ enum dma_status dma_sync_wait(struct dma_chan *chan, dma_cookie_t cookie);
 enum dma_status dma_wait_for_async_tx(struct dma_async_tx_descriptor *tx);
 void dma_issue_pending_all(void);
 struct dma_chan *__dma_request_channel(const dma_cap_mask_t *mask,
-					dma_filter_fn fn, void *fn_param);
+				       dma_filter_fn fn, void *fn_param,
+				       struct device_node *np);
 struct dma_chan *dma_request_slave_channel(struct device *dev, const char *name);
 
 struct dma_chan *dma_request_chan(struct device *dev, const char *name);
@@ -1366,7 +1336,9 @@ static inline void dma_issue_pending_all(void)
 {
 }
 static inline struct dma_chan *__dma_request_channel(const dma_cap_mask_t *mask,
-					      dma_filter_fn fn, void *fn_param)
+						     dma_filter_fn fn,
+						     void *fn_param,
+						     struct device_node *np)
 {
 	return NULL;
 }
@@ -1436,11 +1408,13 @@ static inline int dmaengine_desc_free(struct dma_async_tx_descriptor *desc)
 /* --- DMA device --- */
 
 int dma_async_device_register(struct dma_device *device);
+int dmaenginem_async_device_register(struct dma_device *device);
 void dma_async_device_unregister(struct dma_device *device);
 void dma_run_dependencies(struct dma_async_tx_descriptor *tx);
 struct dma_chan *dma_get_slave_channel(struct dma_chan *chan);
 struct dma_chan *dma_get_any_slave_channel(struct dma_device *device);
-#define dma_request_channel(mask, x, y) __dma_request_channel(&(mask), x, y)
+#define dma_request_channel(mask, x, y) \
+	__dma_request_channel(&(mask), x, y, NULL)
 #define dma_request_slave_channel_compat(mask, x, y, dev, name) \
 	__dma_request_slave_channel_compat(&(mask), x, y, dev, name)
 
@@ -1458,6 +1432,6 @@ static inline struct dma_chan
 	if (!fn || !fn_param)
 		return NULL;
 
-	return __dma_request_channel(mask, fn, fn_param);
+	return __dma_request_channel(mask, fn, fn_param, NULL);
 }
 #endif /* DMAENGINE_H */

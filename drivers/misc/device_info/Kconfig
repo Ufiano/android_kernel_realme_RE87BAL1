@@ -1,6 +1,5 @@
 config OPLUS_DEVICE_IFNO
-	bool "config oplus factory mode device info software"
-	default y
+	tristate "config oplus factory mode device info software"
 	help
 		define this config to compile device_info.c for device register
 

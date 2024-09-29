@@ -1,14 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 /*
- * Copyright (C) 2015 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #ifndef _UAPI_VIDEO_GSP_R6P0_CFG_H_
@@ -178,12 +170,12 @@ struct gsp_r6p0_des_layer_user {
 };
 
 struct gsp_r6p0_misc_cfg_user {
-	uint8_t gsp_gap;
-	uint8_t core_num;
-	uint8_t co_work0;
-	uint8_t co_work1;
-	uint8_t work_mod;
-	uint8_t pmargb_en;
+	__u8 gsp_gap;
+	__u8 core_num;
+	__u8 co_work0;
+	__u8 co_work1;
+	__u8 work_mod;
+	__u8 pmargb_en;
 	struct gsp_rect workarea_src_rect;
 	struct gsp_pos workarea_des_pos;
 };

@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
+ *Copyright (C) 2019 Spreadtrum Communications Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -10,7 +11,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-
 #ifdef pr_fmt
 #undef pr_fmt
 #endif
@@ -50,7 +50,7 @@
 #define SIPX_UL_OFFSET          (16)
 
 #define NORMAL_BLOCK_SIZE	(ETH_HLEN + ETH_DATA_LEN + NET_IP_ALIGN)
-#define ACK_BLOCK_SIZE	(96)
+#define ACK_BLOCK_SIZE		(96)
 
 #define TIME_TRIGGER_CP_NS      (500 * 1000)
 
@@ -64,15 +64,208 @@
 int g_flow_on = 1;
 #endif
 
-//extern void __inval_cache_range(const void *, const void *);
-//extern void __dma_flush_range(const void *, const void *);
-
-extern void v7_dma_unmap_area(const void *, size_t, int);
-extern void v7_dma_flush_range(const void *, const void *);
-
 static struct sipx_mgr *sipxs[SIPC_ID_NR];
 
-inline u16 SIPX_GEN_DESC(u32 length, u16 offset)
+#ifdef CONFIG_SPRD_SIPC_MEM_CACHE_EN
+static struct device *sipx_dev;
+#endif
+
+#if defined(CONFIG_DEBUG_FS)
+static int  sipx_init_debugfs(void *root);
+#endif
+
+static struct sipx_channel *sipx_chan_record[SMSG_CH_NR + 1];
+
+#if defined(CONFIG_DEBUG_FS)
+
+static int sipx_debug_show(struct seq_file *m, void *private)
+{
+	volatile struct sipx_fifo_info *fifo_info = NULL;
+	struct sipx_mgr *sipx = NULL;
+	struct sipx_channel *sipx_chan = NULL;
+	int i, j;
+
+	for (i = 0; i < SIPC_ID_NR; i++) {
+		sipx = sipxs[i];
+		if (!sipx)
+			continue;
+
+		/*sipx*/
+		sipc_debug_putline(m, '*', 180);
+#ifdef CONFIG_SPRD_SIPC_MEM_CACHE_EN
+		seq_printf(m, "sipx dst 0x%0x, state: 0x%0x, recovery: %d, ",
+			   sipx->dst, sipx->state, sipx->recovery);
+		seq_printf(m, "smem_virt: 0x%p, smem_cached_virt: 0x%p, ",
+			   sipx->smem_virt, sipx->smem_cached_virt);
+		seq_printf(m, "smem_addr: 0x%0x, mapped_smem_addr:",
+			   sipx->smem_addr);
+		seq_printf(m, "0x%0x\n, smem_size: 0x%0x",
+			   sipx->dst_smem_addr,
+			   sipx->smem_size);
+#else
+		seq_printf(m, "sipx dst %d, state: 0x%0x, recovery: %d, ",
+			   sipx->dst, sipx->state, sipx->recovery);
+		seq_printf(m, "smem_virt: 0x%p, smem_addr: 0x%0x, smem_size: 0x%0x\n",
+			   sipx->smem_virt,
+			   sipx->smem_addr,
+			   sipx->smem_size);
+#endif
+		seq_printf(m, "dl_pool_size: %d, dl_ack_pool_size: %d,",
+			   sipx->dl_pool_size,
+			   sipx->dl_ack_pool_size);
+		seq_printf(m, "ul_pool_size: %d, ul_ack_pool_size: %d,",
+			   sipx->ul_pool_size,
+			   sipx->ul_ack_pool_size);
+		seq_printf(m, "blk_size: %d, ack_blk_size: %d\n",
+			   sipx->blk_size,
+			   sipx->ack_blk_size);
+
+		fifo_info = sipx->dl_pool->fifo_info;
+		seq_printf(m, "dl_pool: blks_addr :0x%0x, blk_size :%d,",
+			   (u32)fifo_info->blks_addr,
+			   (u32)fifo_info->blk_size);
+		seq_printf(m, "fifo_addr :0x%0x, fifo_size :%d, fifo_rdptr",
+			   (u32)fifo_info->fifo_addr,
+			   (u32)fifo_info->fifo_size);
+		seq_printf(m, " :0x%0x, fifo_wrptr: 0x%0x\n",
+			   (u32)fifo_info->fifo_rdptr,
+			   (u32)fifo_info->fifo_wrptr);
+
+		fifo_info = sipx->dl_ack_pool->fifo_info;
+		seq_printf(m, "dl_ack_pool: blks_addr :0x%0x, blk_size :%d,",
+			   (u32)fifo_info->blks_addr,
+			   (u32)fifo_info->blk_size);
+		seq_printf(m, "fifo_addr :0x%0x, fifo_size :%d,",
+			   (u32)fifo_info->fifo_addr,
+			   (u32)fifo_info->fifo_size);
+		seq_printf(m, " fifo_rdptr :0x%0x, fifo_wrptr: 0x%0x\n",
+			   (u32)fifo_info->fifo_rdptr,
+			   (u32)fifo_info->fifo_wrptr);
+
+		fifo_info = sipx->ul_pool->fifo_info;
+		seq_printf(m, "ul_pool: blks_addr :0x%0x, blk_size :%d,",
+			   (u32)fifo_info->blks_addr,
+			   (u32)fifo_info->blk_size);
+		seq_printf(m, " fifo_addr :0x%0x, fifo_size :%d,",
+			   (u32)fifo_info->fifo_addr,
+			   (u32)fifo_info->fifo_size);
+		seq_printf(m, "fifo_rdptr :0x%0x, fifo_wrptr: 0x%0x\n",
+			   (u32)fifo_info->fifo_rdptr,
+			   (u32)fifo_info->fifo_wrptr);
+
+		fifo_info = sipx->ul_ack_pool->fifo_info;
+		seq_printf(m, "ul_ack_pool: blks_addr :0x%0x, blk_size :%d,",
+			   (u32)fifo_info->blks_addr,
+			   (u32)fifo_info->blk_size);
+		seq_printf(m, " fifo_addr :0x%0x, fifo_size :%d,",
+			   (u32)fifo_info->fifo_addr,
+			   (u32)fifo_info->fifo_size);
+		seq_printf(m, "fifo_rdptr :0x%0x, fifo_wrptr: 0x%0x\n",
+			   (u32)fifo_info->fifo_rdptr,
+			   (u32)fifo_info->fifo_wrptr);
+
+		sipc_debug_putline(m, '*', 180);
+
+		for (j = 0; j < SMSG_VALID_CH_NR; j++) {
+			sipx_chan = sipx->channels[j];
+			if (!sipx_chan)
+				continue;
+
+			/* sipx channel */
+			seq_printf(m, "sipx_chan dst %d, channel: %3d, state: %d, ",
+				   sipx_chan->dst,
+				   sipx_chan->channel,
+				   sipx_chan->state);
+			seq_printf(m, "smem_virt: 0x%p, smem_addr: 0x%0x, ",
+				   sipx_chan->smem_virt,
+				   sipx_chan->smem_addr);
+			seq_printf(m, "dst_smem_addr: 0x%0x, smem_size: 0x%0x, ",
+				   sipx_chan->dst_smem_addr,
+				   sipx_chan->smem_size);
+			seq_printf(m, "dl_record: 0x%0x,ul_record: 0x%0x\n",
+				   sipx_chan->dl_record_flag,
+				   sipx_chan->ul_record_flag);
+
+			fifo_info = sipx_chan->dl_ring->fifo_info;
+			seq_printf(m, "dl_ring: blks_addr :0x%0x, blk_size :%d,",
+				   (u32)fifo_info->blks_addr,
+				   (u32)fifo_info->blk_size);
+			seq_printf(m,
+				   "fifo_addr :0x%0x, fifo_size :%d, fifo_rdptr :0x%0x,:",
+				   (u32)fifo_info->fifo_addr,
+				   (u32)fifo_info->fifo_size,
+				   (u32)fifo_info->fifo_rdptr);
+			seq_printf(m, "fifo_wrptr: 0x%0x\n",
+				   (u32)fifo_info->fifo_wrptr);
+
+			fifo_info = sipx_chan->dl_ack_ring->fifo_info;
+			seq_printf(m, "dl_ack_ring: blks_addr :0x%0x, blk_size :%d,",
+				   (u32)fifo_info->blks_addr,
+				   (u32)fifo_info->blk_size);
+			seq_printf(m, "fifo_addr :0x%0x, fifo_size :%d, ",
+				   (u32)fifo_info->fifo_addr,
+				   (u32)fifo_info->fifo_size);
+			seq_printf(m, "fifo_rdptr :0x%0x, fifo_wrptr: 0x%0x\n",
+				   (u32)fifo_info->fifo_rdptr,
+				   (u32)fifo_info->fifo_wrptr);
+
+			fifo_info = sipx_chan->ul_ring->fifo_info;
+			seq_printf(m, "ul_ring: blks_addr :0x%0x, blk_size :%d, ",
+				   (u32)fifo_info->blks_addr,
+				   (u32)fifo_info->blk_size);
+			seq_printf(m, "fifo_addr :0x%0x, fifo_size :%d, ",
+				   (u32)fifo_info->fifo_addr,
+				   (u32)fifo_info->fifo_size);
+			seq_printf(m, "fifo_rdptr :0x%0x, fifo_wrptr: 0x%0x\n",
+				   (u32)fifo_info->fifo_rdptr,
+				   (u32)fifo_info->fifo_wrptr);
+
+			fifo_info = sipx_chan->ul_ack_ring->fifo_info;
+			seq_printf(m, "ul_ack_ring: blks_addr :0x%0x, blk_size :%d,",
+				   (u32)fifo_info->blks_addr,
+				   (u32)fifo_info->blk_size);
+			seq_printf(m,
+				   " fifo_addr :0x%0x, fifo_size :%d, fifo_rdptr :0x%0x,",
+				   (u32)fifo_info->fifo_addr,
+				   (u32)fifo_info->fifo_size,
+				   (u32)fifo_info->fifo_rdptr);
+			seq_printf(m, " fifo_wrptr: 0x%0x\n",
+				   (u32)fifo_info->fifo_wrptr);
+
+			sipc_debug_putline(m, '*', 180);
+		}
+	}
+
+	return 0;
+}
+
+static int sipx_debug_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, sipx_debug_show, inode->i_private);
+}
+
+static const struct file_operations sipx_debug_fops = {
+	.open = sipx_debug_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = single_release,
+};
+
+static int  sipx_init_debugfs(void *root)
+{
+	if (!root)
+		return -ENXIO;
+
+	debugfs_create_file("sipx", 0444,
+			    (struct dentry *)root,
+			    NULL,
+			    &sipx_debug_fops);
+	return 0;
+}
+
+#endif /* CONFIG_DEBUG_FS */
+
+static inline u16 SIPX_GEN_DESC(u32 length, u16 offset)
 {
 	return ((length & 0x7ff) | ((offset & 0x1F) << 11));
 }
@@ -181,8 +374,10 @@ static int sipx_put_item_to_ring(struct sipx_ring *ring, struct sblock *blk,
 	int pos;
 	int cnt;
 	struct sipx_blk_item item;
+
 #ifdef CONFIG_SPRD_SIPC_MEM_CACHE_EN
-	SKB_DATA_TO_SIPC_CACHE_FLUSH(blk->addr, blk->addr + blk->length);
+	SKB_DATA_TO_SIPC_CACHE_FLUSH(sipx_dev, (blk->addr - sipxs[SIPC_ID_PSCP]->smem_cached_virt
+				     + sipxs[SIPC_ID_PSCP]->smem_addr), blk->length);
 #endif
 	/* multi-gotter may cause got failure */
 	spin_lock_irqsave(&ring->lock, flags);
@@ -235,7 +430,8 @@ static int sipx_get_item_from_ring(struct sipx_ring *ring, struct sblock *blk)
 
 		ring->fifo_info->fifo_rdptr = rd + 1;
 #ifdef CONFIG_SPRD_SIPC_MEM_CACHE_EN
-		SIPC_DATA_TO_SKB_CACHE_INV(blk->addr, blk->addr + blk->length);
+		SIPC_DATA_TO_SKB_CACHE_INV(sipx_dev, (blk->addr - sipxs[SIPC_ID_PSCP]->smem_cached_virt
+					   + sipxs[SIPC_ID_PSCP]->smem_addr), blk->length);
 #endif
 	}
 
@@ -404,11 +600,7 @@ static int sipx_thread(void *data)
 {
 	struct sipx_channel *sipx_chan = data;
 	struct smsg mcmd, mrecv;
-	struct sched_param param = {.sched_priority = 90};
 	int rval;
-
-	/*set the thread as a real time thread, and its priority is 90*/
-	sched_setscheduler(current, SCHED_RR, &param);
 
 	/* since the channel open may hang, we call it in the seblock thread */
 	rval = smsg_ch_open(sipx_chan->dst, sipx_chan->channel, -1);
@@ -430,10 +622,13 @@ static int sipx_thread(void *data)
 			continue;
 		}
 
-		pr_debug("sipx thread recv msg: dst=%d, channel=%d, "
-			   "type=%d, flag=0x%04x, value=0x%08x\n",
-			   sipx_chan->dst, sipx_chan->channel,
-			   mrecv.type, mrecv.flag, mrecv.value);
+		pr_debug("%s recv msg: dst=%d, channel=%d, type=%d, flag=0x%04x, value=0x%08x\n",
+			   __func__,
+			   sipx_chan->dst,
+			   sipx_chan->channel,
+			   mrecv.type,
+			   mrecv.flag,
+			   mrecv.value);
 
 		switch (mrecv.type) {
 		case SMSG_TYPE_OPEN:
@@ -455,9 +650,7 @@ static int sipx_thread(void *data)
 
 			/* handle channel recovery */
 			if (sipx_chan->sipx->recovery && (mrecv.value == 0)) {
-				pr_info("sipx_chan start recover! recv msg:"
-					  "dst=%d, channel=%d, type=%d "
-					  "flag=0x%04x, value=0x%08x\n",
+				pr_info("sipx_chan start recover! recv msg: dst=%d, channel=%d, type=%d, flag=0x%04x, value=0x%08x\n",
 					  sipx_chan->dst,
 					  sipx_chan->channel,
 					  mrecv.type,
@@ -475,24 +668,18 @@ static int sipx_thread(void *data)
 			smsg_set(&mcmd, sipx_chan->channel,
 				 SMSG_TYPE_DONE,
 				 SMSG_DONE_SBLOCK_INIT,
-				 sipx_chan->sipx->mapped_smem_addr);
+				 sipx_chan->sipx->dst_smem_addr);
 			smsg_send(sipx_chan->dst, &mcmd, -1);
+			sipx_chan->state = SBLOCK_STATE_READY;
+			sipx_chan->sipx->recovery = 1;
 			if (sipx_chan->handler)
 				sipx_chan->handler(SBLOCK_NOTIFY_OPEN,
 						   sipx_chan->data);
-
-			sipx_chan->state = SBLOCK_STATE_READY;
-			sipx_chan->sipx->recovery = 1;
 			break;
 		case SMSG_TYPE_EVENT:
 			/* handle seblock send/release events */
 			switch (mrecv.flag) {
 			case SMSG_EVENT_SBLOCK_SEND:
-				if (sipx_chan->handler)
-					sipx_chan->handler(
-							   SBLOCK_NOTIFY_RECV,
-							   sipx_chan->data);
-
 				break;
 			case SMSG_EVENT_SBLOCK_RELEASE:
 #ifdef UL_TEST
@@ -573,14 +760,15 @@ static int destroy_spix_mgr(struct sipx_mgr *sipx)
 	kfree(sipx->ul_ack_pool);
 
 	if (sipx->smem_virt)
-		shmem_ram_unmap(sipx->smem_virt);
+		shmem_ram_unmap(sipx->dst, sipx->smem_virt);
 
 #ifdef CONFIG_SPRD_SIPC_MEM_CACHE_EN
 	if (sipx->smem_cached_virt)
-		shmem_ram_unmap(sipx->smem_cached_virt);
+		shmem_ram_unmap(sipx->dst, sipx->smem_cached_virt);
 #endif
+
 	if (sipx->smem_addr)
-		smem_free(sipx->smem_addr, sipx->smem_size);
+		smem_free(sipx->dst, sipx->smem_addr, sipx->smem_size);
 
 	kfree(sipx);
 
@@ -590,7 +778,7 @@ static int destroy_spix_mgr(struct sipx_mgr *sipx)
 static int create_sipx_mgr(struct sipx_mgr **out, struct sipx_init_data *pdata)
 {
 	struct sipx_mgr *sipx = NULL;
-	struct sipc_device *sdev;
+	struct smsg_ipc *sipc;
 	volatile struct sipx_fifo_info *fifo_info;
 	volatile u32 *chan_cnt;
 	u32 offset_chan_cnt;
@@ -605,10 +793,11 @@ static int create_sipx_mgr(struct sipx_mgr **out, struct sipx_init_data *pdata)
 	u32 total_size = 0;
 	void *p = NULL;
 	int ret = 0;
+	phys_addr_t offset = 0;
 
-	sdev = sipc_ap.sipc_dev[pdata->dst];
-	if (!sdev) {
-		pr_err("create_sipx_mgr: sdev is null, dst = %d\n", pdata->dst);
+	sipc = smsg_ipcs[pdata->dst];
+	if (!sipc) {
+		pr_err("sipc is null, dst = %d\n", pdata->dst);
 		return -ENODEV;
 	}
 	sipx = kzalloc(sizeof(*sipx), GFP_KERNEL);
@@ -623,9 +812,9 @@ static int create_sipx_mgr(struct sipx_mgr **out, struct sipx_init_data *pdata)
 	sipx->ul_pool_size = pdata->ul_pool_size;
 	sipx->ul_ack_pool_size = pdata->ul_ack_pool_size;
 	sipx->blk_size = ALIGN(NORMAL_BLOCK_SIZE + SIPX_BLOCK_PENDING,
-			SMP_CACHE_BYTES);
+			       SMP_CACHE_BYTES);
 	sipx->ack_blk_size = ALIGN(ACK_BLOCK_SIZE + SIPX_BLOCK_PENDING,
-			SMP_CACHE_BYTES);
+				   SMP_CACHE_BYTES);
 
 	/* allocated smem based on seblock_main_mgr structure , dl & ul mixed */
 
@@ -675,17 +864,21 @@ static int create_sipx_mgr(struct sipx_mgr **out, struct sipx_init_data *pdata)
 	total_size += sizeof(struct sipx_blk_item) * sipx->ul_ack_pool_size;
 
 	sipx->smem_size = ALIGN(total_size, SBLOCK_ALIGN_BYTES);
-	sipx->smem_addr = smem_alloc_ex(sipx->smem_size,
-					sdev->pdata->smem_base);
+	sipx->smem_addr = smem_alloc(sipx->dst, sipx->smem_size);
 
 	if (!sipx->smem_addr) {
-		pr_err("Failed to allocate smem for sipx\n");
 		ret = -ENOMEM;
 		goto fail;
 	}
-	sipx->mapped_smem_addr = sipx->smem_addr -
-		sdev->pdata->smem_base + sdev->pdata->mapped_smem_base;
-	sipx->smem_virt = shmem_ram_vmap_nocache(sipx->smem_addr,
+	sipx->dst_smem_addr = sipx->smem_addr -
+		sipc->smem_base + sipc->dst_smem_base;
+#ifdef CONFIG_PHYS_ADDR_T_64BIT
+	offset = sipc->high_offset;
+	offset = offset << 32;
+#endif
+	pr_info("offset = 0x%llx!\n", offset);
+	sipx->smem_virt = shmem_ram_vmap_nocache(sipx->dst,
+						 sipx->smem_addr,
 						 sipx->smem_size);
 	if (!sipx->smem_virt) {
 		ret = -EFAULT;
@@ -693,8 +886,9 @@ static int create_sipx_mgr(struct sipx_mgr **out, struct sipx_init_data *pdata)
 	}
 
 #ifdef CONFIG_SPRD_SIPC_MEM_CACHE_EN
-	sipx->smem_cached_virt = shmem_ram_vmap_cache(sipx->smem_addr,
-						      sipx->smem_size);
+	sipx->smem_cached_virt = shmem_ram_vmap_cache(sipx->dst,
+							  sipx->smem_addr,
+							  sipx->smem_size);
 
 	if (!sipx->smem_cached_virt) {
 		ret = -EFAULT;
@@ -716,13 +910,13 @@ static int create_sipx_mgr(struct sipx_mgr **out, struct sipx_init_data *pdata)
 	/* dl pool */
 	fifo_info = (volatile struct sipx_fifo_info *)(sipx->smem_virt);
 	/* offset of smem_addr */
-	fifo_info->blks_addr = sipx->mapped_smem_addr + offset_dl_blk;
+	fifo_info->blks_addr = sipx->dst_smem_addr + offset_dl_blk;
 	fifo_info->fifo_size = sipx->dl_pool_size;
 	fifo_info->blk_size = sipx->blk_size;
 	fifo_info->fifo_rdptr = 0;
 	fifo_info->fifo_wrptr = 0;
 	/* offset of smem_addr */
-	fifo_info->fifo_addr = sipx->mapped_smem_addr + offset_dl_fifo;
+	fifo_info->fifo_addr = sipx->dst_smem_addr + offset_dl_fifo;
 #ifdef CONFIG_SPRD_SIPC_MEM_CACHE_EN
 	ret = create_sipx_pool_ctrl(&sipx->dl_pool,
 				    fifo_info,
@@ -743,12 +937,12 @@ static int create_sipx_mgr(struct sipx_mgr **out, struct sipx_init_data *pdata)
 	/* dl ack pool */
 	fifo_info = (volatile struct sipx_fifo_info *)((sipx->smem_virt) +
 			sizeof(struct sipx_fifo_info));
-	fifo_info->blks_addr = sipx->mapped_smem_addr + offset_dl_ack_blk;
+	fifo_info->blks_addr = sipx->dst_smem_addr + offset_dl_ack_blk;
 	fifo_info->fifo_size = sipx->dl_ack_pool_size;
 	fifo_info->blk_size = sipx->ack_blk_size;
 	fifo_info->fifo_rdptr = 0;
 	fifo_info->fifo_wrptr = 0;
-	fifo_info->fifo_addr = sipx->mapped_smem_addr + offset_dl_ack_fifo;
+	fifo_info->fifo_addr = sipx->dst_smem_addr + offset_dl_ack_fifo;
 #ifdef CONFIG_SPRD_SIPC_MEM_CACHE_EN
 	ret = create_sipx_pool_ctrl(&sipx->dl_ack_pool,
 				    fifo_info,
@@ -770,14 +964,14 @@ static int create_sipx_mgr(struct sipx_mgr **out, struct sipx_init_data *pdata)
 	fifo_info = (volatile struct sipx_fifo_info *)((sipx->smem_virt) +
 			sizeof(struct sipx_fifo_info) * 2);
 	/* offset of smem_addr */
-	fifo_info->blks_addr = sipx->mapped_smem_addr + offset_ul_blk;
+	fifo_info->blks_addr = sipx->dst_smem_addr + offset_ul_blk;
 	fifo_info->fifo_size = sipx->ul_pool_size;
 	fifo_info->blk_size = sipx->blk_size;
 	fifo_info->fifo_rdptr = 0;
 	fifo_info->fifo_wrptr = 0;
 
 	/* offset of smem_addr */
-	fifo_info->fifo_addr = sipx->mapped_smem_addr + offset_ul_fifo;
+	fifo_info->fifo_addr = sipx->dst_smem_addr + offset_ul_fifo;
 #ifdef CONFIG_SPRD_SIPC_MEM_CACHE_EN
 	ret = create_sipx_pool_ctrl(&sipx->ul_pool,
 				    fifo_info,
@@ -785,24 +979,25 @@ static int create_sipx_mgr(struct sipx_mgr **out, struct sipx_init_data *pdata)
 				    sipx->smem_cached_virt + offset_ul_blk,
 				    sipx);
 #else
-	ret = create_sipx_pool_ctrl(&sipx->ul_pool, fifo_info,
+	ret = create_sipx_pool_ctrl(&sipx->ul_pool,
+				    fifo_info,
 				    sipx->smem_virt + offset_ul_fifo,
 				    sipx->smem_virt + offset_ul_blk,
 				    sipx);
 #endif
+
 	if (ret)
 		goto fail;
 
 	/* ul ack pool */
 	fifo_info = (volatile struct sipx_fifo_info *)((sipx->smem_virt) +
 			sizeof(struct sipx_fifo_info) * 3);
-	fifo_info->blks_addr = sipx->mapped_smem_addr + offset_ul_ack_blk;
+	fifo_info->blks_addr = sipx->dst_smem_addr + offset_ul_ack_blk;
 	fifo_info->fifo_size = sipx->ul_ack_pool_size;
 	fifo_info->blk_size = sipx->ack_blk_size;
 	fifo_info->fifo_rdptr = 0;
 	fifo_info->fifo_wrptr = 0;
-	fifo_info->fifo_addr = sipx->mapped_smem_addr + offset_ul_ack_fifo;
-
+	fifo_info->fifo_addr = sipx->dst_smem_addr + offset_ul_ack_fifo;
 #ifdef CONFIG_SPRD_SIPC_MEM_CACHE_EN
 	ret = create_sipx_pool_ctrl(&sipx->ul_ack_pool,
 				    fifo_info,
@@ -816,6 +1011,7 @@ static int create_sipx_mgr(struct sipx_mgr **out, struct sipx_init_data *pdata)
 				    sipx->smem_virt + offset_ul_ack_blk,
 				    sipx);
 #endif
+
 	if (ret)
 		goto fail;
 
@@ -844,10 +1040,12 @@ fail:
 	return ret;
 }
 
-static int sipx_parse_dt(struct sipx_init_data **init, struct device *dev)
+
+static int sipx_parse_dt(struct sipx_init_data **init,
+			 struct device_node *np, struct device *dev)
 {
+	struct device_node *parent_np;
 	struct sipx_init_data *pdata = NULL;
-	struct device_node *np = dev->of_node;
 	int ret;
 	u32 data;
 
@@ -855,21 +1053,30 @@ static int sipx_parse_dt(struct sipx_init_data **init, struct device *dev)
 	if (!pdata)
 		return -ENOMEM;
 
-	ret = of_property_read_string(np, "sprd,name",
-				      (const char **)&pdata->name);
+	/* Get name */
+	ret = of_property_read_string(np, "label", &pdata->name);
 	if (ret)
 		goto error;
+	dev_info(dev, "label  =%s\n", pdata->name);
 
-	ret = of_property_read_u32(np, "sprd,dst", (u32 *)&data);
-	if (ret)
-		goto error;
-
-	pdata->dst = (u8)data;
+	/* Get dst, sipx dst is share sipc dsti
+	 * Get the parent node
+	 */
+	parent_np = of_get_parent(np);
+	if (parent_np) {
+		ret = of_property_read_u32(parent_np, "reg", (u32 *)&data);
+		if (ret)
+			goto error;
+		pdata->dst = (u8)data;
+		dev_info(dev, "dst    =%d\n", pdata->dst);
+	}
+	of_node_put(parent_np);
 
 	ret = of_property_read_u32(np, "sprd,dl-pool",
 				   (u32 *)&pdata->dl_pool_size);
 	if (ret)
 		goto error;
+	dev_info(dev, "sprd,dl-pool =%d\n", pdata->dl_pool_size);
 
 	ret = of_property_read_u32(np, "sprd,dl-ack-pool",
 				   (u32 *)&pdata->dl_ack_pool_size);
@@ -1070,7 +1277,6 @@ static void sipx_force_ul_trigger(struct sipx_channel *sipx_chan)
 
 	pr_debug("sipx trigger cp force\n");
 }
-
 
 static void sipx_start_trigger_timer(struct sipx_channel *sipx_chan)
 {
@@ -1405,7 +1611,7 @@ static int init_sipx_channel_fifos(struct sipx_mgr *sipx,
 	fifo_info->fifo_wrptr = 0;
 	/* all ring fifo info */
 	offset = sizeof(struct sipx_fifo_info) * 4;
-	fifo_info->fifo_addr = sipx_chan->mapped_smem_addr + offset;
+	fifo_info->fifo_addr = sipx_chan->dst_smem_addr + offset;
 	ret = create_sipx_ring_ctrl(&sipx_chan->dl_ring, fifo_info,
 				    sipx_chan->smem_virt + offset,
 				    sipx->dl_pool->blks_buf,
@@ -1428,7 +1634,7 @@ static int init_sipx_channel_fifos(struct sipx_mgr *sipx,
 		(sizeof(struct sipx_fifo_info) * 4) +
 		/* dl ring fifo mem */
 		(sizeof(struct sipx_blk_item) * sipx->dl_pool_size);
-	fifo_info->fifo_addr = sipx_chan->mapped_smem_addr + offset;
+	fifo_info->fifo_addr = sipx_chan->dst_smem_addr + offset;
 	ret = create_sipx_ring_ctrl(&sipx_chan->dl_ack_ring, fifo_info,
 				    sipx_chan->smem_virt + offset,
 				    sipx->dl_ack_pool->blks_buf,
@@ -1454,7 +1660,7 @@ static int init_sipx_channel_fifos(struct sipx_mgr *sipx,
 		(sizeof(struct sipx_blk_item) * sipx->dl_pool_size) +
 		/* ul ring fifo mem */
 		(sizeof(struct sipx_blk_item) * sipx->dl_ack_pool_size);
-	fifo_info->fifo_addr = sipx_chan->mapped_smem_addr + offset;
+	fifo_info->fifo_addr = sipx_chan->dst_smem_addr + offset;
 	ret = create_sipx_ring_ctrl(&sipx_chan->ul_ring,
 				    fifo_info,
 				    sipx_chan->smem_virt + offset,
@@ -1487,7 +1693,7 @@ static int init_sipx_channel_fifos(struct sipx_mgr *sipx,
 		/* dl pool fifo mem */
 		(sizeof(struct sipx_blk_item) * sipx->ul_pool_size);
 
-	fifo_info->fifo_addr = sipx_chan->mapped_smem_addr + offset;
+	fifo_info->fifo_addr = sipx_chan->dst_smem_addr + offset;
 	ret = create_sipx_ring_ctrl(&sipx_chan->ul_ack_ring, fifo_info,
 				    sipx_chan->smem_virt + offset,
 				    sipx->ul_ack_pool->blks_buf,
@@ -1507,10 +1713,12 @@ static int destroy_sipx_channel_ctrl(struct sipx_channel *sipx_chan)
 	kfree(sipx_chan->ul_ack_ring);
 
 	if (sipx_chan->smem_virt)
-		shmem_ram_unmap(sipx_chan->smem_virt);
+		shmem_ram_unmap(sipx_chan->dst, sipx_chan->smem_virt);
 
 	if (sipx_chan->smem_addr)
-		smem_free(sipx_chan->smem_addr, sipx_chan->smem_size);
+		smem_free(sipx_chan->dst,
+		sipx_chan->smem_addr,
+		sipx_chan->smem_size);
 
 	kfree(sipx_chan);
 
@@ -1529,7 +1737,7 @@ static int update_sipx_channel_ptr(struct sipx_mgr *sipx,
 	offset += sizeof(u32) * sipx_chan->channel;
 
 	chan_ptr_mem_ptr = (volatile u32 *)(sipx->smem_virt + offset);
-	*chan_ptr_mem_ptr = sipx_chan->mapped_smem_addr;
+	*chan_ptr_mem_ptr = sipx_chan->dst_smem_addr;
 
 	return 0;
 }
@@ -1538,14 +1746,14 @@ static int create_sipx_channel_ctrl(struct sipx_mgr *sipx, u8 channel,
 				    struct sipx_channel **out)
 {
 	struct sipx_channel *sipx_chan;
-	struct sipc_device *sdev;
+	struct smsg_ipc *sipc;
 	int ret;
 	u8 ch_index;
+	phys_addr_t offset = 0;
 
-	sdev = sipc_ap.sipc_dev[sipx->dst];
-	if (!sdev) {
-		pr_err("sdev is null, dst = %d\n",
-		       sipx->dst);
+	sipc = smsg_ipcs[sipx->dst];
+	if (!sipc) {
+		pr_err("sipc is null, dst = %d\n", sipx->dst);
 		return -ENODEV;
 	}
 
@@ -1589,22 +1797,25 @@ static int create_sipx_channel_ctrl(struct sipx_mgr *sipx, u8 channel,
 	pr_debug("sipx_chan->smem_size = %d\n", sipx_chan->smem_size);
 
 	/*single channel in smem*/
-	sipx_chan->smem_addr = smem_alloc_ex(sipx_chan->smem_size,
-					     sdev->pdata->smem_base);
+	sipx_chan->smem_addr = smem_alloc(sipx->dst, sipx_chan->smem_size);
 	if (!sipx_chan->smem_addr) {
-		pr_err("Failed to allocate smem for sipx_chan\n");
 		kfree(sipx_chan);
 		return -ENOMEM;
 	}
 
-	sipx_chan->mapped_smem_addr = sipx_chan->smem_addr -
-		sdev->pdata->smem_base + sdev->pdata->mapped_smem_base;
-
-	sipx_chan->smem_virt = shmem_ram_vmap_nocache(sipx_chan->smem_addr,
+	sipx_chan->dst_smem_addr = sipx_chan->smem_addr -
+		sipc->smem_base + sipc->dst_smem_base;
+#ifdef CONFIG_PHYS_ADDR_T_64BIT
+	offset = sipc->high_offset;
+	offset = offset << 32;
+#endif
+	pr_info("offset = 0x%llx!\n", offset);
+	sipx_chan->smem_virt = shmem_ram_vmap_nocache(
+				sipx->dst,
+				sipx_chan->smem_addr + offset,
 				sipx_chan->smem_size);
 
 	if (!sipx_chan->smem_virt) {
-		pr_err("Failed to map smem for sipx_chan\n");
 		kfree(sipx_chan);
 		return -EFAULT;
 	}
@@ -1740,9 +1951,9 @@ static int sipx_ul_test_thread(void *data)
 				sipx_flush(5, 7);
 			}
 
-			pr_err("ul test thread sent %d pkts\n", 40 * 5);
+			pr_err("sent %d pkts\n", 40 * 5);
 			usleep_range(1000, 1500);
-			pr_err("ul test thread sent start\n");
+			pr_err("sent start\n");
 		} else {
 			msleep(100);
 		}
@@ -1756,6 +1967,9 @@ int sipx_chan_create(u8 dst, u8 channel)
 	struct sipx_mgr *sipx = NULL;
 	struct sipx_channel *sipx_chan = NULL;
 	int ret = 0;
+	struct sched_param param = {.sched_priority = 88};
+
+	pr_info("%s\n", __func__);
 
 	if (dst >= SIPC_ID_NR) {
 		pr_err("Input Param Error: dst = %d\n", dst);
@@ -1772,7 +1986,7 @@ int sipx_chan_create(u8 dst, u8 channel)
 	ret = create_sipx_channel_ctrl(sipx, channel, &sipx_chan);
 
 	if (ret) {
-		pr_err("Failed! ret = %d", ret);
+		pr_err("Failed to create channel, ret = %d", ret);
 		goto fail;
 	}
 
@@ -1785,6 +1999,10 @@ int sipx_chan_create(u8 dst, u8 channel)
 		ret = PTR_ERR(sipx_chan->thread);
 		goto fail;
 	}
+	sipx_chan_record[channel] = sipx_chan;
+
+	/* set the thread as a real time thread, and its priority is 11 */
+	sched_setscheduler(sipx_chan->thread, SCHED_RR, &param);
 	wake_up_process(sipx_chan->thread);
 #ifdef UL_TEST
 	if (5 == dst && 7 == channel) {
@@ -1805,17 +2023,19 @@ EXPORT_SYMBOL_GPL(sipx_chan_create);
 static int sipx_probe(struct platform_device *pdev)
 {
 	struct sipx_init_data *pdata = pdev->dev.platform_data;
-	struct sipx_mgr *sipx = NULL;
 	struct device *dev = &pdev->dev;
+	struct device_node *np;
+	struct sipx_mgr *sipx = NULL;
 	int ret;
+#if defined(CONFIG_DEBUG_FS)
+	struct dentry *root = debugfs_create_dir("sipx", NULL);
+#endif
 
-	if (pdev->dev.of_node && !pdata) {
-		ret = sipx_parse_dt(&pdata, &pdev->dev);
-		if (ret) {
-			dev_err(dev, "failed to parse seth device tree, ret=%d\n",
-				 ret);
-			return ret;
-		}
+	np = pdev->dev.of_node;
+	ret = sipx_parse_dt(&pdata, np, &pdev->dev);
+	if (ret) {
+		pr_err("failed to parse sipx device tree, ret=%d\n", ret);
+		return ret;
 	}
 
 	dev_info(dev, "parse dt, name=%s, dst=%u, pool size=%d, %d, %d, %d\n",
@@ -1830,8 +2050,7 @@ static int sipx_probe(struct platform_device *pdev)
 	if (!sipx) {
 		ret = create_sipx_mgr(&sipx, pdata);
 		if (ret) {
-			dev_err(dev, "failed to create_sipx_mgr, ret=%d\n",
-				ret);
+			dev_err(dev, "failed to create_sipx_mgr, ret=%d\n", ret);
 			sipx_destroy_pdata(&pdata, &pdev->dev);
 			return ret;
 		}
@@ -1840,6 +2059,17 @@ static int sipx_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, sipx);
+
+#ifdef CONFIG_SPRD_SIPC_MEM_CACHE_EN
+	sipx_dev = dev;
+#endif
+
+#if defined(CONFIG_DEBUG_FS)
+	if (!root)
+		return -ENXIO;
+
+	sipx_init_debugfs(root);
+#endif
 
 	return 0;
 }
@@ -1868,7 +2098,7 @@ static const struct of_device_id sipx_match_table[] = {
 	{ },
 };
 
-static struct platform_driver sipx_driver = {
+static struct platform_driver sprd_ipx_driver = {
 	.probe = sipx_probe,
 	.remove = sipx_remove,
 	.driver = {
@@ -1878,211 +2108,8 @@ static struct platform_driver sipx_driver = {
 	}
 };
 
-static int __init sipx_init(void)
-{
-	return platform_driver_register(&sipx_driver);
-}
-
-static void __exit sipx_exit(void)
-{
-	platform_driver_unregister(&sipx_driver);
-}
-
-module_init(sipx_init);
-module_exit(sipx_exit);
-
-#if defined(CONFIG_DEBUG_FS)
-static int sipx_debug_show(struct seq_file *m, void *private)
-{
-	struct sipx_mgr *sipx = NULL;
-	struct sipx_channel *sipx_chan = NULL;
-	volatile struct sipx_fifo_info *fifo_info = NULL;
-	int i, j;
-
-	for (i = 0; i < SIPC_ID_NR; i++) {
-		sipx = sipxs[i];
-		if (!sipx)
-			continue;
-
-		/*sipx*/
-		sipc_debug_putline(m, '*', 180);
-#ifdef CONFIG_SPRD_SIPC_MEM_CACHE_EN
-		seq_printf(m, "sipx dst 0x%0x, state: 0x%0x, recovery: %d, ",
-			   sipx->dst, sipx->state, sipx->recovery);
-		seq_printf(m, "smem_virt: 0x%p, smem_cached_virt: 0x%p, ",
-			   sipx->smem_virt, sipx->smem_cached_virt);
-		seq_printf(m, "smem_addr: 0x%0x, mapped_smem_addr:",
-			   sipx->smem_addr);
-		seq_printf(m, "0x%0x\n, smem_size: 0x%0x",
-			   sipx->mapped_smem_addr,
-			   sipx->smem_size);
-
-		seq_printf(m, "smem_cached_virt: 0x%p, mapped_smem_addr: 0x%0x\n",
-			   sipx->smem_cached_virt,
-			   sipx->mapped_smem_addr);
-#else
-		seq_printf(m, "sipx dst %d, state: 0x%0x, recovery: %d, ",
-			   sipx->dst, sipx->state, sipx->recovery);
-		seq_printf(m, "smem_virt: 0x%p, smem_addr: 0x%0x, smem_size: 0x%0x\n",
-			   sipx->smem_virt,
-			   sipx->smem_addr,
-			   sipx->smem_size);
-#endif
-		seq_printf(m, "dl_pool_size: %d, dl_ack_pool_size: %d,",
-			   sipx->dl_pool_size,
-			   sipx->dl_ack_pool_size);
-		seq_printf(m, "ul_pool_size: %d, ul_ack_pool_size: %d,",
-			   sipx->ul_pool_size,
-			   sipx->ul_ack_pool_size);
-		seq_printf(m, "blk_size: %d, ack_blk_size: %d\n",
-			   sipx->blk_size,
-			   sipx->ack_blk_size);
-
-		fifo_info = sipx->dl_pool->fifo_info;
-		seq_printf(m, "dl_pool: blks_addr :0x%0x, blk_size :%d,",
-			   (u32)fifo_info->blks_addr,
-			   (u32)fifo_info->blk_size);
-		seq_printf(m, "fifo_addr :0x%0x, fifo_size :%d, fifo_rdptr",
-			   (u32)fifo_info->fifo_addr,
-			   (u32)fifo_info->fifo_size);
-		seq_printf(m, " :0x%0x, fifo_wrptr: 0x%0x\n",
-			   (u32)fifo_info->fifo_rdptr,
-			   (u32)fifo_info->fifo_wrptr);
-
-		fifo_info = sipx->dl_ack_pool->fifo_info;
-		seq_printf(m, "dl_ack_pool: blks_addr :0x%0x, blk_size :%d,",
-			   (u32)fifo_info->blks_addr,
-			   (u32)fifo_info->blk_size);
-		seq_printf(m, "fifo_addr :0x%0x, fifo_size :%d,",
-			   (u32)fifo_info->fifo_addr,
-			   (u32)fifo_info->fifo_size);
-		seq_printf(m, " fifo_rdptr :0x%0x, fifo_wrptr: 0x%0x\n",
-			   (u32)fifo_info->fifo_rdptr,
-			   (u32)fifo_info->fifo_wrptr);
-
-		fifo_info = sipx->ul_pool->fifo_info;
-		seq_printf(m, "ul_pool: blks_addr :0x%0x, blk_size :%d,",
-			   (u32)fifo_info->blks_addr,
-			   (u32)fifo_info->blk_size);
-		seq_printf(m, " fifo_addr :0x%0x, fifo_size :%d,",
-			   (u32)fifo_info->fifo_addr,
-			   (u32)fifo_info->fifo_size);
-		seq_printf(m, "fifo_rdptr :0x%0x, fifo_wrptr: 0x%0x\n",
-			   (u32)fifo_info->fifo_rdptr,
-			   (u32)fifo_info->fifo_wrptr);
-
-		fifo_info = sipx->ul_ack_pool->fifo_info;
-		seq_printf(m, "ul_ack_pool: blks_addr :0x%0x, blk_size :%d,",
-			   (u32)fifo_info->blks_addr,
-			   (u32)fifo_info->blk_size);
-		seq_printf(m, " fifo_addr :0x%0x, fifo_size :%d,",
-			   (u32)fifo_info->fifo_addr,
-			   (u32)fifo_info->fifo_size);
-		seq_printf(m, "fifo_rdptr :0x%0x, fifo_wrptr: 0x%0x\n",
-			   (u32)fifo_info->fifo_rdptr,
-			   (u32)fifo_info->fifo_wrptr);
-
-		sipc_debug_putline(m, '*', 180);
-
-		for (j = 0; j < SMSG_VALID_CH_NR; j++) {
-			sipx_chan = sipx->channels[j];
-			if (!sipx_chan)
-				continue;
-
-			/* sipx channel */
-			seq_printf(m, "sipx_chan dst %d, channel: %3d, state: %d, ",
-				   sipx_chan->dst,
-				   sipx_chan->channel,
-				   sipx_chan->state);
-			seq_printf(m, "smem_virt: 0x%p, smem_addr: 0x%0x, ",
-				   sipx_chan->smem_virt,
-				   sipx_chan->smem_addr);
-			seq_printf(m, "mapped_smem_addr: 0x%0x, smem_size: 0x%0x, ",
-				   sipx_chan->mapped_smem_addr,
-				   sipx_chan->smem_size);
-			seq_printf(m, "dl_record: 0x%0x,ul_record: 0x%0x\n",
-				   sipx_chan->dl_record_flag,
-				   sipx_chan->ul_record_flag);
-
-			fifo_info = sipx_chan->dl_ring->fifo_info;
-			seq_printf(m, "dl_ring: blks_addr :0x%0x, blk_size :%d,",
-				   (u32)fifo_info->blks_addr,
-				   (u32)fifo_info->blk_size);
-			seq_printf(m,
-				   "fifo_addr :0x%0x, fifo_size :%d, fifo_rdptr :0x%0x,:",
-				   (u32)fifo_info->fifo_addr,
-				   (u32)fifo_info->fifo_size,
-				   (u32)fifo_info->fifo_rdptr);
-			seq_printf(m, "fifo_wrptr: 0x%0x\n",
-				   (u32)fifo_info->fifo_wrptr);
-
-			fifo_info = sipx_chan->dl_ack_ring->fifo_info;
-			seq_printf(m, "dl_ack_ring: blks_addr :0x%0x, blk_size :%d,",
-				   (u32)fifo_info->blks_addr,
-				   (u32)fifo_info->blk_size);
-			seq_printf(m, "fifo_addr :0x%0x, fifo_size :%d, ",
-				   (u32)fifo_info->fifo_addr,
-				   (u32)fifo_info->fifo_size);
-			seq_printf(m, "fifo_rdptr :0x%0x, fifo_wrptr: 0x%0x\n",
-				   (u32)fifo_info->fifo_rdptr,
-				   (u32)fifo_info->fifo_wrptr);
-
-			fifo_info = sipx_chan->ul_ring->fifo_info;
-			seq_printf(m, "ul_ring: blks_addr :0x%0x, blk_size :%d, ",
-				   (u32)fifo_info->blks_addr,
-				   (u32)fifo_info->blk_size);
-			seq_printf(m, "fifo_addr :0x%0x, fifo_size :%d, ",
-				   (u32)fifo_info->fifo_addr,
-				   (u32)fifo_info->fifo_size);
-			seq_printf(m, "fifo_rdptr :0x%0x, fifo_wrptr: 0x%0x\n",
-				   (u32)fifo_info->fifo_rdptr,
-				   (u32)fifo_info->fifo_wrptr);
-
-			fifo_info = sipx_chan->ul_ack_ring->fifo_info;
-			seq_printf(m, "ul_ack_ring: blks_addr :0x%0x, blk_size :%d,",
-				   (u32)fifo_info->blks_addr,
-				   (u32)fifo_info->blk_size);
-			seq_printf(m,
-				   " fifo_addr :0x%0x, fifo_size :%d, fifo_rdptr :0x%0x,",
-				   (u32)fifo_info->fifo_addr,
-				   (u32)fifo_info->fifo_size,
-				   (u32)fifo_info->fifo_rdptr);
-			seq_printf(m, " fifo_wrptr: 0x%0x\n",
-				   (u32)fifo_info->fifo_wrptr);
-
-			sipc_debug_putline(m, '*', 180);
-		}
-	}
-
-	return 0;
-}
-
-static int sipx_debug_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, sipx_debug_show, inode->i_private);
-}
-
-static const struct file_operations sipx_debug_fops = {
-	.open = sipx_debug_open,
-	.read = seq_read,
-	.llseek = seq_lseek,
-	.release = single_release,
-};
-
-int  sipx_init_debugfs(void *root)
-{
-	if (!root)
-		return -ENXIO;
-
-	debugfs_create_file("sipx", S_IRUGO,
-			    (struct dentry *)root,
-			    NULL,
-			    &sipx_debug_fops);
-	return 0;
-}
-
-#endif /* CONFIG_DEBUG_FS */
+module_platform_driver(sprd_ipx_driver);
 
 MODULE_AUTHOR("Wu Zhiwei");
 MODULE_DESCRIPTION("SIPC/SIPX driver");
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("GPL v2");

@@ -1,3 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (C) 2020 Unisoc Inc.
+ */
+
 #include <linux/device.h>
 #include <linux/module.h>
 #include <linux/kernel.h>

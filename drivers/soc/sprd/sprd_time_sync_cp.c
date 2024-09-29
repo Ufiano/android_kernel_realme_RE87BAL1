@@ -28,7 +28,7 @@
 #define pr_fmt(fmt) "sprd_time_sync_cp: " fmt
 
 /* realize the notifier_call func */
-int sprd_time_sync_fn(struct notifier_block *nb,
+int __nocfi sprd_time_sync_fn(struct notifier_block *nb,
 		unsigned long action, void *data)
 {
 	struct timezone tz;
@@ -64,3 +64,7 @@ int sprd_time_sync_fn(struct notifier_block *nb,
 
 	return NOTIFY_OK;
 }
+
+MODULE_AUTHOR("Ruifeng Zhang");
+MODULE_DESCRIPTION("sprd time sync cp driver");
+MODULE_LICENSE("GPL v2");

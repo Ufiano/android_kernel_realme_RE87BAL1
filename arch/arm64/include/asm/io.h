@@ -1,25 +1,12 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Based on arch/arm/include/asm/io.h
  *
  * Copyright (C) 1996-2000 Russell King
  * Copyright (C) 2012 ARM Ltd.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 as
- * published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #ifndef __ASM_IO_H
 #define __ASM_IO_H
-
-#ifdef __KERNEL__
 
 #include <linux/types.h>
 
@@ -31,92 +18,6 @@
 #include <asm/alternative.h>
 #include <asm/cpufeature.h>
 
-#include <xen/xen.h>
-
-#ifdef CONFIG_SPRD_LAST_REGS
-#include <linux/jiffies.h>
-#include <../../../../drivers/soc/sprd/debug/last_regs/regs_debug.h>
-
-extern struct sprd_debug_regs_access *sprd_debug_last_regs_access;
-/*
- * Generic IO read/write.  These perform native-endian accesses.
- */
-#define __raw_writeb __raw_writeb
-static inline void __raw_writeb(u8 val, volatile void __iomem *addr)
-{
-	sprd_debug_regs_write_start(val, addr);
-	asm volatile("strb %w0, [%1]" : : "r" (val), "r" (addr));
-	sprd_debug_regs_access_done();
-}
-
-#define __raw_writew __raw_writew
-static inline void __raw_writew(u16 val, volatile void __iomem *addr)
-{
-	sprd_debug_regs_write_start(val, addr);
-	asm volatile("strh %w0, [%1]" : : "r" (val), "r" (addr));
-	sprd_debug_regs_access_done();
-}
-
-#define __raw_writel __raw_writel
-static inline void __raw_writel(u32 val, volatile void __iomem *addr)
-{
-	sprd_debug_regs_write_start(val, addr);
-	asm volatile("str %w0, [%1]" : : "r" (val), "r" (addr));
-	sprd_debug_regs_access_done();
-}
-
-#define __raw_writeq __raw_writeq
-static inline void __raw_writeq(u64 val, volatile void __iomem *addr)
-{
-	sprd_debug_regs_write_start(val, addr);
-	asm volatile("str %0, [%1]" : : "r" (val), "r" (addr));
-	sprd_debug_regs_access_done();
-}
-
-#define __raw_readb __raw_readb
-static inline u8 __raw_readb(const volatile void __iomem *addr)
-{
-	u8 val;
-
-	sprd_debug_regs_read_start(addr);
-	asm volatile("ldrb %w0, [%1]" : "=r" (val) : "r" (addr));
-	sprd_debug_regs_access_done();
-	return val;
-}
-
-#define __raw_readw __raw_readw
-static inline u16 __raw_readw(const volatile void __iomem *addr)
-{
-	u16 val;
-
-	sprd_debug_regs_read_start(addr);
-	asm volatile("ldrh %w0, [%1]" : "=r" (val) : "r" (addr));
-	sprd_debug_regs_access_done();
-	return val;
-}
-
-#define __raw_readl __raw_readl
-static inline u32 __raw_readl(const volatile void __iomem *addr)
-{
-	u32 val;
-
-	sprd_debug_regs_read_start(addr);
-	asm volatile("ldr %w0, [%1]" : "=r" (val) : "r" (addr));
-	sprd_debug_regs_access_done();
-	return val;
-}
-
-#define __raw_readq __raw_readq
-static inline u64 __raw_readq(const volatile void __iomem *addr)
-{
-	u64 val;
-
-	sprd_debug_regs_read_start(addr);
-	asm volatile("ldr %0, [%1]" : "=r" (val) : "r" (addr));
-	sprd_debug_regs_access_done();
-	return val;
-}
-#else
 /*
  * Generic IO read/write.  These perform native-endian accesses.
  */
@@ -188,14 +89,13 @@ static inline u64 __raw_readq(const volatile void __iomem *addr)
 		     : "=r" (val) : "r" (addr));
 	return val;
 }
-#endif
 
 /* IO barriers */
 #define __iormb(v)							\
 ({									\
 	unsigned long tmp;						\
 									\
-	rmb();								\
+	dma_rmb();								\
 									\
 	/*								\
 	 * Create a dummy control dependency from the IO read to any	\
@@ -208,9 +108,8 @@ static inline u64 __raw_readq(const volatile void __iomem *addr)
 		     : "memory");					\
 })
 
-#define __iowmb()		wmb()
-
-#define mmiowb()		do { } while (0)
+#define __io_par(v)		__iormb(v)
+#define __iowmb()		dma_wmb()
 
 /*
  * Relaxed I/O memory access primitives. These follow the Device memory
@@ -264,14 +163,13 @@ extern void __memset_io(volatile void __iomem *, int, size_t);
  * I/O memory mapping functions.
  */
 extern void __iomem *__ioremap(phys_addr_t phys_addr, size_t size, pgprot_t prot);
-extern void __iounmap(volatile void __iomem *addr);
+extern void iounmap(volatile void __iomem *addr);
 extern void __iomem *ioremap_cache(phys_addr_t phys_addr, size_t size);
 
 #define ioremap(addr, size)		__ioremap((addr), (size), __pgprot(PROT_DEVICE_nGnRE))
 #define ioremap_nocache(addr, size)	__ioremap((addr), (size), __pgprot(PROT_DEVICE_nGnRE))
 #define ioremap_wc(addr, size)		__ioremap((addr), (size), __pgprot(PROT_NORMAL_NC))
 #define ioremap_wt(addr, size)		__ioremap((addr), (size), __pgprot(PROT_DEVICE_nGnRE))
-#define iounmap				__iounmap
 
 /*
  * PCI configuration space mapping function.
@@ -306,12 +204,4 @@ extern int valid_mmap_phys_addr_range(unsigned long pfn, size_t size);
 
 extern int devmem_is_allowed(unsigned long pfn);
 
-struct bio_vec;
-extern bool xen_biovec_phys_mergeable(const struct bio_vec *vec1,
-				      const struct bio_vec *vec2);
-#define BIOVEC_PHYS_MERGEABLE(vec1, vec2)				\
-	(__BIOVEC_PHYS_MERGEABLE(vec1, vec2) &&				\
-	 (!xen_domain() || xen_biovec_phys_mergeable(vec1, vec2)))
-
-#endif	/* __KERNEL__ */
 #endif	/* __ASM_IO_H */

@@ -68,7 +68,7 @@ struct dwc3_sprd {
 	enum usb_dr_mode	dr_mode;
 	enum usb_dr_mode	wq_mode;
 
-	struct wakeup_source		wake_lock;
+	struct wakeup_source		*wake_lock;
 	spinlock_t		lock;
 
 	bool			vbus_active;
@@ -145,9 +145,11 @@ static ssize_t u1u2_enable_show(struct device *dev,
 	dwc = platform_get_drvdata(sdwc->dwc3);
 	if (!dwc)
 		return -EINVAL;
-
+	//todo fixme
+/*
 	if (dwc->u1u2_enable)
 		return sprintf(buf, "enabled\n");
+*/
 	return sprintf(buf, "disabled\n");
 }
 
@@ -164,14 +166,14 @@ static ssize_t u1u2_enable_store(struct device *dev,
 	dwc = platform_get_drvdata(sdwc->dwc3);
 	if (!dwc)
 		return -EINVAL;
-
-	if (!strncmp(buf, "enable", 6))
+	//todo fixme
+/*	if (!strncmp(buf, "enable", 6))
 		dwc->u1u2_enable = true;
 	else if (!strncmp(buf, "disable", 7))
 		dwc->u1u2_enable = false;
 	else
 		return -EINVAL;
-
+*/
 	return size;
 }
 static DEVICE_ATTR_RW(u1u2_enable);
@@ -211,9 +213,9 @@ static void dwc3_flush_all_events(struct dwc3_sprd *sdwc)
 	/* Skip remaining events on disconnect */
 	spin_lock_irqsave(&dwc->lock, flags);
 
-	reg = dwc3_readl(dwc->regs, DWC3_GEVNTSIZ(0));
+	reg = readl(dwc->regs + DWC3_GEVNTSIZ(0) - DWC3_GLOBALS_REGS_START);
 	reg |= DWC3_GEVNTSIZ_INTMASK;
-	dwc3_writel(dwc->regs, DWC3_GEVNTSIZ(0), reg);
+	writel(reg, dwc->regs + DWC3_GEVNTSIZ(0) - DWC3_GLOBALS_REGS_START);
 
 	evt = dwc->ev_buf;
 	evt->lpos = (evt->lpos + evt->count) % DWC3_EVENT_BUFFERS_SIZE;
@@ -222,29 +224,55 @@ static void dwc3_flush_all_events(struct dwc3_sprd *sdwc)
 	spin_unlock_irqrestore(&dwc->lock, flags);
 }
 
-static __init int dwc3_sprd_charger_mode(char *str)
+static int dwc3_sprd_charger_mode(void)
 {
-	if (strcmp(str, "charger"))
-		boot_charging = 0;
+	struct device_node *cmdline_node;
+	const char *cmdline, *mode;
+	int ret;
+
+	cmdline_node = of_find_node_by_path("/chosen");
+	ret = of_property_read_string(cmdline_node, "bootargs", &cmdline);
+
+	if (ret) {
+		pr_err("Can't not parse bootargs\n");
+		return 0;
+	}
+
+	mode = strstr(cmdline, "androidboot.mode=charger");
+
+	if (mode)
+		return 1;
 	else
-		boot_charging = 1;
-
-	return 0;
-}
-__setup("androidboot.mode=", dwc3_sprd_charger_mode);
-
-static int __init dwc3_sprd_calibration_mode(char *str)
-{
-	if (!str)
 		return 0;
 
-	if (!strncmp(str, "cali", strlen("cali")) ||
-	    !strncmp(str, "autotest", strlen("autotest")))
-		boot_calibration = true;
-
-	return 0;
 }
-__setup("androidboot.mode=", dwc3_sprd_calibration_mode);
+
+static int dwc3_sprd_calibration_mode(void)
+{
+	struct device_node *cmdline_node;
+	const char *cmdline, *mode;
+	int ret;
+
+	cmdline_node = of_find_node_by_path("/chosen");
+	ret = of_property_read_string(cmdline_node, "bootargs", &cmdline);
+
+	if (ret) {
+		pr_err("Can't not parse bootargs\n");
+		return 0;
+	}
+
+	mode = strstr(cmdline, "androidboot.mode=cali");
+
+	if (mode)
+		return 1;
+	else {
+		mode = strstr(cmdline, "androidboot.mode=autotest");
+		if (mode)
+			return 1;
+		else
+			return 0;
+	}
+}
 
 static int dwc3_sprd_is_udc_start(struct dwc3_sprd *sdwc)
 {
@@ -502,7 +530,7 @@ static void dwc3_sprd_hot_plug(struct dwc3_sprd *sdwc)
 		}
 
 		if (charging_only)
-			__pm_relax(&sdwc->wake_lock);
+			__pm_relax(sdwc->wake_lock);
 
 		dev_info(sdwc->dev, "is running as %s\n",
 			 current_mode == USB_DR_MODE_HOST ? "HOST" : "DEVICE");
@@ -530,7 +558,7 @@ static void dwc3_sprd_hot_plug(struct dwc3_sprd *sdwc)
 		spin_unlock_irqrestore(&sdwc->lock, flags);
 
 		if (!charging_only)
-			__pm_relax(&sdwc->wake_lock);
+			__pm_relax(sdwc->wake_lock);
 
 		dev_info(sdwc->dev, "is shut down\n");
 	}
@@ -568,7 +596,7 @@ static int dwc3_sprd_vbus_notifier(struct notifier_block *nb,
 			return 0;
 		}
 
-		__pm_stay_awake(&sdwc->wake_lock);
+		__pm_stay_awake(sdwc->wake_lock);
 
 		sdwc->vbus_active = true;
 		sdwc->wq_mode = USB_DR_MODE_PERIPHERAL;
@@ -612,7 +640,7 @@ static int dwc3_sprd_id_notifier(struct notifier_block *nb,
 			return 0;
 		}
 
-		__pm_stay_awake(&sdwc->wake_lock);
+		__pm_stay_awake(sdwc->wake_lock);
 
 		sdwc->vbus_active = true;
 		sdwc->wq_mode = USB_DR_MODE_HOST;
@@ -665,7 +693,7 @@ static void dwc3_sprd_detect_cable(struct dwc3_sprd *sdwc)
 			return;
 		}
 
-		__pm_stay_awake(&sdwc->wake_lock);
+		__pm_stay_awake(sdwc->wake_lock);
 
 		sdwc->vbus_active = true;
 		sdwc->wq_mode = USB_DR_MODE_PERIPHERAL;
@@ -679,7 +707,7 @@ static void dwc3_sprd_detect_cable(struct dwc3_sprd *sdwc)
 			return;
 		}
 
-		__pm_stay_awake(&sdwc->wake_lock);
+		__pm_stay_awake(sdwc->wake_lock);
 
 		sdwc->vbus_active = true;
 		sdwc->wq_mode = USB_DR_MODE_HOST;
@@ -808,6 +836,7 @@ static int dwc3_sprd_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct dwc3_sprd *sdwc;
 	const char *usb_mode;
+	u64 dma_mask;
 	int ret;
 
 	if (!node) {
@@ -819,7 +848,8 @@ static int dwc3_sprd_probe(struct platform_device *pdev)
 	if (!sdwc)
 		return -ENOMEM;
 
-	ret = dma_coerce_mask_and_coherent(dev, DMA_BIT_MASK(BITS_PER_LONG));
+	dma_mask = DMA_BIT_MASK(64);
+	ret = dma_coerce_mask_and_coherent(dev, dma_mask);
 	if (ret)
 		return ret;
 
@@ -1019,8 +1049,11 @@ static int dwc3_sprd_probe(struct platform_device *pdev)
 		dev_err(sdwc->dev, "failed to create dwc3 attributes\n");
 		goto err_extcon_id;
 	}
-	wakeup_source_init(&sdwc->wake_lock, "dwc3-sprd");
+	sdwc->wake_lock = wakeup_source_create("dwc3-sprd");
+	wakeup_source_add(sdwc->wake_lock);
 
+	boot_charging = dwc3_sprd_charger_mode();
+	boot_calibration = dwc3_sprd_calibration_mode();
 	pm_runtime_set_active(dev);
 	pm_runtime_enable(dev);
 
@@ -1233,7 +1266,18 @@ static struct platform_driver dwc3_sprd_driver = {
 	},
 };
 
-module_platform_driver(dwc3_sprd_driver);
+static int __init dwc3_sprd_driver_init(void)
+{
+	return platform_driver_register(&dwc3_sprd_driver);
+}
+
+static void __exit dwc3_sprd_driver_exit(void)
+{
+	platform_driver_unregister(&dwc3_sprd_driver);
+}
+
+late_initcall(dwc3_sprd_driver_init);
+module_exit(dwc3_sprd_driver_exit);
 
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("DesignWare USB3 SPRD Glue Layer");

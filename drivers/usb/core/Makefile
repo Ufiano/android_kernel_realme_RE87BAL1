@@ -2,12 +2,11 @@
 #
 # Makefile for USB Core files and filesystem
 #
-GCOV_PROFILE := $(CONFIG_SPRD_USB_GCOV)
 
 usbcore-y := usb.o hub.o hcd.o urb.o message.o driver.o
 usbcore-y += config.o file.o buffer.o sysfs.o endpoint.o
 usbcore-y += devio.o notify.o generic.o quirks.o devices.o
-usbcore-y += port.o
+usbcore-y += phy.o port.o
 
 usbcore-$(CONFIG_OF)		+= of.o
 usbcore-$(CONFIG_USB_PCI)		+= hcd-pci.o

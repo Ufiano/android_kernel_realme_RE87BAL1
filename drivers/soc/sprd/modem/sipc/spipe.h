@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
+ * Copyright (C) 2019 Spreadtrum Communications Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -15,14 +15,13 @@
 #define __SPIPE_H
 
 struct spipe_init_data {
-	char			*name;
-	char			*sipc_name;
-	u8			dst;
-	u8			channel;
-	u32		smem;
-	u32		ringnr;
-	u32		txbuf_size;
-	u32		rxbuf_size;
+	const char *name;
+	char	*sipc_name;
+	u8	dst;
+	u8	channel;
+	u16	smem;
+	u32	ringnr;
+	u32	txbuf_size;
+	u32	rxbuf_size;
 };
-
 #endif

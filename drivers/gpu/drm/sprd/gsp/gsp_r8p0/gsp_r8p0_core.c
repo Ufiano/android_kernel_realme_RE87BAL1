@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/delay.h>
@@ -42,8 +34,8 @@
 
 static bool tipc_init;
 static int zorder_used[R8P0_IMGL_NUM + R8P0_OSDL_NUM] = {0};
-int gsp_enabled_layer_count;
-extern bool cali_mode;
+extern int boot_mode_check(void);
+
 static void print_image_layer_cfg(struct gsp_r8p0_img_layer *layer)
 {
 	struct gsp_r8p0_img_layer_params *params = NULL;
@@ -825,7 +817,7 @@ int gsp_r8p0_core_parse_dt(struct gsp_core *core)
 
 	gsp_r8p0_core_parse_clk(r8p0_core);
 
-	if (!cali_mode) {
+	if (!boot_mode_check()) {
 		GSP_WARN(" NOT Calibration Mode! ");
 		sprd_iommu_restore(core->dev);
 	}
@@ -1627,8 +1619,6 @@ int gsp_r8p0_core_copy_cfg(struct gsp_kcfg *kcfg,
 	struct gsp_r8p0_cfg *cfg = NULL;
 	int icnt = 0;
 
-	gsp_enabled_layer_count = 0;
-
 	if (IS_ERR_OR_NULL(arg)
 		|| 0 > index) {
 		GSP_ERR("core copy params error\n");
@@ -1664,16 +1654,12 @@ int gsp_r8p0_core_copy_cfg(struct gsp_kcfg *kcfg,
 		memcpy(&cfg->limg[icnt].params, &cfg_user->limg[icnt].params,
 			   sizeof(struct gsp_r8p0_img_layer_params));
 		gsp_layer_set_filled(&cfg->limg[icnt].common);
-		if (cfg->limg[icnt].common.enable == 1)
-			gsp_enabled_layer_count++;
 	}
 
 	for (icnt = 0; icnt < R8P0_OSDL_NUM; icnt++) {
 		memcpy(&cfg->losd[icnt].params, &cfg_user->losd[icnt].params,
 			   sizeof(struct gsp_r8p0_osd_layer_params));
 		gsp_layer_set_filled(&cfg->losd[icnt].common);
-		if (cfg->losd[icnt].common.enable == 1)
-			gsp_enabled_layer_count++;
 	}
 
 	memcpy(&cfg->ld1.params, &cfg_user->ld1.params,

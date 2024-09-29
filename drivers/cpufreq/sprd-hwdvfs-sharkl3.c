@@ -12,7 +12,7 @@
  * GNU General Public License for more details.
  *
  */
-#define pr_fmt(fmt) "sprd-hwdvfs-sharkl3: " fmt
+#define pr_fmt(fmt) "sprd_hwdvfs: " fmt
 
 #include <linux/kernel.h>
 #include <linux/i2c.h>
@@ -203,19 +203,19 @@
 
 /* channel0:little core */
 #define HW_DVFS_TAB_CLUSTER0(hz, uv, idx_freq, idx_dcdc) \
-	(sprd_val2reg_dcdcx_vtune((unsigned int)(uv), idx_dcdc) | \
+	(sprd_val2reg_dcdcx_vtune(uv, idx_dcdc) | \
 	VAL2REG_FCFG((((hz) <= 768000000UL ? 1 : 0) << 3) | idx_freq) | \
 	VAL2REG_FSEL((hz) <= 768000000UL ? 0x02 : 0x06))
 
 /* channel1:big core */
 #define HW_DVFS_TAB_CLUSTER1(hz, uv, idx_freq, idx_dcdc) \
-	(sprd_val2reg_dcdcx_vtune((unsigned int)(uv), idx_dcdc) | \
+	(sprd_val2reg_dcdcx_vtune(uv, idx_dcdc) | \
 	VAL2REG_FCFG((((hz) <= 768000000UL ? 1 : 0) << 3) | idx_freq) | \
 	VAL2REG_FSEL((hz) <= 768000000UL ? 0x02 : 0x07))
 
 /* channel2:fcm */
 #define HW_DVFS_TAB_CLUSTER2(hz, uv, idx_freq, idx_dcdc) \
-	(sprd_val2reg_dcdcx_vtune((unsigned int)(uv), idx_dcdc) | \
+	(sprd_val2reg_dcdcx_vtune(uv, idx_dcdc) | \
 	VAL2REG_FCFG((((hz) <= 768000000UL ? 1 : 0) << 3) | idx_freq) | \
 	VAL2REG_FSEL((hz) <= 768000000UL ? 0x02 : 0x05))
 
@@ -324,9 +324,9 @@ struct sprd_hwdvfs_l3_info {
 
 static const struct sprd_hwdvfs_l3_info sprd_hwdvfs_l3_info_1h10 = {
 	.type = SPRD_HWDVFS_SHARKL3,
-	.def_freq0 = 2,
-	.def_freq1 = 3,
-	.def_freq2 = 3,
+	.def_freq0 = 4,
+	.def_freq1 = 5,
+	.def_freq2 = 5,
 };
 
 static const struct sprd_hwdvfs_l3_info sprd_hwdvfs_l3_info_3h10 = {
@@ -362,7 +362,6 @@ struct sprd_hwdvfs_l3 {
 
 
 static struct sprd_hwdvfs_l3 *hwdvfs_l3;
-static struct kobject *hwdvfs_l3_kobj;
 static atomic_t hwdvfs_l3_suspend;
 static void sprd_hwdvfs_l3_dump(bool forcedump);
 static int sprd_hwdvfs_set_clst0(unsigned int scalecode00,
@@ -385,7 +384,6 @@ static unsigned int dvfs_rd(unsigned int reg)
 {
 	if (hwdvfs_l3 == NULL || hwdvfs_l3->base == NULL)
 		return 0;
-
 	return readl_relaxed((void __iomem *)(reg + hwdvfs_l3->base));
 
 }
@@ -411,9 +409,9 @@ static inline unsigned int sprd_val2reg_dcdcx_vtune(unsigned int to_uv,
 	return valreg;
 }
 
-static inline int sprd_wr_ctrl_hold_pause(unsigned int ctrl,
-					  unsigned int hold,
-					  unsigned int pause)
+static inline unsigned int sprd_wr_ctrl_hold_pause(unsigned int ctrl,
+						   unsigned int hold,
+						   unsigned int pause)
 {
 	switch (ctrl) {
 	case 0:
@@ -433,9 +431,9 @@ static inline int sprd_wr_ctrl_hold_pause(unsigned int ctrl,
 	return 0;
 }
 
-static inline int sprd_wr_ctrl_timeout_stable(unsigned int ctrl,
-					      unsigned int timeout,
-					      unsigned int stable)
+static inline unsigned int sprd_wr_ctrl_timeout_stable(unsigned int ctrl,
+						       unsigned int timeout,
+						       unsigned int stable)
 {
 	switch (ctrl) {
 	case 0:
@@ -455,9 +453,9 @@ static inline int sprd_wr_ctrl_timeout_stable(unsigned int ctrl,
 	return 0;
 }
 
-static inline int sprd_wr_ctrl_step(unsigned int ctrl,
-				    unsigned int chnl,
-				    unsigned int step_uv)
+static inline unsigned int sprd_wr_ctrl_step(unsigned int ctrl,
+					     unsigned int chnl,
+					     unsigned int step_uv)
 {
 	unsigned int dcdc_index;
 
@@ -491,8 +489,8 @@ static inline int sprd_wr_ctrl_step(unsigned int ctrl,
 	return 0;
 }
 
-static inline int sprd_wr_ctrl_vtune_valid_bits(unsigned int ctrl,
-						unsigned int dcdc_idx)
+static inline unsigned int sprd_wr_ctrl_vtune_valid_bits(unsigned int ctrl,
+							 unsigned int dcdc_idx)
 {
 	unsigned int regval;
 	unsigned int valid_bits;
@@ -569,82 +567,6 @@ static inline int hwdvfs_mpll_write(unsigned int cluster,
 			    hwdvfs_mpll_table(hz_freq / 1000UL));
 }
 
-static ssize_t hwdvfs_enable_show(struct device *dev,
-				  struct device_attribute *attr,
-				  char *buf)
-{
-	int ret;
-
-	if (hwdvfs_l3 == NULL)
-		return sprintf(buf, "NULL\n");
-	else {
-		ret = (hwdvfs_l3->probed ?
-		       sprintf(buf, "1\n") :
-		       sprintf(buf, "0\n"));
-
-		pr_debug("state:[%d %d %d]\n",
-			 atomic_read(&hwdvfs_l3->state[HWDVFS_CHNL00]),
-			 atomic_read(&hwdvfs_l3->state[HWDVFS_CHNL01]),
-			 atomic_read(&hwdvfs_l3->state[HWDVFS_CHNL02]));
-	}
-
-	return ret;
-}
-
-static ssize_t hwdvfs_enable_store(struct device *dev,
-				   struct device_attribute *attr,
-				   const char *buf, size_t n)
-{
-	unsigned int en;
-
-	if (n != 2 || hwdvfs_l3 == NULL)
-		return -EINVAL;
-
-	if (kstrtouint(buf, 0, &en))
-		return -EINVAL;
-
-	/*  TODO: need to enable magic number and add spinlock here */
-	switch (en) {
-	case 0:
-		if (!sprd_hwdvfs_set_clst0(hwdvfs_l3->info->def_freq0,
-					   true, true) &&
-		    !sprd_hwdvfs_set_clst1_scu(hwdvfs_l3->info->def_freq1,
-					       true, true)) {
-			hwdvfs_l3->probed = false;
-			dvfs_wr(DVFS_CTRL_MAGIC_NUM_UNLOCK,
-				REG_DVFS_CTRL_MAGIC_NUM);
-			dvfs_wr(VAL2REG(0x0, BIT_DVFS_CTRL_HW_DVFS_SEL),
-				REG_DVFS_CTRL_HW_DVFS_SEL);
-			pr_debug("DISABLE HWDVFS!\n");
-		}
-		break;
-	case 1:
-		dvfs_wr(DVFS_CTRL_MAGIC_NUM_LOCK, REG_DVFS_CTRL_MAGIC_NUM);
-		dvfs_wr(VAL2REG(0x1, BIT_DVFS_CTRL_HW_DVFS_SEL),
-			REG_DVFS_CTRL_HW_DVFS_SEL);
-		hwdvfs_l3->probed = true;
-		sprd_hwdvfs_set_clst0(hwdvfs_l3->info->def_freq0,
-				      true, true);
-		sprd_hwdvfs_set_clst1_scu(hwdvfs_l3->info->def_freq1,
-					  true, true);
-		pr_debug("ENABLE HWDVFS!\n");
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	return n;
-}
-
-
-DEVICE_ATTR_RW(hwdvfs_enable);
-
-static struct attribute *hwdvfs_enable_attrs[] = {
-	&dev_attr_hwdvfs_enable.attr, NULL,
-};
-
-ATTRIBUTE_GROUPS(hwdvfs_enable);
-
 static void sprd_hwdvfs_l3_dump(bool forcedump)
 {
 	unsigned int i;
@@ -717,7 +639,7 @@ static int sprd_hwdvfs_l3_completing(unsigned int cluster)
 
 	if (hwdvfs_l3->on_i2c[cluster] &&
 	    hwdvfs_l3->i2c_client != NULL) {
-		i2c_unlock_adapter(hwdvfs_l3->i2c_client->adapter);
+		i2c_unlock_bus(hwdvfs_l3->i2c_client->adapter, I2C_LOCK_ROOT_ADAPTER);
 		pr_debug("CHNL%u DONE i2c_unlock_adapter\n", cluster);
 	}
 
@@ -793,7 +715,7 @@ static void sprd_hwdvfs_l3_unlock(unsigned int cluster, bool complete)
 {
 	if (atomic_read(&hwdvfs_l3->state[cluster]) !=
 	    HWDVFS_STATE_RUNNING) {
-		pr_err("ERROR! CHNL%u get multiple DVFS INT\n", cluster);
+		pr_info("ERROR! CHNL%u get multiple DVFS INT\n", cluster);
 		sprd_hwdvfs_l3_dump(false);
 	}
 
@@ -814,22 +736,11 @@ static int sprd_hwdvfs_l3_parse_dt(struct device_node *np)
 	unsigned int cfg[4];
 	struct device_node *np0, *np1;
 	unsigned int chnl = 0, ctrl;
-	unsigned int dev_num;
 
 	if (hwdvfs_l3 == NULL  || np == NULL)
 		return -ENODEV;
 
-	if (!of_find_property(np, "hwdvfs_dev", &dev_num)) {
-		pr_err("no hwdvfs_dev found!\n");
-		return -ENODEV;
-	}
-	dev_num = dev_num / sizeof(u32);
-
-	while (chnl < dev_num) {
-		np0 = of_parse_phandle(np, "hwdvfs_dev", chnl);
-		if (!np0)
-			return -ENODEV;
-
+	for_each_child_of_node(np, np0) {
 		np1 = of_parse_phandle(np0, "dcdc-ctrl", 0);
 		if (np1 == NULL) {
 			ret = -ENODEV;
@@ -938,9 +849,8 @@ static int sprd_hwdvfs_l3_init_param(struct device_node *np)
 	/* not select HW DVFS at first */
 	dvfs_wr(VAL2REG(0x0, BIT_DVFS_CTRL_HW_DVFS_SEL),
 		REG_DVFS_CTRL_HW_DVFS_SEL);
-
 	regval = dvfs_rd(REG_DVFS_CTRL_VERSION);
-	pr_debug("Project Name:0x%x-0x%x;Version:0x%x-0x%x\n",
+	pr_info("Project Name:0x%x-0x%x;Version:0x%x-0x%x\n",
 		(char)(REG2VAL(regval, BIT_DVFS_CTRL_PROJ_NAME1)),
 		(char)(REG2VAL(regval, BIT_DVFS_CTRL_PROJ_NAME0)),
 		(REG2VAL(regval, BIT_DVFS_CTRL_VERSION1)),
@@ -1053,7 +963,7 @@ static int sprd_hwdvfs_set_clst0(unsigned int scalecode00,
 		if (hwdvfs_l3->busy[HWDVFS_CHNL00] &&
 		    time_after(jiffies,
 			       hwdvfs_l3->busy[HWDVFS_CHNL00])) {
-			pr_warn("CHNL0 busy expired! cur-%u ing-%u to-%u\n",
+			pr_info("CHNL0 busy expired! cur-%u ing-%u to-%u\n",
 				REG2VAL(regval,
 					BIT_DVFS_CTRL_DONE_SCL_CHNL00(0xf)),
 				scalecodeing,
@@ -1093,7 +1003,7 @@ static int sprd_hwdvfs_set_clst0(unsigned int scalecode00,
 
 	if (i >= RETRY_MAX) {
 		regval = dvfs_rd(REG_DVFS_CTRL_STS_CHNL00);
-		pr_debug("CHN0=%d fail (0x%x), DONE=0x%x,SCALE=0x%x\n",
+		pr_info("CHN0=%d fail (0x%x), DONE=0x%x,SCALE=0x%x\n",
 			scalecode00, regval,
 			REG2VAL(regval, BIT_DVFS_CTRL_IRQ_DONE_CHNL00),
 			REG2VAL(regval,
@@ -1149,7 +1059,7 @@ static int sprd_hwdvfs_set_clst1(unsigned int scalecode01,
 		if (hwdvfs_l3->busy[HWDVFS_CHNL01] &&
 		    time_after(jiffies,
 			       hwdvfs_l3->busy[HWDVFS_CHNL01])) {
-			pr_warn("CHNL1 busy expired! cur-%u ing-%u to-%u\n",
+			pr_info("CHNL1 busy expired! cur-%u ing-%u to-%u\n",
 				REG2VAL(regval,
 					BIT_DVFS_CTRL_DONE_SCL_CHNL01(0xf)),
 				scalecodeing,
@@ -1245,7 +1155,7 @@ static int sprd_hwdvfs_set_scu(unsigned int scalecode02, bool sync, bool force)
 		if (hwdvfs_l3->busy[HWDVFS_CHNL02] &&
 		    time_after(jiffies,
 			       hwdvfs_l3->busy[HWDVFS_CHNL02])) {
-			pr_warn("CHNL2 busy expired! cur-%u ing-%u to-%u\n",
+			pr_info("CHNL2 busy expired! cur-%u ing-%u to-%u\n",
 				REG2VAL(regval,
 					BIT_DVFS_CTRL_DONE_SCL_CHNL02(0xf)),
 				scalecodeing,
@@ -1343,7 +1253,7 @@ static int sprd_hwdvfs_set_clst1_scu(unsigned int scalecode01, bool sync,
 		if (hwdvfs_l3->busy[HWDVFS_CHNL01] &&
 		    time_after(jiffies,
 			       hwdvfs_l3->busy[HWDVFS_CHNL01])) {
-			pr_warn("CHNL1 CHNL2 busy expired! cur-%u ing-%u to-%u\n",
+			pr_info("CHNL1 CHNL2 busy expired! cur-%u ing-%u to-%u\n",
 				REG2VAL(regval1,
 					BIT_DVFS_CTRL_DONE_SCL_CHNL01(0xf)),
 				scalecodeing,
@@ -1444,16 +1354,16 @@ static irqreturn_t sprd_hwdvfs_l3_isr(int irq, void *dev_id)
 
 	/* CHNL00: ERROR INTERRUPT */
 	if (regval00 & BIT_DVFS_CTRL_CONFLICT1_CHNL00)
-		pr_warn("CHNL0 CONFLICT1\n");
+		pr_info("CHNL0 CONFLICT1\n");
 
 	if (regval00 & BIT_DVFS_CTRL_CONFLICT0_CHNL00)
-		pr_warn("CHNL0 CONFLICT0\n");
+		pr_info("CHNL0 CONFLICT0\n");
 
 	if (regval00 & BIT_DVFS_CTRL_IRQ_TO_CHNL00)
-		pr_warn("CHNL0 TIMEOUT\n");
+		pr_info("CHNL0 TIMEOUT\n");
 
 	if (regval00 & BIT_DVFS_CTRL_IRQ_VREAD_MIS_CHNL00)
-		pr_warn("CHNL0 VREAD_MIS in 0x%x\n",
+		pr_info("CHNL0 VREAD_MIS in 0x%x\n",
 			REG2VAL(regval00,
 				BIT_DVFS_CTRL_DONE_SCL_CHNL00(0xf)));
 	if ((regval00 & BIT_DVFS_CTRL_IRQ_DONE_CHNL00) ||
@@ -1463,16 +1373,16 @@ static irqreturn_t sprd_hwdvfs_l3_isr(int irq, void *dev_id)
 
 	/* CHNL01: ERROR INTERRUPT */
 	if (regval01 & BIT_DVFS_CTRL_CONFLICT1_CHNL01)
-		pr_warn("CHNL1 CONFLICT1\n");
+		pr_info("CHNL1 CONFLICT1\n");
 
 	if (regval01 & BIT_DVFS_CTRL_CONFLICT0_CHNL01)
-		pr_warn("CHNL1 CONFLICT0\n");
+		pr_info("CHNL1 CONFLICT0\n");
 
 	if (regval01 & BIT_DVFS_CTRL_IRQ_TO_CHNL01)
-		pr_warn("CHNL1 TIMEOUT\n");
+		pr_info("CHNL1 TIMEOUT\n");
 
 	if (regval01 & BIT_DVFS_CTRL_IRQ_VREAD_MIS_CHNL01)
-		pr_warn("CHNL1 VREAD_MIS in 0x%x\n",
+		pr_info("CHNL1 VREAD_MIS in 0x%x\n",
 			REG2VAL(regval01,
 				BIT_DVFS_CTRL_DONE_SCL_CHNL01(0xf)));
 	if ((regval01 & BIT_DVFS_CTRL_IRQ_DONE_CHNL01) ||
@@ -1482,16 +1392,16 @@ static irqreturn_t sprd_hwdvfs_l3_isr(int irq, void *dev_id)
 
 	/* CHNL02: ERROR INTERRUPT */
 	if (regval02 & BIT_DVFS_CTRL_CONFLICT1_CHNL02)
-		pr_warn("CHNL2 CONFLICT1\n");
+		pr_info("CHNL2 CONFLICT1\n");
 
 	if (regval02 & BIT_DVFS_CTRL_CONFLICT0_CHNL02)
-		pr_warn("CHNL2 CONFLICT0\n");
+		pr_info("CHNL2 CONFLICT0\n");
 
 	if (regval02 & BIT_DVFS_CTRL_IRQ_TO_CHNL02)
-		pr_warn("CHNL2 TIMEOUT\n");
+		pr_info("CHNL2 TIMEOUT\n");
 
 	if (regval02 & BIT_DVFS_CTRL_IRQ_VREAD_MIS_CHNL02)
-		pr_warn("CHNL2 VREAD_MIS in 0x%x\n",
+		pr_info("CHNL2 VREAD_MIS in 0x%x\n",
 			REG2VAL(regval02,
 				BIT_DVFS_CTRL_DONE_SCL_CHNL02(0xf)));
 	if ((regval02 & BIT_DVFS_CTRL_IRQ_DONE_CHNL02) ||
@@ -1513,8 +1423,9 @@ static irqreturn_t sprd_hwdvfs_l3_isr(int irq, void *dev_id)
  * This is the last known freq, without actually getting it from the driver.
  * Return value will be same as what is shown in scaling_cur_freq in sysfs.
  */
-static int sprd_hwdvfs_l3_opp_add(void *drvdata, int cluster, unsigned long hz_freq,
-				  unsigned long u_volt, int idx_volt)
+static int sprd_hwdvfs_l3_opp_add(void *drvdata, unsigned int cluster,
+				  unsigned long hz_freq, unsigned long u_volt,
+				  int idx_volt)
 {
 	int ret = 0;
 	unsigned int idx_freq, index;
@@ -1583,7 +1494,7 @@ static int sprd_hwdvfs_l3_opp_add(void *drvdata, int cluster, unsigned long hz_f
 		break;
 	default:
 		ret = -ENODEV;
-		pr_warn("hwdvfs_l3_opp_add cluster %u error!\n", cluster);
+		pr_err("hwdvfs_l3_opp_add cluster %u error!\n", cluster);
 		break;
 	}
 
@@ -1600,7 +1511,7 @@ static int sprd_hwdvfs_l3_opp_add(void *drvdata, int cluster, unsigned long hz_f
 /*
  * @idx:        0 points to min freq, ascending order
  */
-static int sprd_hwdvfs_l3_set_target(void *drvdata, int cluster, u32 idx_volt)
+static int sprd_hwdvfs_l3_set_target(void *drvdata, u32 cluster, u32 idx_volt)
 {
 	int ret;
 
@@ -1642,10 +1553,10 @@ static unsigned int sprd_hwdvfs_l3_get(void *drvdata, int cluster)
 	unsigned int regval = 0, reg = 0, freq_khz;
 
 	if (hwdvfs_l3 == NULL || !hwdvfs_l3->probed)
-		return 0;
+		return -ENODEV;
 
 	if (cluster > HWDVFS_CHNL_MAX)
-		return 0;
+		return -EINVAL;
 
 	if (cluster == HWDVFS_CHNL_MAX)
 		cluster = HWDVFS_CHNL02;
@@ -1705,8 +1616,7 @@ static unsigned int sprd_hwdvfs_l3_get(void *drvdata, int cluster)
 			break;
 		}
 	}
-
-	freq_khz = (unsigned int)(hwdvfs_l3->freqvolt[cluster][regval].freq / 1000UL);
+	freq_khz = hwdvfs_l3->freqvolt[cluster][regval].freq / 1000;
 
 	pr_debug("[%d,%ukhz,en-%d:%d, reg-0x%x, val-0x%x]\n",
 		 cluster, freq_khz,
@@ -1740,24 +1650,24 @@ static bool sprd_hwdvfs_l3_enable(void *drvdata, int cluster, bool en)
 				dvfs_wr(regval1 |
 					VAL2REG(0x1, SW_CHNL00_EN_MSK),
 					REG_DVFS_CTRL_SW_CHNL_EN);
-			pr_debug("SW_CHNL00_EN\n");
+			pr_info("SW_CHNL00_EN\n");
 			break;
 		case HWDVFS_CHNL01:
 			if (!(regval1 & SW_CHNL01_EN_MSK))
 				dvfs_wr(regval1 |
 					VAL2REG(0x1, SW_CHNL01_EN_MSK),
 					REG_DVFS_CTRL_SW_CHNL_EN);
-			pr_debug("SW_CHNL01_EN\n");
+			pr_info("SW_CHNL01_EN\n");
 			break;
 		case HWDVFS_CHNL02:
 			if (!(regval1 & SW_CHNL02_EN_MSK))
 				dvfs_wr(regval1 |
 					VAL2REG(0x1, SW_CHNL02_EN_MSK),
 					REG_DVFS_CTRL_SW_CHNL_EN);
-			pr_debug("SW_CHNL02_EN\n");
+			pr_info("SW_CHNL02_EN\n");
 			break;
 		default:
-			pr_warn("%s cluster %u error!\n", __func__, cluster);
+			pr_info("%s cluster %u error!\n", __func__, cluster);
 			break;
 		}
 
@@ -1782,18 +1692,18 @@ static bool sprd_hwdvfs_l3_enable(void *drvdata, int cluster, bool en)
 		switch (cluster) {
 		case HWDVFS_CHNL00:
 			if (!sprd_hwdvfs_set_clst0(0, false, false))
-				pr_debug("SW_CHNL00_DISABLE\n");
+				pr_info("SW_CHNL00_DISABLE\n");
 			break;
 		case HWDVFS_CHNL01:
 			if (!sprd_hwdvfs_set_clst1(0, false, false))
-				pr_debug("SW_CHNL01_DISABLE\n");
+				pr_info("SW_CHNL01_DISABLE\n");
 			break;
 		case HWDVFS_CHNL02:
 			if (!sprd_hwdvfs_set_scu(0, false, false))
-				pr_debug("SW_CHNL02_DISABLE\n");
+				pr_info("SW_CHNL02_DISABLE\n");
 			break;
 		default:
-			pr_warn("%s cluster %u error!\n", __func__, cluster);
+			pr_err("%s cluster %u error!\n", __func__, cluster);
 			break;
 		}
 
@@ -1874,7 +1784,7 @@ static bool sprd_hwdvfs_l3_probed(void *drvdata, int cluster)
 		return false;
 
 	if (cluster > HWDVFS_CHNL_MAX) {
-		pr_warn("%s cluster%u  error!\n", __func__, cluster);
+		pr_info("%s cluster%u  error!\n", __func__, cluster);
 		return false;
 	}
 
@@ -1925,7 +1835,6 @@ static int sprd_hwdvfs_l3_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "get anlg-phy-g4 failed!\n");
 		return PTR_ERR(anlg_phy_g4_ctrl_base);
 	}
-
 	hwdvfs_l3 =
 		devm_kzalloc(&pdev->dev,
 			     sizeof(struct sprd_hwdvfs_l3), GFP_KERNEL);
@@ -1937,10 +1846,8 @@ static int sprd_hwdvfs_l3_probe(struct platform_device *pdev)
 	hwdvfs_l3->aon_apb_base = aon_apb_base;
 	hwdvfs_l3->anlg_phy_g4_ctrl = anlg_phy_g4_ctrl_base;
 	hwdvfs_l3->info = pdata;
-
 	for (i = HWDVFS_CHNL00; i < HWDVFS_CHNL_MAX; i++)
 		init_completion(&hwdvfs_l3->dvfs_done[i]);
-
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	base = devm_ioremap_resource(&pdev->dev, res);
 	if (!base) {
@@ -1955,7 +1862,6 @@ static int sprd_hwdvfs_l3_probe(struct platform_device *pdev)
 		ret = hwdvfs_l3->irq;
 		goto exit_err;
 	}
-
 	ret = devm_request_irq(&pdev->dev, hwdvfs_l3->irq, sprd_hwdvfs_l3_isr,
 			       IRQF_NO_SUSPEND, "sprd_hwdvfs_l3", NULL);
 	if (ret)
@@ -1964,22 +1870,6 @@ static int sprd_hwdvfs_l3_probe(struct platform_device *pdev)
 	ret = sprd_hwdvfs_l3_init_param(np);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to sprd_hwdvfs_l3_init\n");
-		goto exit_err;
-	}
-
-	hwdvfs_l3_kobj =
-	    kobject_create_and_add("cpufreqhw", cpufreq_global_kobject);
-	if (hwdvfs_l3_kobj == NULL) {
-		dev_err(&pdev->dev,
-			"sysfs failed to add cpufreqhw\n");
-		ret = -EPERM;
-		goto exit_err;
-	}
-
-	ret = sysfs_create_groups(hwdvfs_l3_kobj, hwdvfs_enable_groups);
-	if (ret) {
-		dev_err(&pdev->dev,
-			"sysfs failed to add hwdvfs_enable\n");
 		goto exit_err;
 	}
 
@@ -2003,7 +1893,6 @@ static int sprd_hwdvfs_l3_probe(struct platform_device *pdev)
 			"hwdvfs_l3_register fail\n");
 		goto exit_err;
 	}
-
 	hwdvfs_l3->probed = true;
 
 	return ret;
@@ -2016,9 +1905,6 @@ exit_err:
 
 static int sprd_hwdvfs_l3_remove(struct platform_device *pdev)
 {
-	if (hwdvfs_l3_kobj)
-		sysfs_remove_groups(hwdvfs_l3_kobj, hwdvfs_enable_groups);
-
 	i2c_del_driver(&hwdvfs_l3_i2c_driver);
 
 	return 0;

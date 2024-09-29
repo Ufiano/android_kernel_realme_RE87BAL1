@@ -524,4 +524,4 @@ module_exit(rpmb_exit);
 
 MODULE_AUTHOR("Intel Corporation");
 MODULE_DESCRIPTION("RPMB class");
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("GPL v2");

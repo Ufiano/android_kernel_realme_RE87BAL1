@@ -2488,6 +2488,9 @@ struct isp_raw_proc_info {
 	uint32_t dst0_offset;/*first bytes offset in buffer fd_dst0*/
 	uint32_t dst1_offset;/*first bytes offset in buffer fd_dst1*/
 	enum raw_proc_scene scene;
+	//1231 sprd start
+	uint32_t ch_id;
+	//1231 sprd end
 };
 
 

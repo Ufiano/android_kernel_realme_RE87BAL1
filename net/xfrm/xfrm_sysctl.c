@@ -4,16 +4,18 @@
 #include <net/net_namespace.h>
 #include <net/xfrm.h>
 
+#ifdef CONFIG_XFRM_FRAGMENT
+static int enable_xfrm_fragment __read_mostly = 1;
+static struct ctl_table *sprd_sys_ctl_table;
+static struct ctl_table_header	*sprd_xfrm_hdr;
+#endif
+
 static void __net_init __xfrm_sysctl_init(struct net *net)
 {
 	net->xfrm.sysctl_aevent_etime = XFRM_AE_ETIME;
 	net->xfrm.sysctl_aevent_rseqth = XFRM_AE_SEQT_SIZE;
 	net->xfrm.sysctl_larval_drop = 1;
 	net->xfrm.sysctl_acq_expires = 30;
-#ifdef CONFIG_XFRM_FRAGMENT
-	/*default is close.*/
-	net->xfrm.enable_xfrm_fragment = 0;
-#endif
 }
 
 #ifdef CONFIG_SYSCTL
@@ -42,19 +44,25 @@ static struct ctl_table xfrm_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec
 	},
+	{}
+};
+
 #ifdef CONFIG_XFRM_FRAGMENT
-	/*Add this parameter is for control the vowifi fragment module.
-	 *junjie.wang@spreadtrum.com@20160510
-	 */
+static struct ctl_table sprd_net_sys_table[] = {
 	{
-		.procname	= "xfrm_vowifi_fragment",
+		.procname	= "enable_xfrm_fragment",
 		.maxlen		= sizeof(int),
 		.mode		= 0660,
 		.proc_handler	= proc_dointvec
 	},
-#endif
 	{}
 };
+
+int get_xfrm_fragment(void)
+{
+	return enable_xfrm_fragment;
+}
+#endif
 
 int __net_init xfrm_sysctl_init(struct net *net)
 {
@@ -69,9 +77,6 @@ int __net_init xfrm_sysctl_init(struct net *net)
 	table[1].data = &net->xfrm.sysctl_aevent_rseqth;
 	table[2].data = &net->xfrm.sysctl_larval_drop;
 	table[3].data = &net->xfrm.sysctl_acq_expires;
-#ifdef CONFIG_XFRM_FRAGMENT
-	table[4].data = &net->xfrm.enable_xfrm_fragment;
-#endif
 
 	/* Don't export sysctls to unprivileged users */
 	if (net->user_ns != &init_user_ns)
@@ -80,7 +85,26 @@ int __net_init xfrm_sysctl_init(struct net *net)
 	net->xfrm.sysctl_hdr = register_net_sysctl(net, "net/core", table);
 	if (!net->xfrm.sysctl_hdr)
 		goto out_register;
+
+#ifdef CONFIG_XFRM_FRAGMENT
+	sprd_sys_ctl_table = kmemdup(sprd_net_sys_table,
+				     sizeof(sprd_net_sys_table), GFP_KERNEL);
+	if (!sprd_sys_ctl_table)
+		goto out_kmemdup;
+
+	sprd_sys_ctl_table[0].data = &enable_xfrm_fragment;
+	sprd_xfrm_hdr = register_net_sysctl(net, "net/core",
+					    sprd_sys_ctl_table);
+	if (!sprd_xfrm_hdr)
+		goto out_register2;
+#endif
 	return 0;
+
+#ifdef CONFIG_XFRM_FRAGMENT
+out_register2:
+	kfree(sprd_sys_ctl_table);
+	sprd_sys_ctl_table = NULL;
+#endif
 
 out_register:
 	kfree(table);
@@ -95,6 +119,12 @@ void __net_exit xfrm_sysctl_fini(struct net *net)
 	table = net->xfrm.sysctl_hdr->ctl_table_arg;
 	unregister_net_sysctl_table(net->xfrm.sysctl_hdr);
 	kfree(table);
+#ifdef CONFIG_XFRM_FRAGMENT
+	if (sprd_xfrm_hdr) {
+		unregister_net_sysctl_table(sprd_xfrm_hdr);
+		kfree(sprd_sys_ctl_table);
+	}
+#endif
 }
 #else
 int __net_init xfrm_sysctl_init(struct net *net)

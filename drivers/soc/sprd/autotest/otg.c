@@ -1,5 +1,5 @@
 /*
- ** Copyright (C) 2019 Spreadtrum Communications Inc.
+ ** Copyright (C) 2020 Unisoc Communications Inc.
  **
  ** This software is licensed under the terms of the GNU General Public
  ** License version 2, as published by the Free Software Foundation, and
@@ -142,3 +142,6 @@ static void __exit otg_exit(void)
 
 late_initcall(otg_init);
 module_exit(otg_exit);
+
+MODULE_DESCRIPTION("sprd autotest otg driver");
+MODULE_LICENSE("GPL v2");

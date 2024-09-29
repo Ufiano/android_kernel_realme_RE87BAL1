@@ -2,7 +2,6 @@
 #
 # USB peripheral controller drivers
 #
-GCOV_PROFILE := $(CONFIG_SPRD_USB_GCOV)
 
 ccflags-y			:= -I$(srctree)/drivers/usb/gadget/
 ccflags-y			+= -I$(srctree)/drivers/usb/gadget/udc/
@@ -49,17 +48,14 @@ usb_f_hid-y			:= f_hid.o
 obj-$(CONFIG_USB_F_HID)		+= usb_f_hid.o
 usb_f_printer-y			:= f_printer.o
 obj-$(CONFIG_USB_F_PRINTER)	+= usb_f_printer.o
-usb_f_mtp-y                     := f_mtp.o
-obj-$(CONFIG_USB_F_MTP)         += usb_f_mtp.o
-usb_f_ptp-y                     := f_ptp.o
-obj-$(CONFIG_USB_F_PTP)         += usb_f_ptp.o
 usb_f_tcm-y			:= f_tcm.o
 obj-$(CONFIG_USB_F_TCM)		+= usb_f_tcm.o
-usb_f_audio_source-y            := f_audio_source.o
-obj-$(CONFIG_USB_F_AUDIO_SRC)   += usb_f_audio_source.o
-usb_f_accessory-y               := f_accessory.o
-obj-$(CONFIG_USB_F_ACC)         += usb_f_accessory.o
-obj-$(CONFIG_USB_F_VSERIAL)	+= usb_f_vser.o
+usb_f_accessory-y		:= f_accessory.o
+obj-$(CONFIG_USB_F_ACC)		+= usb_f_accessory.o
+usb_f_audio_source-y		:= f_audio_source.o
+obj-$(CONFIG_USB_F_AUDIO_SRC)	+= usb_f_audio_source.o
+obj-$(CONFIG_SPRD_USB_U_ETHER)	+= sprd_u_ether.o
+sprd_usb_f_rndis-y		:= sprd_f_rndis.o sprd_rndis.o
+obj-$(CONFIG_SPRD_USB_F_RNDIS)	+= sprd_usb_f_rndis.o
 usb_f_vser-y			:= f_vserial.o
-obj-$(CONFIG_USB_F_MBIM)	+= usb_f_mbim.o
-usb_f_mbim-y			:= f_mbim.o
+obj-$(CONFIG_USB_F_VSERIAL)	+= usb_f_vser.o

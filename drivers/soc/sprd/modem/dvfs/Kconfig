@@ -1,5 +1,0 @@
-config SPRD_HW_DEVICE_DVFS_CP
-	bool "Spreadtrum CP dvfs driver"
-	depends on SPRD_SIPC
-	help
-	  This driver supports dvfs interfaces for PUBCP DVFS and WTLCP DVFS at user specidied.

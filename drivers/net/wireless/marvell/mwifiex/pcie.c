@@ -150,10 +150,8 @@ static bool mwifiex_pcie_ok_to_access_hw(struct mwifiex_adapter *adapter)
 static int mwifiex_pcie_suspend(struct device *dev)
 {
 	struct mwifiex_adapter *adapter;
-	struct pcie_service_card *card;
-	struct pci_dev *pdev = to_pci_dev(dev);
+	struct pcie_service_card *card = dev_get_drvdata(dev);
 
-	card = pci_get_drvdata(pdev);
 
 	/* Might still be loading firmware */
 	wait_for_completion(&card->fw_done);
@@ -170,7 +168,7 @@ static int mwifiex_pcie_suspend(struct device *dev)
 	if (!mwifiex_enable_hs(adapter)) {
 		mwifiex_dbg(adapter, ERROR,
 			    "cmd: failed to suspend\n");
-		adapter->hs_enabling = false;
+		clear_bit(MWIFIEX_IS_HS_ENABLING, &adapter->work_flags);
 		mwifiex_disable_wake(adapter);
 		return -EFAULT;
 	}
@@ -178,8 +176,8 @@ static int mwifiex_pcie_suspend(struct device *dev)
 	flush_workqueue(adapter->workqueue);
 
 	/* Indicate device suspended */
-	adapter->is_suspended = true;
-	adapter->hs_enabling = false;
+	set_bit(MWIFIEX_IS_SUSPENDED, &adapter->work_flags);
+	clear_bit(MWIFIEX_IS_HS_ENABLING, &adapter->work_flags);
 
 	return 0;
 }
@@ -195,10 +193,8 @@ static int mwifiex_pcie_suspend(struct device *dev)
 static int mwifiex_pcie_resume(struct device *dev)
 {
 	struct mwifiex_adapter *adapter;
-	struct pcie_service_card *card;
-	struct pci_dev *pdev = to_pci_dev(dev);
+	struct pcie_service_card *card = dev_get_drvdata(dev);
 
-	card = pci_get_drvdata(pdev);
 
 	if (!card->adapter) {
 		dev_err(dev, "adapter structure is not valid\n");
@@ -207,13 +203,13 @@ static int mwifiex_pcie_resume(struct device *dev)
 
 	adapter = card->adapter;
 
-	if (!adapter->is_suspended) {
+	if (!test_bit(MWIFIEX_IS_SUSPENDED, &adapter->work_flags)) {
 		mwifiex_dbg(adapter, WARN,
 			    "Device already resumed\n");
 		return 0;
 	}
 
-	adapter->is_suspended = false;
+	clear_bit(MWIFIEX_IS_SUSPENDED, &adapter->work_flags);
 
 	mwifiex_cancel_hs(mwifiex_get_priv(adapter, MWIFIEX_BSS_ROLE_STA),
 			  MWIFIEX_ASYNC_CMD);
@@ -320,6 +316,19 @@ static void mwifiex_pcie_shutdown(struct pci_dev *pdev)
 	return;
 }
 
+static void mwifiex_pcie_coredump(struct device *dev)
+{
+	struct pci_dev *pdev;
+	struct pcie_service_card *card;
+
+	pdev = container_of(dev, struct pci_dev, dev);
+	card = pci_get_drvdata(pdev);
+
+	if (!test_and_set_bit(MWIFIEX_IFACE_WORK_DEVICE_DUMP,
+			      &card->work_flags))
+		schedule_work(&card->work);
+}
+
 static const struct pci_device_id mwifiex_ids[] = {
 	{
 		PCIE_VENDOR_ID_MARVELL, PCIE_DEVICE_ID_MARVELL_88W8766P,
@@ -368,6 +377,8 @@ static void mwifiex_pcie_reset_prepare(struct pci_dev *pdev)
 	clear_bit(MWIFIEX_IFACE_WORK_DEVICE_DUMP, &card->work_flags);
 	clear_bit(MWIFIEX_IFACE_WORK_CARD_RESET, &card->work_flags);
 	mwifiex_dbg(adapter, INFO, "%s, successful\n", __func__);
+
+	card->pci_reset_ongoing = true;
 }
 
 /*
@@ -396,6 +407,8 @@ static void mwifiex_pcie_reset_done(struct pci_dev *pdev)
 		dev_err(&pdev->dev, "reinit failed: %d\n", ret);
 	else
 		mwifiex_dbg(adapter, INFO, "%s, successful\n", __func__);
+
+	card->pci_reset_ongoing = false;
 }
 
 static const struct pci_error_handlers mwifiex_pcie_err_handler = {
@@ -415,11 +428,12 @@ static struct pci_driver __refdata mwifiex_pcie = {
 	.id_table = mwifiex_ids,
 	.probe    = mwifiex_pcie_probe,
 	.remove   = mwifiex_pcie_remove,
-#ifdef CONFIG_PM_SLEEP
 	.driver   = {
+		.coredump = mwifiex_pcie_coredump,
+#ifdef CONFIG_PM_SLEEP
 		.pm = &mwifiex_pcie_pm_ops,
-	},
 #endif
+	},
 	.shutdown = mwifiex_pcie_shutdown,
 	.err_handler = &mwifiex_pcie_err_handler,
 };
@@ -1066,7 +1080,7 @@ static int mwifiex_pcie_delete_cmdrsp_buf(struct mwifiex_adapter *adapter)
 static int mwifiex_pcie_alloc_sleep_cookie_buf(struct mwifiex_adapter *adapter)
 {
 	struct pcie_service_card *card = adapter->card;
-	u32 tmp;
+	u32 *cookie;
 
 	card->sleep_cookie_vbase = pci_alloc_consistent(card->dev, sizeof(u32),
 						     &card->sleep_cookie_pbase);
@@ -1075,13 +1089,11 @@ static int mwifiex_pcie_alloc_sleep_cookie_buf(struct mwifiex_adapter *adapter)
 			    "pci_alloc_consistent failed!\n");
 		return -ENOMEM;
 	}
+	cookie = (u32 *)card->sleep_cookie_vbase;
 	/* Init val of Sleep Cookie */
-	tmp = FW_AWAKE_COOKIE;
-	put_unaligned(tmp, card->sleep_cookie_vbase);
+	*cookie = FW_AWAKE_COOKIE;
 
-	mwifiex_dbg(adapter, INFO,
-		    "alloc_scook: sleep cookie=0x%x\n",
-		    get_unaligned(card->sleep_cookie_vbase));
+	mwifiex_dbg(adapter, INFO, "alloc_scook: sleep cookie=0x%x\n", *cookie);
 
 	return 0;
 }
@@ -1886,7 +1898,8 @@ static int mwifiex_pcie_process_event_ready(struct mwifiex_adapter *adapter)
 		mwifiex_dbg(adapter, EVENT,
 			    "info: Event length: %d\n", evt_len);
 
-		if ((evt_len > 0) && (evt_len  < MAX_EVENT_SIZE))
+		if (evt_len > MWIFIEX_EVENT_HEADER_LEN &&
+		    evt_len < MAX_EVENT_SIZE)
 			memcpy(adapter->event_body, skb_cmd->data +
 			       MWIFIEX_EVENT_HEADER_LEN, evt_len -
 			       MWIFIEX_EVENT_HEADER_LEN);
@@ -2420,7 +2433,7 @@ static irqreturn_t mwifiex_pcie_interrupt(int irq, void *context)
 	}
 	adapter = card->adapter;
 
-	if (adapter->surprise_removed)
+	if (test_bit(MWIFIEX_SURPRISE_REMOVED, &adapter->work_flags))
 		goto exit;
 
 	if (card->msix_enable)
@@ -2774,12 +2787,17 @@ static void mwifiex_pcie_fw_dump(struct mwifiex_adapter *adapter)
 
 static void mwifiex_pcie_device_dump_work(struct mwifiex_adapter *adapter)
 {
-	int drv_info_size;
-	void *drv_info;
+	adapter->devdump_data = vzalloc(MWIFIEX_FW_DUMP_SIZE);
+	if (!adapter->devdump_data) {
+		mwifiex_dbg(adapter, ERROR,
+			    "vzalloc devdump data failure!\n");
+		return;
+	}
 
-	drv_info_size = mwifiex_drv_info_dump(adapter, &drv_info);
+	mwifiex_drv_info_dump(adapter);
 	mwifiex_pcie_fw_dump(adapter);
-	mwifiex_upload_device_dump(adapter, drv_info, drv_info_size);
+	mwifiex_prepare_fw_dump_info(adapter);
+	mwifiex_upload_device_dump(adapter);
 }
 
 static void mwifiex_pcie_card_reset_work(struct mwifiex_adapter *adapter)
@@ -2909,10 +2927,9 @@ static int mwifiex_init_pcie(struct mwifiex_adapter *adapter)
 
 	pci_set_master(pdev);
 
-	pr_notice("try set_consistent_dma_mask(32)\n");
 	ret = pci_set_dma_mask(pdev, DMA_BIT_MASK(32));
 	if (ret) {
-		pr_err("set_dma_mask(32) failed\n");
+		pr_err("set_dma_mask(32) failed: %d\n", ret);
 		goto err_set_dma_mask;
 	}
 
@@ -2945,7 +2962,7 @@ static int mwifiex_init_pcie(struct mwifiex_adapter *adapter)
 		goto err_iomap2;
 	}
 
-	pr_notice("PCI memory map Virt0: %p PCI memory map Virt2: %p\n",
+	pr_notice("PCI memory map Virt0: %pK PCI memory map Virt2: %pK\n",
 		  card->pci_mmap, card->pci_mmap1);
 
 	ret = mwifiex_pcie_alloc_buffers(adapter);
@@ -2980,7 +2997,19 @@ static void mwifiex_cleanup_pcie(struct mwifiex_adapter *adapter)
 	int ret;
 	u32 fw_status;
 
-	cancel_work_sync(&card->work);
+	/* Perform the cancel_work_sync() only when we're not resetting
+	 * the card. It's because that function never returns if we're
+	 * in reset path. If we're here when resetting the card, it means
+	 * that we failed to reset the card (reset failure path).
+	 */
+	if (!card->pci_reset_ongoing) {
+		mwifiex_dbg(adapter, MSG, "performing cancel_work_sync()...\n");
+		cancel_work_sync(&card->work);
+		mwifiex_dbg(adapter, MSG, "cancel_work_sync() done\n");
+	} else {
+		mwifiex_dbg(adapter, MSG,
+			    "skipped cancel_work_sync() because we're in card reset failure path\n");
+	}
 
 	ret = mwifiex_read_reg(adapter, reg->fw_status, &fw_status);
 	if (fw_status == FIRMWARE_READY_PCIE) {

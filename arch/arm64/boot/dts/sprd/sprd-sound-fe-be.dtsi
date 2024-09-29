@@ -1,6 +1,6 @@
 / {
 	sprd_headset: sprd-headset {
-		compatible = "sprd,headset";
+		compatible = "unisoc,headset";
 		status = "disabled";
 		/* 0: normal-open jack; 1: normal-close jack */
 		sprd,jack-type = <0>;
@@ -18,8 +18,8 @@
 		sprd,half-adc-gnd = <100>;
 		sprd,coefficient = <884520>;
 		sprd,irq-threshold-button = <4>;
-		nvmem-cells = <&headset_adc_fir>, <&headset_adc_sec>;
-		nvmem-cell-names = "hp_adc_fir_calib", "hp_adc_sec_calib";
+		nvmem-cells = <&headset_adc_fir>, <&headset_adc_sec>, <&pdref_calib>, <&aud_pabst_vcal>, <&neg_cp_efuse>;
+		nvmem-cell-names = "hp_adc_fir_calib", "hp_adc_sec_calib", "aud_impd_cal2", "aud_impd_cal0", "aud_impd_cal1";
 
 		sprd,headset-button@0 {
 			/* media */
@@ -42,7 +42,7 @@
 	};
 
 	sound_vbc_v4_sprd_codec: sound@0 {
-		compatible = "sprd,vbc-v4-codec-sc2730";
+		compatible = "unisoc,vbc-v4-codec-sc2730";
 		status = "disabled";
 		sprd-audio-card,name = "sprdphone-sc2730";
 		sprd-audio-card,routing =
@@ -59,7 +59,7 @@
 			"Ext Ear", "HP Pin";
 		sprd-audio-card,headset = <&sprd_headset>;
 		sprd,syscon-agcp-ahb = <&audcp_ahb_regs>;
-		 /* fe dai-links */
+		/* fe dai-links */
 
 		/* fe normal ap01 */
 		sprd-audio-card,dai-link@0 {
@@ -160,7 +160,7 @@
 				sound-dai = <&sprd_fe_dai 4>;
 			};
 			codec {
-				sound-dai = <0 1>;
+				sound-dai = <0 0>;
 			};
 		};
 
@@ -482,7 +482,7 @@
 				sound-dai = <&vbc_v4 2>;
 			};
 			codec {
-				sound-dai = <&sprd_audio_codec_ana 2>;
+				sound-dai = <&sprd_audio_codec_ana 0>;
 			};
 		};
 
@@ -501,7 +501,7 @@
 				sound-dai = <&vbc_v4 3>;
 			};
 			codec {
-				sound-dai = <&sprd_audio_codec_ana 3>;
+				sound-dai = <&sprd_audio_codec_ana 0>;
 			};
 		};
 
@@ -521,7 +521,7 @@
 				sound-dai = <&vbc_v4 4>;
 			};
 			codec {
-				sound-dai = <&sprd_audio_codec_ana 4>;
+				sound-dai = <&sprd_audio_codec_ana 0>;
 			};
 		};
 
@@ -541,7 +541,7 @@
 				sound-dai = <&vbc_v4 5>;
 			};
 			codec {
-				sound-dai = <&sprd_audio_codec_ana 5>;
+				sound-dai = <&sprd_audio_codec_ana 0>;
 			};
 		};
 
@@ -561,7 +561,7 @@
 				sound-dai = <&vbc_v4 6>;
 			};
 			codec {
-				sound-dai = <&sprd_audio_codec_ana 6>;
+				sound-dai = <&sprd_audio_codec_ana 0>;
 			};
 		};
 
@@ -580,7 +580,7 @@
 				sound-dai = <&vbc_v4 7>;
 			};
 			codec {
-				sound-dai = <&sprd_audio_codec_ana 7>;
+				sound-dai = <&sprd_audio_codec_ana 0>;
 			};
 		};
 
@@ -600,7 +600,7 @@
 				sound-dai = <&vbc_v4 8>;
 			};
 			codec {
-				sound-dai = <&sprd_audio_codec_ana 8>;
+				sound-dai = <&sprd_audio_codec_ana 0>;
 			};
 		};
 		/* 9: be fm dsp codec */
@@ -618,7 +618,7 @@
 				sound-dai = <&vbc_v4 9>;
 			};
 			codec {
-				sound-dai = <&sprd_audio_codec_ana 9>;
+				sound-dai = <&sprd_audio_codec_ana 0>;
 			};
 		};
 		/* 10: be normal_ap01 usb */
@@ -1069,7 +1069,7 @@
 				sound-dai = <&vbc_v4 31>;
 			};
 			codec {
-				sound-dai = <&sprd_audio_codec_ana 14>;
+				sound-dai = <&sprd_audio_codec_ana 0>;
 			};
 		};
 
@@ -1110,6 +1110,7 @@
 				sound-dai = <0 0>;
 			};
 		};
+
 		/* dai-link@53 ~ dai-link@67 (index from 35 to 49)
 		 * are reserved for ucp1301 and HIFI.
 		 */
@@ -1152,55 +1153,42 @@
 				sound-dai = <0 0>;
 			};
 		};
-	};
-
-	sprd_pcm_iis: sprd-pcm-iis {
-		compatible = "sprd,sharkl5-pcm-platform";
-		#sound-dai-cells = <0>;
-		dmas = <&ap_dma 5 &ap_dma 6>;
-		dma-names = "iis0_tx", "iis0_rx";
-		sprd,dma-2stage-usecase = <2>;
-		sprd,node-count-2stage-level-1 = <1>;
-		sprd,syscon-pmu-apb = <&pmu_apb_regs>;
-		sprd,dma-2stage-level-1-int-source = <1>;
-	};
-
-	sound_sprd_ap_alliis: sound@1 {
-		compatible = "sprd,i2s-null-codec";
-		status = "disabled";
-		sprd-audio-card,name = "all-i2s";
-		/* dai-links */
-		sprd-audio-card,dai-link@0 {
+		/* 52: fe multimedia*/
+		sprd-audio-card,dai-link@90 {
+			link-name = "FE_MM_P";
+			stream-name = "FE_ST_MM_P";
+			be-id = <0>;
+			trigger = <1 1>;
+			ignore-suspend = <1>;
+			dynamic = <1>;
+			dpcm-playback = <1>;
 			plat {
-				sound-dai = <&sprd_pcm_iis>;
+				sound-dai = <&sprd_pcm>;
 			};
 			cpu {
-				sound-dai = <&i2s0>;
+				sound-dai = <&sprd_fe_dai 24>;
 			};
 			codec {
 				sound-dai = <0 0>;
 			};
 		};
+		/* 53: be multimedia */
+		sprd-audio-card,dai-link@91 {
+			link-name = "BE_FAST_P_SMART_AMP";
+			stream-name = "BE_ST_FAST_P_SMART_AMP";
+			be-id = <0>;
+			ignore-suspend = <0>;
+			no-pcm = <1>;
+			dpcm-playback = <1>;
+			plat {
+				sound-dai = <&sprd_route_pcm>;
+			};
+			cpu {
+				sound-dai = <&vbc_v4 57>;
+			};
+			codec {
+				sound-dai = <&sprd_audio_codec_ana 0>;
+			};
+		};
 	};
-};
-
-
-&i2s0 {
-	sprd,config_type = "pcm";
-	sprd,slave_timeout = <0xF11>;
-	sprd,fs = <8000>;
-	sprd,bus_type = <1>;
-	sprd,rtx_mode = <3>;
-	sprd,byte_per_chan = <1>;
-	sprd,slave_mode = <0>;
-	sprd,lsb = <0>;
-	sprd,lrck = <0>;
-	sprd,low_for_left = <1>;
-	sprd,clk_inv = <0>;
-	sprd,pcm_short_frame = <1>;
-	sprd,pcm_slot = <0x1>;
-	sprd,pcm_cycle = <1>;
-	sprd,tx_watermark = <12>;
-	sprd,rx_watermark = <20>;
-	status = "disable";
 };

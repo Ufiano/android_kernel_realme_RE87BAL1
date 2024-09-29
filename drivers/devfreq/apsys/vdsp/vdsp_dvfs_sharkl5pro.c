@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2019 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
@@ -19,7 +11,7 @@
 #include <linux/clk.h>
 #include "sprd_dvfs_apsys.h"
 #include "sprd_dvfs_vdsp.h"
-#include "apsys_dvfs_sharkl5pro.h"
+#include "../sys/apsys_dvfs_sharkl5pro.h"
 #include "vdsp_dvfs_sharkl5pro.h"
 
 #define CLK_PLL_NUM 3
@@ -98,23 +90,22 @@ static int transfer_mapindex_to_pllindex(u32 index)
 	}
 }
 
-static void vdsp_hw_dfs_en(bool dfs_en)
+static void vdsp_hw_dfs_en(struct vdsp_dvfs *vdsp, bool dfs_en)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
-
-	mutex_lock(&apsys_glb_reg_lock);
+		(struct apsys_dvfs_reg *)vdsp->apsys->apsys_base;
+	mutex_lock(&vdsp->apsys->reg_lock);
 	if (dfs_en)
 		reg->ap_dfs_en_ctrl |= BIT(2);
 	else
 		reg->ap_dfs_en_ctrl &= ~BIT(2);
-	mutex_unlock(&apsys_glb_reg_lock);
+	mutex_unlock(&vdsp->apsys->reg_lock);
 }
 
-static void vdsp_dvfs_map_cfg(void)
+static void vdsp_dvfs_map_cfg(struct vdsp_dvfs *vdsp)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct apsys_dvfs_reg *)vdsp->apsys->apsys_base;
 	reg->vdsp_index0_map = map_table[0].clk_level |
 		map_table[0].edap_div << 3 |
 		map_table[0].volt_level << 5;
@@ -135,10 +126,10 @@ static void vdsp_dvfs_map_cfg(void)
 		map_table[5].volt_level << 5;
 }
 
-static int set_vdsp_work_freq(u32 freq)
+static int set_vdsp_work_freq(struct vdsp_dvfs *vdsp, u32 freq)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct apsys_dvfs_reg *)vdsp->apsys->apsys_base;
 	int i;
 	int pll_index;
 	int ret;
@@ -159,10 +150,10 @@ static int set_vdsp_work_freq(u32 freq)
 	return ret;
 }
 
-static u32 get_vdsp_work_freq(void)
+static u32 get_vdsp_work_freq(struct vdsp_dvfs *vdsp)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct apsys_dvfs_reg *)vdsp->apsys->apsys_base;
 	u32 freq = 0;
 	int i;
 
@@ -177,10 +168,10 @@ static u32 get_vdsp_work_freq(void)
 	return freq;
 }
 
-static void set_vdsp_idle_freq(u32 freq)
+static void set_vdsp_idle_freq(struct vdsp_dvfs *vdsp, u32 freq)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct apsys_dvfs_reg *)vdsp->apsys->apsys_base;
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(map_table); i++) {
@@ -191,10 +182,10 @@ static void set_vdsp_idle_freq(u32 freq)
 	}
 }
 
-static u32 get_vdsp_idle_freq(void)
+static u32 get_vdsp_idle_freq(struct vdsp_dvfs *vdsp)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct apsys_dvfs_reg *)vdsp->apsys->apsys_base;
 	u32 freq = 0;
 	int i;
 
@@ -209,13 +200,12 @@ static u32 get_vdsp_idle_freq(void)
 	return freq;
 }
 
-static int set_vdsp_work_index(int index)
+static int set_vdsp_work_index(struct vdsp_dvfs *vdsp, int index)
 {
 	int pll_index;
 	int ret;
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
-
+		(struct apsys_dvfs_reg *)vdsp->apsys->apsys_base;
 	pll_index = transfer_mapindex_to_pllindex(index);
 	ret = clk_prepare_enable(clk_pll[pll_index]);
 	if (ret) {
@@ -227,93 +217,93 @@ static int set_vdsp_work_index(int index)
 	return ret;
 }
 
-static int get_vdsp_work_index(void)
+static int get_vdsp_work_index(struct vdsp_dvfs *vdsp)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct apsys_dvfs_reg *)vdsp->apsys->apsys_base;
 
 	return reg->vdsp_dvfs_index_cfg;
 }
 
-static void set_vdsp_idle_index(int index)
+static void set_vdsp_idle_index(struct vdsp_dvfs *vdsp, int index)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct apsys_dvfs_reg *)vdsp->apsys->apsys_base;
 
 	reg->vdsp_dvfs_index_idle_cfg = index;
 }
 
-static int get_vdsp_idle_index(void)
+static int get_vdsp_idle_index(struct vdsp_dvfs *vdsp)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct apsys_dvfs_reg *)vdsp->apsys->apsys_base;
 
 	return reg->vdsp_dvfs_index_idle_cfg;
 }
 
-static void set_vdsp_gfree_wait_delay(u32 para)
+static void set_vdsp_gfree_wait_delay(struct vdsp_dvfs *vdsp, u32 para)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct apsys_dvfs_reg *)vdsp->apsys->apsys_base;
 	u32 temp;
 
-	mutex_lock(&apsys_glb_reg_lock);
+	mutex_lock(&vdsp->apsys->reg_lock);
 	temp = reg->ap_gfree_wait_delay_cfg;
 	temp &= GENMASK(19, 0);
 	reg->ap_gfree_wait_delay_cfg = para << 20 | temp;
-	mutex_unlock(&apsys_glb_reg_lock);
+	mutex_unlock(&vdsp->apsys->reg_lock);
 }
 
-static void set_vdsp_freq_upd_en_byp(bool enable)
+static void set_vdsp_freq_upd_en_byp(struct vdsp_dvfs *vdsp, bool enable)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct apsys_dvfs_reg *)vdsp->apsys->apsys_base;
 
-	mutex_lock(&apsys_glb_reg_lock);
+	mutex_lock(&vdsp->apsys->reg_lock);
 	if (enable)
 		reg->ap_freq_update_bypass |= BIT(2);
 	else
 		reg->ap_freq_update_bypass &= ~BIT(2);
-	mutex_unlock(&apsys_glb_reg_lock);
+	mutex_unlock(&vdsp->apsys->reg_lock);
 }
 
-static void set_vdsp_freq_upd_delay_en(bool enable)
+static void set_vdsp_freq_upd_delay_en(struct vdsp_dvfs *vdsp, bool enable)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct apsys_dvfs_reg *)vdsp->apsys->apsys_base;
 
-	mutex_lock(&apsys_glb_reg_lock);
+	mutex_lock(&vdsp->apsys->reg_lock);
 	if (enable)
 		reg->ap_freq_upd_type_cfg |= BIT(1);
 	else
 		reg->ap_freq_upd_type_cfg &= ~BIT(1);
-	mutex_unlock(&apsys_glb_reg_lock);
+	mutex_unlock(&vdsp->apsys->reg_lock);
 }
 
-static void set_vdsp_freq_upd_hdsk_en(bool enable)
+static void set_vdsp_freq_upd_hdsk_en(struct vdsp_dvfs *vdsp, bool enable)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct apsys_dvfs_reg *)vdsp->apsys->apsys_base;
 
-	mutex_lock(&apsys_glb_reg_lock);
+	mutex_lock(&vdsp->apsys->reg_lock);
 	if (enable)
 		reg->ap_freq_upd_type_cfg |= BIT(0);
 	else
 		reg->ap_freq_upd_type_cfg &= ~BIT(0);
-	mutex_unlock(&apsys_glb_reg_lock);
+	mutex_unlock(&vdsp->apsys->reg_lock);
 }
 
-static void set_vdsp_dvfs_swtrig_en(bool enable)
+static void set_vdsp_dvfs_swtrig_en(struct vdsp_dvfs *vdsp, bool enable)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct apsys_dvfs_reg *)vdsp->apsys->apsys_base;
 
-	mutex_lock(&apsys_glb_reg_lock);
+	mutex_lock(&vdsp->apsys->reg_lock);
 	if (enable)
 		reg->ap_sw_trig_ctrl |= BIT(0);
 	else
 		reg->ap_sw_trig_ctrl &= ~BIT(0);
-	mutex_unlock(&apsys_glb_reg_lock);
+	mutex_unlock(&vdsp->apsys->reg_lock);
 }
 
 static void set_vdsp_dvfs_table(struct ip_dvfs_map_cfg *dvfs_table)
@@ -337,12 +327,12 @@ static int get_vdsp_dvfs_table(struct ip_dvfs_map_cfg *dvfs_table)
 	return i;
 }
 
-static void get_vdsp_dvfs_status(struct ip_dvfs_status *dvfs_status)
+static void get_vdsp_dvfs_status(struct vdsp_dvfs *vdsp, struct ip_dvfs_status *dvfs_status)
 {
 	struct apsys_dvfs_reg *reg =
-		(struct apsys_dvfs_reg *)regmap_ctx.apsys_base;
+		(struct apsys_dvfs_reg *)vdsp->apsys->apsys_base;
 
-	mutex_lock(&apsys_glb_reg_lock);
+	mutex_lock(&vdsp->apsys->reg_lock);
 	dvfs_status->apsys_cur_volt =
 		sharkl5pro_apsys_val_to_volt(reg->ap_dvfs_voltage_dbg >> 12 & 0x7);
 	dvfs_status->vsp_vote_volt =
@@ -359,7 +349,7 @@ static void get_vdsp_dvfs_status(struct ip_dvfs_status *dvfs_status)
 		sharkl5pro_vdsp_val_to_freq(reg->ap_dvfs_cgm_cfg_dbg >> 5 & 0x7);
 	dvfs_status->vdsp_edap_div = reg->ap_dvfs_cgm_cfg_dbg >> 8 & 0x3;
 	dvfs_status->vdsp_m0_div = reg->ap_dvfs_cgm_cfg_dbg >> 10 & 0x3;
-	mutex_unlock(&apsys_glb_reg_lock);
+	mutex_unlock(&vdsp->apsys->reg_lock);
 }
 
 static int vdsp_dvfs_parse_dt(struct vdsp_dvfs *vdsp,
@@ -410,21 +400,21 @@ static int vdsp_dvfs_parse_pll(struct vdsp_dvfs *vdsp, struct device *dev)
 
 static int vdsp_dvfs_init(struct vdsp_dvfs *vdsp)
 {
-	vdsp_dvfs_map_cfg();
-	set_vdsp_gfree_wait_delay(vdsp->dvfs_coffe.gfree_wait_delay);
-	set_vdsp_freq_upd_hdsk_en(vdsp->dvfs_coffe.freq_upd_hdsk_en);
-	set_vdsp_freq_upd_delay_en(vdsp->dvfs_coffe.freq_upd_delay_en);
-	set_vdsp_freq_upd_en_byp(vdsp->dvfs_coffe.freq_upd_en_byp);
-	set_vdsp_work_index(vdsp->dvfs_coffe.work_index_def);
+	vdsp_dvfs_map_cfg(vdsp);
+	set_vdsp_gfree_wait_delay(vdsp, vdsp->dvfs_coffe.gfree_wait_delay);
+	set_vdsp_freq_upd_hdsk_en(vdsp, vdsp->dvfs_coffe.freq_upd_hdsk_en);
+	set_vdsp_freq_upd_delay_en(vdsp, vdsp->dvfs_coffe.freq_upd_delay_en);
+	set_vdsp_freq_upd_en_byp(vdsp, vdsp->dvfs_coffe.freq_upd_en_byp);
+	set_vdsp_work_index(vdsp, vdsp->dvfs_coffe.work_index_def);
 	vdsp->work_freq = trans_index_to_freq(vdsp->dvfs_coffe.work_index_def);
-	set_vdsp_idle_index(vdsp->dvfs_coffe.idle_index_def);
+	set_vdsp_idle_index(vdsp, vdsp->dvfs_coffe.idle_index_def);
 	vdsp->idle_freq = trans_index_to_freq(vdsp->dvfs_coffe.idle_index_def);
-	vdsp_hw_dfs_en(vdsp->dvfs_coffe.hw_dfs_en);
+	vdsp_hw_dfs_en(vdsp, vdsp->dvfs_coffe.hw_dfs_en);
 
 	return 0;
 }
 
-static struct vdsp_dvfs_ops vdsp_dvfs_ops = {
+const struct vdsp_dvfs_ops sharkl5pro_vdsp_dvfs_ops = {
 	.parse_dt = vdsp_dvfs_parse_dt,
 	.parse_pll = vdsp_dvfs_parse_pll,
 	.dvfs_init = vdsp_dvfs_init,
@@ -447,15 +437,3 @@ static struct vdsp_dvfs_ops vdsp_dvfs_ops = {
 	.set_freq_upd_hdsk_en = set_vdsp_freq_upd_hdsk_en,
 	.set_dvfs_swtrig_en = set_vdsp_dvfs_swtrig_en,
 };
-
-static struct dvfs_ops_entry vdsp_dvfs_entry = {
-	.ver = "sharkl5pro",
-	.ops = &vdsp_dvfs_ops,
-};
-
-static int __init vdsp_dvfs_register(void)
-{
-	return vdsp_dvfs_ops_register(&vdsp_dvfs_entry);
-}
-
-module_init(vdsp_dvfs_register);

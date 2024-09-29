@@ -5,7 +5,7 @@
  * Copyright (C) 2021 Spreadtrum corporation. http://www.unisoc.com
  */
 
-#define pr_fmt(fmt)  "sprd-sysdump: " fmt
+#define pr_fmt(fmt)  "sprd-sysdump-msg: " fmt
 
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -22,15 +22,20 @@
 #include "sysdump64.h"
 #endif
 
-#define SPRD_DUMP_RQ_SIZE	(2000 * NR_CPUS)
-#define SPRD_DUMP_MAX_TASK	2500
-#define SPRD_DUMP_TASK_SIZE	(141 * (SPRD_DUMP_MAX_TASK + 2))
-#ifdef CONFIG_ARM64
-#define SPRD_DUMP_STACK_SIZE	92160
+/* GKI requires the NR_CPUS is 32 */
+#if NR_CPUS >= 8
+#define SPRD_NR_CPUS		8
 #else
-#define SPRD_DUMP_STACK_SIZE	16000
+#define SPRD_NR_CPUS		NR_CPUS
 #endif
-#define MAX_CALLBACK_LEVEL  16
+#define SPRD_DUMP_RQ_SIZE	(2000 * SPRD_NR_CPUS)
+#define SPRD_DUMP_MAX_TASK	3000
+#define SPRD_DUMP_TASK_SIZE	(160 * (SPRD_DUMP_MAX_TASK + 2))
+#define SPRD_DUMP_STACK_SIZE	(2048 * SPRD_NR_CPUS)
+#define SPRD_DUMP_MEM_SIZE	12288 /* 12k */
+#define SPRD_DUMP_IRQ_SIZE	12288
+#define MAX_CALLBACK_LEVEL	16
+#define MAX_NAME_LEN		16
 
 #define SEQ_printf(m, x...)			\
 do {						\
@@ -58,6 +63,10 @@ static char *sprd_runq_buf;
 static struct seq_buf *sprd_rq_seq_buf;
 static char *sprd_stack_reg_buf;
 static struct seq_buf *sprd_sr_seq_buf;
+static char *sprd_meminfo_buf;
+struct seq_buf *sprd_mem_seq_buf;
+static char *sprd_irqstat_buf;
+struct seq_buf *sprd_irqstat_seq_buf;
 
 static DEFINE_RAW_SPINLOCK(dump_lock);
 
@@ -74,6 +83,105 @@ static int minidump_add_section(const char *name, long vaddr, int size)
 	return ret;
 }
 
+#if defined(CONFIG_ARM64)
+static void minidump_add_irq_stack(void)
+{
+	int cpu;
+	u64 irq_stack_base, sp;
+	char name[MAX_NAME_LEN];
+#ifdef CONFIG_VMAP_STACK
+	int page_count;
+	unsigned int i;
+#endif
+
+	for_each_possible_cpu(cpu) {
+		irq_stack_base = (u64)per_cpu(irq_stack_ptr, cpu);
+		if (!irq_stack_base)
+			return;
+#ifdef CONFIG_VMAP_STACK
+		page_count = IRQ_STACK_SIZE / PAGE_SIZE;
+		sp = irq_stack_base & ~(PAGE_SIZE - 1);
+		for (i = 0; i < page_count; i++) {
+			struct page *sp_page;
+			unsigned long phys_addr;
+
+			scnprintf(name, MAX_NAME_LEN, "irqstack%d_%d", cpu, i);
+			sp_page = vmalloc_to_page((const void *) sp);
+			phys_addr = page_to_phys(sp_page);
+			if (minidump_save_extend_information(name, phys_addr, phys_addr + PAGE_SIZE))
+				return;
+			sp += PAGE_SIZE;
+		}
+#else
+		sp = irq_stack_base;
+		scnprintf(name, MAX_NAME_LEN, "irqstack%d", cpu);
+		minidump_add_section(name, sp, IRQ_STACK_SIZE);
+#endif
+	}
+}
+#else
+static inline void minidump_add_irq_stack(void) {}
+#endif
+
+static int currstack_inited;
+static void minidump_add_current_stack(void)
+{
+	char name[MAX_NAME_LEN];
+	int cpu;
+#ifdef CONFIG_VMAP_STACK
+	int i, page_count;
+
+	page_count = THREAD_SIZE / PAGE_SIZE;
+	for_each_possible_cpu(cpu)
+		for (i = 0; i < page_count; i++) {
+			scnprintf(name, MAX_NAME_LEN, "cpustack%d_%d", cpu, i);
+			if (minidump_save_extend_information(name, 0, PAGE_SIZE))
+				return;
+		}
+#else
+	for_each_possible_cpu(cpu) {
+		scnprintf(name, MAX_NAME_LEN, "cpustack%d", cpu);
+		minidump_save_extend_information(name, 0, THREAD_SIZE);
+	}
+#endif
+	currstack_inited = 1;
+}
+void minidump_update_current_stack(int cpu, struct pt_regs *regs)
+{
+	unsigned long sp;
+	char name[MAX_NAME_LEN];
+#ifdef CONFIG_VMAP_STACK
+	struct vm_struct *stack_vm_area;
+	int i, page_count;
+
+	if (!currstack_inited || user_mode(regs) || is_idle_task(current))
+		return;
+
+	stack_vm_area = task_stack_vm_area(current);
+	sp = (unsigned long)stack_vm_area->addr;
+
+	sp &= ~(PAGE_SIZE - 1);
+	page_count = THREAD_SIZE / PAGE_SIZE;
+	for (i = 0; i < page_count; i++) {
+		struct page *sp_page;
+		unsigned long phys_addr;
+
+		scnprintf(name, MAX_NAME_LEN, "cpustack%d_%d", cpu, i);
+		sp_page = vmalloc_to_page((const void *) sp);
+		phys_addr = page_to_phys(sp_page);
+		if (minidump_change_extend_information(name, phys_addr, phys_addr + PAGE_SIZE))
+			return;
+		sp += PAGE_SIZE;
+	}
+#else
+	if (!currstack_inited || user_mode(regs) || is_idle_task(current))
+		return;
+
+	sp = (unsigned long)current->stack;
+	scnprintf(name, MAX_NAME_LEN, "cpustack%d", cpu);
+	minidump_change_extend_information(name, __pa(sp), __pa(sp + THREAD_SIZE));
+#endif
+}
 /*
  * Ease the printing of nsec fields:
  */
@@ -97,7 +205,7 @@ static unsigned long nsec_low(unsigned long long nsec)
 	return do_div(nsec, 1000000000);
 }
 
-static align_offset;
+static int align_offset;
 
 static void dump_align(void)
 {
@@ -121,7 +229,7 @@ static void dump_task_info(struct task_struct *task, char *status,
 
 	se = &task->se;
 	if (task == curr) {
-		SEQ_printf(sprd_rq_seq_buf, "[status: curr] pid: %d comm: %s preempt: %#x\n",
+		SEQ_printf(sprd_rq_seq_buf, "[status: curr] pid: %d comm: %s preempt: %#llx\n",
 			task_pid_nr(task), task->comm,
 			task_thread_info(task)->preempt_count);
 		return;
@@ -133,14 +241,11 @@ static void dump_task_info(struct task_struct *task, char *status,
 		task->comm,
 		(unsigned long)task->stack);
 	SEQ_printf(sprd_rq_seq_buf, " prio: %d aff: %*pb",
-		       task->prio, cpumask_pr_args(&task->cpus_allowed));
-#ifdef CONFIG_SCHED_WALT
-	SEQ_printf(sprd_rq_seq_buf, " sleep: %lu", task->last_sleep_ts);
-#endif
-	SEQ_printf(sprd_rq_seq_buf, " vrun: %lu arr: %lu sum_ex: %lu\n",
-		(unsigned long)se->vruntime,
-		(unsigned long)se->exec_start,
-		(unsigned long)se->sum_exec_runtime);
+		       task->prio, cpumask_pr_args(&task->cpus_mask));
+	SEQ_printf(sprd_rq_seq_buf, " enqueue: %llu", task->last_enqueue_ts);
+	SEQ_printf(sprd_rq_seq_buf, " last_sleep: %llu", task->last_sleep_ts);
+	SEQ_printf(sprd_rq_seq_buf, " vrun: %llu exec_start: %llu sum_ex: %llu\n",
+		se->vruntime, se->exec_start, se->sum_exec_runtime);
 }
 
 static void dump_cfs_rq(struct cfs_rq *cfs, struct task_struct *curr);
@@ -235,7 +340,7 @@ static void dump_rt_rq(struct rt_rq  *rt_rq, struct task_struct *curr)
 	}
 }
 
-static void sprd_dump_runqueues(void)
+void sprd_dump_runqueues(void)
 {
 	int cpu;
 	struct rq *rq;
@@ -288,16 +393,17 @@ static void sprd_print_task_stats(int cpu, struct rq *rq, struct task_struct *p)
 	SEQ_printf(task_seq_buf, "   %6lld.%09ld",
 				nsec_high(p->se.sum_exec_runtime),
 				nsec_low(p->se.sum_exec_runtime));
-
-#ifdef CONFIG_SCHED_WALT
+	SEQ_printf(task_seq_buf, "   %6lld.%09ld",
+				nsec_high(p->last_enqueue_ts),
+				nsec_low(p->last_enqueue_ts));
 	SEQ_printf(task_seq_buf, "   %6lld.%09ld",
 				nsec_high(p->last_sleep_ts),
 				nsec_low(p->last_sleep_ts));
-#endif
+
 	SEQ_printf(task_seq_buf, "\n");
 }
 
-static void sprd_dump_task_stats(void)
+void sprd_dump_task_stats(void)
 {
 	struct task_struct *g, *p;
 	int cpu;
@@ -308,100 +414,23 @@ static void sprd_dump_task_stats(void)
 
 	SEQ_printf(sprd_task_seq_buf, "cpu  S       task_comm   PID  prio   num_of_exec");
 #ifdef CONFIG_SCHED_INFO
-	SEQ_printf(sprd_task_seq_buf, "   exec_started_ts    last_queued_ts   total_wait_time ");
+	SEQ_printf(sprd_task_seq_buf, "   last_arrival_ts    last_queued_ts   total_wait_time ");
 #endif
 	SEQ_printf(sprd_task_seq_buf, "   total_exec_time");
-#ifdef CONFIG_SCHED_WALT
+	SEQ_printf(sprd_task_seq_buf, "    last_enqueue_ts");
 	SEQ_printf(sprd_task_seq_buf, "      last_sleep_ts");
-#endif
-	SEQ_printf(sprd_task_seq_buf, "\n-----------------------------------------------------------"
-		"---------------------------------------------------------------------------------\n");
+	SEQ_printf(sprd_task_seq_buf, "\n-------------------------------------------------------------------"
+		"-------------------------------------------------------------------------------------------\n");
 
-	rcu_read_lock();
 	for_each_process_thread(g, p) {
 		cpu = task_cpu(p);
 		rq = cpu_rq(cpu);
 
 		sprd_print_task_stats(cpu, rq, p);
 	}
-	rcu_read_unlock();
 }
 
 #ifdef CONFIG_ARM64
-/*
- * dump a block of kernel memory from around the given address
- */
-static void show_data(unsigned long addr, int nbytes, const char *name)
-{
-	int	i, j;
-	int	nlines;
-	u32	*p;
-	struct vm_struct *vaddr;
-
-	/*
-	 * don't attempt to dump non-kernel addresses or
-	 * values that are probably just small negative numbers
-	 */
-	if (addr < KIMAGE_VADDR || addr > -256UL)
-		return;
-
-	if (addr > VMALLOC_START && addr < VMALLOC_END) {
-		vaddr = find_vm_area_no_wait((const void *)addr);
-		if (!vaddr || ((vaddr->flags & VM_IOREMAP) == VM_IOREMAP))
-			return;
-	}
-
-	SEQ_printf(sprd_sr_seq_buf, "\n%s: %#lx:\n", name, addr);
-
-	/*
-	 * round address down to a 32 bit boundary
-	 * and always dump a multiple of 32 bytes
-	 */
-	p = (u32 *)(addr & ~(sizeof(u32) - 1));
-	nbytes += (addr & (sizeof(u32) - 1));
-	nlines = (nbytes + 31) / 32;
-
-
-	for (i = 0; i < nlines; i++) {
-		/*
-		 * just display low 16 bits of address to keep
-		 * each line of the dump < 80 characters
-		 */
-		SEQ_printf(sprd_sr_seq_buf, "%04lx ", (unsigned long)p & 0xffff);
-		for (j = 0; j < 8; j++) {
-			u32 data;
-
-			if (probe_kernel_address(p, data))
-				SEQ_printf(sprd_sr_seq_buf, " ********");
-			else
-				SEQ_printf(sprd_sr_seq_buf, " %08x", data);
-
-			++p;
-		}
-		SEQ_printf(sprd_sr_seq_buf, "\n");
-	}
-	flush_cache_all();
-}
-
-static void dump_extra_register_data(struct pt_regs *regs, int nbytes)
-{
-	mm_segment_t fs;
-	unsigned int i;
-
-	fs = get_fs();
-	set_fs(KERNEL_DS);
-	show_data(regs->pc - nbytes, nbytes * 2, "PC");
-	show_data(regs->regs[30] - nbytes, nbytes * 2, "LR");
-	show_data(regs->sp - nbytes, nbytes * 2, "SP");
-	for (i = 0; i < 30; i++) {
-		char name[4];
-
-		snprintf(name, sizeof(name), "X%u", i);
-		show_data(regs->regs[i] - nbytes, nbytes * 2, name);
-	}
-	set_fs(fs);
-}
-
 static void sprd_dump_regs(struct pt_regs *regs)
 {
 	int i, top_reg;
@@ -416,9 +445,17 @@ static void sprd_dump_regs(struct pt_regs *regs)
 		sp = regs->sp;
 		top_reg = 29;
 	}
-	SEQ_printf(sprd_sr_seq_buf, "pc : %016llx\n", regs->pc);
-	SEQ_printf(sprd_sr_seq_buf, "lr : %016llx\n", lr);
+	if (!user_mode(regs)) {
+		SEQ_printf(sprd_sr_seq_buf, "pc : %pS\n", (void *)regs->pc);
+		SEQ_printf(sprd_sr_seq_buf, "lr : %pS\n", (void *)lr);
+	} else {
+		SEQ_printf(sprd_sr_seq_buf, "pc : %016llx\n", regs->pc);
+		SEQ_printf(sprd_sr_seq_buf, "lr : %016llx\n", lr);
+	}
 	SEQ_printf(sprd_sr_seq_buf, "sp : %016llx pstate : %08llx\n", sp, regs->pstate);
+
+	if (system_uses_irq_prio_masking())
+		SEQ_printf(sprd_sr_seq_buf, "pmr_save: %08llx\n", regs->pmr_save);
 
 	i = top_reg;
 	while (i >= 0) {
@@ -432,8 +469,6 @@ static void sprd_dump_regs(struct pt_regs *regs)
 
 		SEQ_printf(sprd_sr_seq_buf, "\n");
 	}
-	if (!user_mode(regs))
-		dump_extra_register_data(regs, 128);
 	SEQ_printf(sprd_sr_seq_buf, "\n");
 }
 #else
@@ -500,7 +535,7 @@ static void sprd_dump_regs(struct pt_regs *regs)
 		if ((domain & domain_mask(DOMAIN_USER)) ==
 		    domain_val(DOMAIN_USER, DOMAIN_NOACCESS))
 			segment = "none";
-		else if (fs == get_ds())
+		else if (fs == KERNEL_DS)
 			segment = "kernel";
 		else
 			segment = "user";
@@ -538,6 +573,7 @@ static void sprd_dump_regs(struct pt_regs *regs)
 	SEQ_printf(sprd_sr_seq_buf, "\n");
 }
 #endif
+
 void sprd_dump_stack_reg(int cpu, struct pt_regs *pregs)
 {
 	int i;
@@ -557,6 +593,9 @@ void sprd_dump_stack_reg(int cpu, struct pt_regs *pregs)
 #ifdef CONFIG_FUNCTION_GRAPH_TRACER
 	frame.graph = 0;
 #endif
+	bitmap_zero(frame.stacks_done, __NR_STACK_TYPES);
+	frame.prev_fp = 0;
+	frame.prev_type = STACK_TYPE_UNKNOWN;
 #else
 	frame.fp = pregs->ARM_fp;
 	frame.sp = pregs->ARM_sp;
@@ -564,7 +603,6 @@ void sprd_dump_stack_reg(int cpu, struct pt_regs *pregs)
 	frame.pc = pregs->ARM_pc;
 	sp = pregs->ARM_sp;
 #endif
-
 
 #ifdef CONFIG_VMAP_STACK
 	if (!((sp >= VMALLOC_START) && (sp < VMALLOC_END))) {
@@ -578,11 +616,16 @@ void sprd_dump_stack_reg(int cpu, struct pt_regs *pregs)
 	}
 #endif
 
+	if (!sprd_virt_addr_valid(frame.pc)) {
+		SEQ_printf(sprd_sr_seq_buf, "invalid pc\n");
+		goto unlock;
+	}
 	SEQ_printf(sprd_sr_seq_buf, "callstack:\n");
-	SEQ_printf(sprd_sr_seq_buf, "[<%08lx>] (%ps)\n", frame.pc, (void *)frame.pc);
+	SEQ_printf(sprd_sr_seq_buf, "[<%08lx>] (%pS)\n", frame.pc, (void *)frame.pc);
 
 	for (i = 0; i < MAX_CALLBACK_LEVEL; i++) {
 		int urc;
+
 #ifdef CONFIG_ARM64
 		urc = unwind_frame(NULL, &frame);
 #else
@@ -591,13 +634,12 @@ void sprd_dump_stack_reg(int cpu, struct pt_regs *pregs)
 		if (urc < 0)
 			break;
 
-
 		if (!sprd_virt_addr_valid(frame.pc)) {
 			SEQ_printf(sprd_sr_seq_buf, "i=%d, sprd_virt_addr_valid fail\n", i);
 			break;
 		}
 
-		SEQ_printf(sprd_sr_seq_buf, "[<%08lx>] (%ps)\n", frame.pc, (void *)frame.pc);
+		SEQ_printf(sprd_sr_seq_buf, "[<%08lx>] (%pS)\n", frame.pc, (void *)frame.pc);
 	}
 
 	SEQ_printf(sprd_sr_seq_buf, "\n-----cpu%d regs info-----\n", cpu);
@@ -606,87 +648,30 @@ unlock:
 	raw_spin_unlock(&dump_lock);
 }
 
-static int sprd_sched_panic_event(struct notifier_block *self,
-				  unsigned long val, void *reason)
+static int sprd_add_task_stats(void)
 {
-	pr_crit("Dump runqueue/task stats...\n");
-	sprd_dump_runqueues();
-	sprd_dump_task_stats();
-
-	return NOTIFY_DONE;
-}
-
-static struct notifier_block sprd_sched_panic_event_nb = {
-	.notifier_call	= sprd_sched_panic_event,
-	.priority	= INT_MAX - 1,
-};
-
-static int __init sprd_dump_sched_init(void)
-{
-	int ret;
+	int ret = 0;
 
 	sprd_task_buf = kzalloc(SPRD_DUMP_TASK_SIZE, GFP_KERNEL);
 	if (!sprd_task_buf)
-		return -EINVAL;
+		return -ENOMEM;
 
 	sprd_task_seq_buf = kzalloc(sizeof(*sprd_task_seq_buf), GFP_KERNEL);
 	if (!sprd_task_seq_buf) {
-		ret = -EINVAL;
+		ret = -ENOMEM;
 		goto err_task_seq;
 	}
 
-	sprd_runq_buf = kzalloc(SPRD_DUMP_RQ_SIZE, GFP_KERNEL);
-	if (!sprd_runq_buf) {
+	if (minidump_add_section("task_stats", (unsigned long)(sprd_task_buf), SPRD_DUMP_TASK_SIZE)) {
 		ret = -EINVAL;
-		goto err_runq;
-	}
-
-	sprd_rq_seq_buf = kzalloc(sizeof(*sprd_rq_seq_buf), GFP_KERNEL);
-	if (!sprd_rq_seq_buf) {
-		ret = -EINVAL;
-		goto err_rq_seq;
-	}
-
-	sprd_stack_reg_buf = kzalloc(SPRD_DUMP_STACK_SIZE, GFP_KERNEL);
-	if (!sprd_stack_reg_buf) {
-		ret = -EINVAL;
-		goto err_sr_buf;
-	}
-
-	sprd_sr_seq_buf = kzalloc(sizeof(*sprd_sr_seq_buf), GFP_KERNEL);
-	if (!sprd_sr_seq_buf) {
-		ret = -EINVAL;
-		goto err_sr_seq;
-	}
-
-	if (minidump_add_section("task_stats", (unsigned long)(sprd_task_buf), SPRD_DUMP_TASK_SIZE) ||
-	    minidump_add_section("runqueue", (unsigned long)(sprd_runq_buf), SPRD_DUMP_RQ_SIZE) ||
-	    minidump_add_section("stack_regs", (unsigned long)(sprd_stack_reg_buf), SPRD_DUMP_STACK_SIZE)) {
-		ret = -EINVAL;
-		goto err_save;
+		goto err_task_save;
 	}
 
 	seq_buf_init(sprd_task_seq_buf, sprd_task_buf, SPRD_DUMP_TASK_SIZE);
-	seq_buf_init(sprd_rq_seq_buf, sprd_runq_buf, SPRD_DUMP_RQ_SIZE);
-	seq_buf_init(sprd_sr_seq_buf, sprd_stack_reg_buf, SPRD_DUMP_STACK_SIZE);
-
-	/* register sched panic notifier */
-	atomic_notifier_chain_register(&panic_notifier_list,
-					&sprd_sched_panic_event_nb);
-
-	pr_info("sprd: sched_panic_nofifier_register success\n");
 
 	return 0;
 
-err_save:
-	kfree(sprd_sr_seq_buf);
-err_sr_seq:
-	kfree(sprd_stack_reg_buf);
-err_sr_buf:
-	kfree(sprd_rq_seq_buf);
-err_rq_seq:
-	kfree(sprd_runq_buf);
-err_runq:
+err_task_save:
 	kfree(sprd_task_seq_buf);
 err_task_seq:
 	kfree(sprd_task_buf);
@@ -694,20 +679,224 @@ err_task_seq:
 	return ret;
 }
 
-static void __exit sprd_dump_sched_exit(void)
+static void sprd_free_task_stats(void)
 {
-	atomic_notifier_chain_unregister(&panic_notifier_list,
-					 &sprd_sched_panic_event_nb);
 	kfree(sprd_task_buf);
 	kfree(sprd_task_seq_buf);
+}
+
+static int sprd_add_runq_stats(void)
+{
+	int ret = 0;
+
+	sprd_runq_buf = kzalloc(SPRD_DUMP_RQ_SIZE, GFP_KERNEL);
+	if (!sprd_runq_buf)
+		return -ENOMEM;
+
+	sprd_rq_seq_buf = kzalloc(sizeof(*sprd_rq_seq_buf), GFP_KERNEL);
+	if (!sprd_rq_seq_buf) {
+		ret = -ENOMEM;
+		goto err_rq_seq;
+	}
+
+	if (minidump_add_section("runqueue", (unsigned long)(sprd_runq_buf), SPRD_DUMP_RQ_SIZE)) {
+		ret = -EINVAL;
+		goto err_rq_save;
+	}
+
+	seq_buf_init(sprd_rq_seq_buf, sprd_runq_buf, SPRD_DUMP_RQ_SIZE);
+
+	return 0;
+
+err_rq_save:
+	kfree(sprd_rq_seq_buf);
+err_rq_seq:
+	kfree(sprd_runq_buf);
+
+	return ret;
+}
+
+static void sprd_free_runq_stats(void)
+{
 	kfree(sprd_runq_buf);
 	kfree(sprd_rq_seq_buf);
+}
+
+static int sprd_add_stack_regs_stats(void)
+{
+	int ret = 0;
+
+	sprd_stack_reg_buf = kzalloc(SPRD_DUMP_STACK_SIZE, GFP_KERNEL);
+	if (!sprd_stack_reg_buf)
+		return -ENOMEM;
+
+	sprd_sr_seq_buf = kzalloc(sizeof(*sprd_sr_seq_buf), GFP_KERNEL);
+	if (!sprd_sr_seq_buf) {
+		ret = -ENOMEM;
+		goto err_sr_seq;
+	}
+
+	if (minidump_add_section("stack_regs", (unsigned long)(sprd_stack_reg_buf), SPRD_DUMP_STACK_SIZE)) {
+		ret = -EINVAL;
+		goto err_sr_save;
+	}
+
+	seq_buf_init(sprd_sr_seq_buf, sprd_stack_reg_buf, SPRD_DUMP_STACK_SIZE);
+
+	return 0;
+
+err_sr_save:
+	kfree(sprd_sr_seq_buf);
+err_sr_seq:
+	kfree(sprd_stack_reg_buf);
+
+	return ret;
+}
+
+static void sprd_free_stack_regs_stats(void)
+{
 	kfree(sprd_stack_reg_buf);
 	kfree(sprd_sr_seq_buf);
 }
 
-module_init(sprd_dump_sched_init);
-module_exit(sprd_dump_sched_exit);
+static int sprd_add_memory_stat(void)
+{
+	int ret = 0;
 
-MODULE_DESCRIPTION("kernel sched stats for Unisoc");
+	sprd_meminfo_buf = kzalloc(SPRD_DUMP_MEM_SIZE, GFP_KERNEL);
+	if (!sprd_meminfo_buf)
+		return -ENOMEM;
+
+	sprd_mem_seq_buf = kzalloc(sizeof(*sprd_mem_seq_buf), GFP_KERNEL);
+	if (!sprd_mem_seq_buf) {
+		ret = -ENOMEM;
+		goto err_mem_seq;
+	}
+	if (minidump_add_section("memstat", (unsigned long)(sprd_meminfo_buf), SPRD_DUMP_MEM_SIZE)) {
+		ret = -EINVAL;
+		goto err_save;
+	}
+
+	seq_buf_init(sprd_mem_seq_buf, sprd_meminfo_buf, SPRD_DUMP_MEM_SIZE);
+
+	return 0;
+
+err_save:
+	kfree(sprd_mem_seq_buf);
+err_mem_seq:
+	kfree(sprd_meminfo_buf);
+
+	return ret;
+}
+static void sprd_free_memory_stat(void)
+{
+	kfree(sprd_meminfo_buf);
+	kfree(sprd_mem_seq_buf);
+}
+
+void sprd_dump_mem_stat(void)
+{
+	if (!sprd_mem_seq_buf || !sprd_meminfo_buf)
+		return;
+	SEQ_printf(sprd_mem_seq_buf, "-----MemInfo-----\n\n");
+	sprd_dump_meminfo();
+	SEQ_printf(sprd_mem_seq_buf, "\n\n-----Vmstat-----\n\n");
+	sprd_dump_vmstat();
+	SEQ_printf(sprd_mem_seq_buf, "\n\n-----BuddyInfo-----\n\n");
+	sprd_dump_buddyinfo();
+	SEQ_printf(sprd_mem_seq_buf, "\n\n-----ZoneInfo-----\n\n");
+	sprd_dump_zoneinfo();
+	SEQ_printf(sprd_mem_seq_buf, "\n\n-----PagetypeInfo-----\n\n");
+	sprd_dump_pagetypeinfo();
+	flush_cache_all();
+}
+
+static int sprd_add_interrupt_stat(void)
+{
+	int ret = 0;
+
+	sprd_irqstat_buf = kzalloc(SPRD_DUMP_IRQ_SIZE, GFP_KERNEL);
+	if (!sprd_irqstat_buf)
+		return -ENOMEM;
+
+	sprd_irqstat_seq_buf = kzalloc(sizeof(*sprd_irqstat_seq_buf), GFP_KERNEL);
+	if (!sprd_irqstat_seq_buf) {
+		ret = -ENOMEM;
+		goto err_irqstat_seq;
+	}
+
+	if (minidump_add_section("interruptes", (unsigned long)(sprd_irqstat_buf), SPRD_DUMP_IRQ_SIZE)) {
+		ret = -EINVAL;
+		goto err_save;
+	}
+
+	seq_buf_init(sprd_irqstat_seq_buf, sprd_irqstat_buf, SPRD_DUMP_IRQ_SIZE);
+
+	return 0;
+
+err_save:
+	kfree(sprd_irqstat_seq_buf);
+err_irqstat_seq:
+	kfree(sprd_irqstat_buf);
+
+	return ret;
+}
+static void sprd_free_interrupt_stat(void)
+{
+	kfree(sprd_irqstat_buf);
+	kfree(sprd_irqstat_seq_buf);
+}
+
+static int sprd_kmsg_panic_event(struct notifier_block *self,
+				  unsigned long val, void *reason)
+{
+	sprd_dump_runqueues();
+	sprd_dump_task_stats();
+	sprd_dump_mem_stat();
+	sprd_dump_interrupts();
+
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block sprd_kmsg_panic_event_nb = {
+	.notifier_call	= sprd_kmsg_panic_event,
+	.priority	= INT_MAX - 1,
+};
+
+static int __init sprd_dump_msg_init(void)
+{
+
+	sprd_add_task_stats();
+	sprd_add_runq_stats();
+	sprd_add_stack_regs_stats();
+	sprd_add_memory_stat();
+	sprd_add_interrupt_stat();
+	minidump_add_irq_stack();
+	minidump_add_current_stack();
+
+	/* register sched panic notifier */
+	atomic_notifier_chain_register(&panic_notifier_list,
+					&sprd_kmsg_panic_event_nb);
+
+	pr_info("sprd_kmsg_panic_notifier_register success!\n");
+
+	return 0;
+
+}
+
+static void __exit sprd_dump_msg_exit(void)
+{
+	atomic_notifier_chain_unregister(&panic_notifier_list,
+					 &sprd_kmsg_panic_event_nb);
+	sprd_free_task_stats();
+	sprd_free_runq_stats();
+	sprd_free_stack_regs_stats();
+	sprd_free_memory_stat();
+	sprd_free_interrupt_stat();
+}
+
+late_initcall_sync(sprd_dump_msg_init);
+module_exit(sprd_dump_msg_exit);
+
+MODULE_DESCRIPTION("kernel kmsg stats for Unisoc");
 MODULE_LICENSE("GPL");

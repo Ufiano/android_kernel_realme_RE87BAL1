@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (C) 2018 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #include <linux/clk.h>
@@ -17,6 +9,7 @@
 #include <linux/mfd/syscon.h>
 #include <linux/regmap.h>
 #include <linux/io.h>
+#include <linux/of_address.h>
 
 #include "sprd_dpu.h"
 
@@ -37,16 +30,10 @@ static struct dpu_clk_context {
 	struct clk *clk_dpu_dpi;
 } dpu_clk_ctx;
 
-static struct qos_thres {
-	u8 awqos_thres;
-	u8 arqos_thres;
-} qos_cfg;
-
 enum {
 	CLK_DPI_DIV6 = 6,
 	CLK_DPI_DIV8 = 8
 };
-
 
 static const u32 dpu_core_clk[] = {
 	256000000,
@@ -69,7 +56,7 @@ static struct dpu_glb_context {
 	unsigned int enable_reg;
 	unsigned int mask_bit;
 	struct regmap *regmap;
-} ctx_reset, vau_reset, ctx_qos;
+} ctx_reset, vau_reset;
 
 static struct clk *val_to_clk(struct dpu_clk_context *ctx, u32 val)
 {
@@ -201,8 +188,6 @@ static struct clk *div_to_clk(struct dpu_clk_context *clk_ctx, u32 clk_div)
 		return NULL;
 	}
 }
-
-
 static int dpu_clk_init(struct dpu_context *ctx)
 {
 	int ret;
@@ -288,6 +273,22 @@ static int dpu_clk_enable(struct dpu_context *ctx)
 	return 0;
 }
 
+int dpu_r6p0_enable_div6_clk(struct dpu_context *ctx)
+{
+	int ret;
+	struct clk *clk_src;
+	struct dpu_clk_context *clk_ctx = &dpu_clk_ctx;
+	struct sprd_dpu *dpu = (struct sprd_dpu *)container_of(ctx,
+				struct sprd_dpu, ctx);
+
+	clk_src = div_to_clk(clk_ctx, dpu->dsi->ctx.dpi_clk_div);
+	ret = clk_set_parent(clk_ctx->clk_dpu_dpi, clk_src);
+	if (ret)
+		pr_warn("set dpi clk source failed\n");
+
+	return ret;
+}
+
 static int dpu_clk_disable(struct dpu_context *ctx)
 {
 	struct dpu_clk_context *clk_ctx = &dpu_clk_ctx;
@@ -305,35 +306,25 @@ static int dpu_glb_parse_dt(struct dpu_context *ctx,
 		struct device_node *np)
 {
 	unsigned int syscon_args[2];
-	struct device_node *qos_np = NULL;
-	int ret;
 
-	ctx_reset.regmap = syscon_regmap_lookup_by_name(np, "reset");
+	ctx_reset.regmap = syscon_regmap_lookup_by_phandle_args(np,
+			"reset-syscon", 2, syscon_args);
 	if (IS_ERR(ctx_reset.regmap)) {
-		pr_warn("failed to map dpu glb reg: reset\n");
+		pr_warn("failed to reset syscon\n");
 		return PTR_ERR(ctx_reset.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "reset", 2, syscon_args);
-	if (ret == 2) {
+	}  else {
 		ctx_reset.enable_reg = syscon_args[0];
 		ctx_reset.mask_bit = syscon_args[1];
-	} else {
-		pr_warn("failed to parse dpu glb reg: reset\n");
 	}
 
-	vau_reset.regmap = syscon_regmap_lookup_by_name(np, "vau_reset");
+	vau_reset.regmap = syscon_regmap_lookup_by_phandle_args(np,
+			"vau_reset-syscon", 2, syscon_args);
 	if (IS_ERR(vau_reset.regmap)) {
-		pr_warn("failed to map dpu glb reg: vau_reset\n");
+		pr_warn("failed to vau_reset syscon\n");
 		return PTR_ERR(vau_reset.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "vau_reset", 2, syscon_args);
-	if (ret == 2) {
+	}  else {
 		vau_reset.enable_reg = syscon_args[0];
 		vau_reset.mask_bit = syscon_args[1];
-	} else {
-		pr_warn("failed to parse dpu glb reg: vau_reset\n");
 	}
 
 	clk_dpuvsp_eb =
@@ -357,39 +348,24 @@ static int dpu_glb_parse_dt(struct dpu_context *ctx,
 		clk_master_div6_eb = NULL;
 	}
 
-	ctx_qos.regmap = syscon_regmap_lookup_by_name(np, "qos");
-	if (IS_ERR(ctx_qos.regmap)) {
-		pr_warn("failed to map dpu glb reg: qos\n");
-		return PTR_ERR(ctx_qos.regmap);
-	}
-
-	ret = syscon_get_args_by_name(np, "qos", 2, syscon_args);
-	if (ret == 2) {
-		ctx_qos.enable_reg = syscon_args[0];
-		ctx_qos.mask_bit = syscon_args[1];
-	} else {
-		pr_warn("failed to parse dpu glb reg: qos\n");
-	}
-
-	qos_np = of_parse_phandle(np, "sprd,qos", 0);
-	if (!qos_np)
-		pr_warn("can't find dpu qos cfg node\n");
-
-	ret = of_property_read_u8(qos_np, "awqos-threshold",
-					&qos_cfg.awqos_thres);
-	if (ret)
-		pr_warn("read awqos-threshold failed, use default\n");
-
-	ret = of_property_read_u8(qos_np, "arqos-threshold",
-					&qos_cfg.arqos_thres);
-	if (ret)
-		pr_warn("read arqos-threshold failed, use default\n");
-
 	return 0;
 }
 
 static void dpu_glb_enable(struct dpu_context *ctx)
 {
+	int ret;
+
+	ret = clk_prepare_enable(clk_dpuvsp_disp_eb);
+	if (ret) {
+		pr_err("enable clk_dpuvsp_disp_eb failed!\n");
+		return;
+	}
+
+	ret = clk_prepare_enable(clk_dpuvsp_eb);
+	if (ret) {
+		pr_err("enable clk_dpuvsp_eb failed!\n");
+		return;
+	}
 }
 
 static void dpu_glb_disable(struct dpu_context *ctx)
@@ -432,39 +408,20 @@ static void dpu_power_domain(struct dpu_context *ctx, int enable)
 #endif
 }
 
-static struct dpu_clk_ops dpu_clk_ops = {
+const struct dpu_clk_ops qogirn6pro_dpu_clk_ops = {
 	.parse_dt = dpu_clk_parse_dt,
 	.init = dpu_clk_init,
 	.enable = dpu_clk_enable,
 	.disable = dpu_clk_disable,
 };
 
-static struct dpu_glb_ops dpu_glb_ops = {
+const struct dpu_glb_ops qogirn6pro_dpu_glb_ops = {
 	.parse_dt = dpu_glb_parse_dt,
 	.reset = dpu_reset,
 	.enable = dpu_glb_enable,
 	.disable = dpu_glb_disable,
 	.power = dpu_power_domain,
 };
-
-static struct ops_entry clk_entry = {
-	.ver = "qogirn6pro",
-	.ops = &dpu_clk_ops,
-};
-
-static struct ops_entry glb_entry = {
-	.ver = "qogirn6pro",
-	.ops = &dpu_glb_ops,
-};
-
-static int __init dpu_glb_register(void)
-{
-	dpu_clk_ops_register(&clk_entry);
-	dpu_glb_ops_register(&glb_entry);
-	return 0;
-}
-
-subsys_initcall(dpu_glb_register);
 
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Junxiao.feng@unisoc.com");

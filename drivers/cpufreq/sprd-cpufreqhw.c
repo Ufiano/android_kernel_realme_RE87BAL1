@@ -10,7 +10,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-#define pr_fmt(fmt) "sprd-cpufreqhw: " fmt
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/cpu.h>
 #include <linux/cpufreq.h>
@@ -27,10 +27,19 @@
 #include <linux/of_platform.h>
 #include "sprd-cpufreqhw.h"
 
+static const struct of_device_id sprd_hardware_cpufreq_of_match[] = {
+	{
+		.compatible = "sprd,hardware-cpufreq",
+	},
+	{
+	},
+};
 static struct cpufreq_driver sprd_hardware_cpufreq_driver;
 static unsigned long boot_done_timestamp;
 static int boost_mode_flag = 1;
 struct sprd_cpudvfs_device *plat_dev;
+EXPORT_SYMBOL_GPL(plat_dev);
+
 /*
  * sprd_hardware_dvfs_device_register - register hw dvfs module
  * @ops: hw dvfs operations
@@ -79,11 +88,10 @@ EXPORT_SYMBOL_GPL(sprd_hardware_dvfs_device_unregister);
  */
 struct sprd_cpudvfs_device *sprd_hardware_dvfs_device_get(void)
 {
-	if (plat_dev && !plat_dev->archdata) {
-		pr_err("No cpu dvfs private data found\n");
+	if (!plat_dev || !plat_dev->archdata) {
+		pr_emerg("No cpu dvfs private data found\n");
 		return NULL;
 	}
-
 	return plat_dev;
 }
 EXPORT_SYMBOL_GPL(sprd_hardware_dvfs_device_get);
@@ -250,12 +258,6 @@ static int sprd_hardware_cpufreq_init_slaves(
 	return 0;
 
 free_np:
-	for_each_set_bit(i, &c_host->sub_cluster_bits,
-			 SPRD_CPUFREQ_MAX_MODULE) {
-		kfree(cpufreq_datas[i]);
-		cpufreq_datas[i] = NULL;
-	}
-
 	if (np)
 		of_node_put(np);
 
@@ -270,10 +272,12 @@ static int sprd_hardware_cpufreq_init(struct cpufreq_policy *policy)
 	struct sprd_cpudvfs_device *pdev;
 	struct sprd_cpudvfs_ops *driver;
 	struct device_node *cpu_np;
-	unsigned int freq_Hz = 0;
+	unsigned long freq_Hz = 0;
 	struct device *cpu_dev;
 	int ret, cpu = 0;
 	int curr_cluster;
+	unsigned int cluster_cpumask;
+	unsigned int policy_trans_delay;
 
 	pdev = sprd_hardware_dvfs_device_get();
 
@@ -337,8 +341,6 @@ static int sprd_hardware_cpufreq_init(struct cpufreq_policy *policy)
 		}
 	}
 
-	mutex_lock(data->volt_lock);
-
 	data->online  = true;
 	data->cpu_dev = cpu_dev;
 	data->cluster = curr_cluster;
@@ -363,16 +365,21 @@ static int sprd_hardware_cpufreq_init(struct cpufreq_policy *policy)
 	}
 
 	/* Verify the frequency table */
-	ret = cpufreq_table_validate_and_show(policy, freq_table);
-	if (ret) {
-		pr_err("Invalid frequency table (%d)\n", ret);
-		goto free_table;
-	}
+	policy->freq_table = freq_table;
+
+	data->update_opp = sprd_cpufreq_update_opp_common;
+
+	if (!of_property_read_u32(cpufreq_of_node, "transition_delay_us",
+				   &policy_trans_delay))
+		policy->transition_delay_us = policy_trans_delay;
 
 #ifdef CONFIG_SMP
 	/* CPUs in the same cluster share a clock and power domain */
+	of_property_read_u32(cpufreq_of_node, "cpufreq-cluster-cpumask",
+			     &cluster_cpumask);
+	data->cluster_cpumask.bits[0] = cluster_cpumask;
 	cpumask_or(policy->cpus, policy->cpus,
-		   cpu_coregroup_mask(policy->cpu));
+		   &(data->cluster_cpumask));
 #endif
 
 	if (!cpufreq_datas[data->cluster])
@@ -399,8 +406,10 @@ static int sprd_hardware_cpufreq_init(struct cpufreq_policy *policy)
 		if (policy->cur < 0)
 			goto free_table;
 		if (!driver->enable(pdev->archdata,
-				    data->cluster, true))
+				    data->cluster, true)){
+			pr_err("enable failed!\n");
 			goto free_table;
+		}
 	} else {
 		goto free_table;
 	}
@@ -409,7 +418,7 @@ static int sprd_hardware_cpufreq_init(struct cpufreq_policy *policy)
 
 	policy->dvfs_possible_from_any_cpu = true;
 
-	mutex_unlock(data->volt_lock);
+	dev_pm_opp_of_register_em(policy->cpus);
 
 	goto free_np;
 
@@ -422,7 +431,6 @@ free_opp:
 
 free_mem:
 	if (data->volt_lock) {
-		mutex_unlock(data->volt_lock);
 		mutex_destroy(data->volt_lock);
 		kfree(data->volt_lock);
 	}
@@ -468,15 +476,15 @@ static int sprd_hardware_cpufreq_exit(struct cpufreq_policy *policy)
 	ret = driver->enable(pdev->archdata,
 		       topology_physical_package_id(policy->cpu), false);
 	policy->driver_data = NULL;
-	data->online  = false;
 	mutex_unlock(data->volt_lock);
 
 	return ret;
 }
 
-static int sprd_hardware_cpufreq_table_verify(struct cpufreq_policy *policy)
+static int sprd_hardware_cpufreq_table_verify(struct cpufreq_policy_data
+					      *policy_data)
 {
-	return cpufreq_generic_frequency_table_verify(policy);
+	return cpufreq_generic_frequency_table_verify(policy_data);
 }
 
 static unsigned int sprd_hardware_cpufreq_get(unsigned int cpu)
@@ -506,11 +514,6 @@ static int sprd_hardware_cpufreq_suspend(struct cpufreq_policy *policy)
 		return 0;
 	}
 
-	if (boost_mode_flag) {
-		sprd_hardware_cpufreq_set_boost(0);
-		sprd_hardware_cpufreq_driver.boost_enabled = false;
-	}
-
 	return cpufreq_generic_suspend(policy);
 }
 
@@ -528,7 +531,8 @@ static struct cpufreq_driver sprd_hardware_cpufreq_driver = {
 	.name = "sprd-cpufreq",
 	.flags = CPUFREQ_STICKY
 			| CPUFREQ_NEED_INITIAL_FREQ_CHECK
-			| CPUFREQ_HAVE_GOVERNOR_PER_POLICY,
+			| CPUFREQ_HAVE_GOVERNOR_PER_POLICY
+			| CPUFREQ_IS_COOLING_DEV,
 	.init = sprd_hardware_cpufreq_init,
 	.exit = sprd_hardware_cpufreq_exit,
 	.verify = sprd_hardware_cpufreq_table_verify,
@@ -548,6 +552,7 @@ static int sprd_hardware_cpufreq_probe(struct platform_device *pdev)
 	struct device_node *cpu_np;
 	struct nvmem_cell *cell;
 	int ret;
+	struct sprd_cpudvfs_device *dvfs_dev;
 	int cpu = 0; /* just core0 do probe */
 
 	boot_done_timestamp = jiffies + SPRD_CPUFREQ_DRV_BOOST_DURATOIN;
@@ -571,14 +576,18 @@ static int sprd_hardware_cpufreq_probe(struct platform_device *pdev)
 		return -ENOENT;
 	}
 
+	dvfs_dev = sprd_hardware_dvfs_device_get();
+	if (!dvfs_dev) {
+		pr_err("can't get dvfs_dev in hardware cpufreq\n");
+		ret = -EPROBE_DEFER;
+		goto exit;
+	}
 	cell = of_nvmem_cell_get(np, "dvfs_bin");
 	ret = PTR_ERR(cell);
 	if (!IS_ERR(cell))
 		nvmem_cell_put(cell);
 	else if (ret == -EPROBE_DEFER)
 		goto exit;
-
-	sprd_cpufreq_cpuhp_setup();
 
 	ret = cpufreq_register_driver(&sprd_hardware_cpufreq_driver);
 	if (ret)
@@ -601,24 +610,24 @@ static int sprd_hardware_cpufreq_remove(struct platform_device *pdev)
 static struct platform_driver sprd_hardware_cpufreq_platdrv = {
 	.driver = {
 		.name	= "sprd-hardware-cpufreq",
-		.owner	= THIS_MODULE,
+		.of_match_table = sprd_hardware_cpufreq_of_match,
 	},
 	.probe		= sprd_hardware_cpufreq_probe,
 	.remove		= sprd_hardware_cpufreq_remove,
 };
 
-module_platform_driver(sprd_hardware_cpufreq_platdrv);
-
-static struct platform_device sprd_hardware_cpufreq_pdev = {
-	.name = "sprd-hardware-cpufreq",
-};
-
-static int  __init sprd_hardware_cpufreq_init_pdev(void)
+static int __init sprd_hardware_cpufreq_common_init(void)
 {
-	return platform_device_register(&sprd_hardware_cpufreq_pdev);
+	return platform_driver_register(&sprd_hardware_cpufreq_platdrv);
 }
 
-device_initcall(sprd_hardware_cpufreq_init_pdev);
+static void __exit sprd_hardware_cpufreq_common_exit(void)
+{
+	return platform_driver_unregister(&sprd_hardware_cpufreq_platdrv);
+}
+
+device_initcall(sprd_hardware_cpufreq_common_init);
+module_exit(sprd_hardware_cpufreq_common_exit);
 
 MODULE_DESCRIPTION("sprd hardware cpufreq driver");
 MODULE_LICENSE("GPL v2");

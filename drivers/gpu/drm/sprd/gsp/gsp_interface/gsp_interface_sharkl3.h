@@ -1,14 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (C) 2017 Spreadtrum Communications Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2020 Unisoc Inc.
  */
 
 #ifndef _GSP_INTERFACE_SHARKL3_H
@@ -32,7 +24,7 @@ struct gsp_interface_sharkl3 {
 };
 
 int gsp_interface_sharkl3_parse_dt(struct gsp_interface *intf,
-				  struct device_node *node);
+				struct device_node *node);
 
 int gsp_interface_sharkl3_init(struct gsp_interface *intf);
 int gsp_interface_sharkl3_deinit(struct gsp_interface *intf);

@@ -10,9 +10,11 @@
 #include <linux/tty_ldisc.h>
 #include <linux/mutex.h>
 #include <linux/tty_flags.h>
+#include <linux/seq_file.h>
 #include <uapi/linux/tty.h>
 #include <linux/rwsem.h>
 #include <linux/llist.h>
+#include <linux/android_kabi.h>
 
 
 /*
@@ -217,6 +219,8 @@ struct tty_port_operations {
 	int (*activate)(struct tty_port *port, struct tty_struct *tty);
 	/* Called on the final put of a port */
 	void (*destruct)(struct tty_port *port);
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 struct tty_port_client_operations {
@@ -251,6 +255,8 @@ struct tty_port {
 						   set to size of fifo */
 	struct kref		kref;		/* Ref counter */
 	void 			*client_data;
+
+	ANDROID_KABI_RESERVE(1);
 };
 
 /* tty_port::iflags bits -- use atomic bit ops */
@@ -341,6 +347,9 @@ struct tty_struct {
 	/* If the tty has a pending do_SAK, queue it here - akpm */
 	struct work_struct SAK_work;
 	struct tty_port *port;
+
+	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
 } __randomize_layout;
 
 /* Each of a tty's open files has private_data pointing to tty_file_private */
@@ -540,7 +549,7 @@ static inline speed_t tty_get_baud_rate(struct tty_struct *tty)
 }
 
 extern void tty_termios_copy_hw(struct ktermios *new, struct ktermios *old);
-extern int tty_termios_hw_change(struct ktermios *a, struct ktermios *b);
+extern int tty_termios_hw_change(const struct ktermios *a, const struct ktermios *b);
 extern int tty_set_termios(struct tty_struct *tty, struct ktermios *kt);
 
 extern struct tty_ldisc *tty_ldisc_ref(struct tty_struct *);
@@ -548,7 +557,7 @@ extern void tty_ldisc_deref(struct tty_ldisc *);
 extern struct tty_ldisc *tty_ldisc_ref_wait(struct tty_struct *);
 extern void tty_ldisc_hangup(struct tty_struct *tty, bool reset);
 extern int tty_ldisc_reinit(struct tty_struct *tty, int disc);
-extern const struct file_operations tty_ldiscs_proc_fops;
+extern const struct seq_operations tty_ldiscs_seq_ops;
 
 extern void tty_wakeup(struct tty_struct *tty);
 extern void tty_ldisc_flush(struct tty_struct *tty);
@@ -568,6 +577,7 @@ extern struct tty_struct *tty_init_dev(struct tty_driver *driver, int idx);
 extern void tty_release_struct(struct tty_struct *tty, int idx);
 extern int tty_release(struct inode *inode, struct file *filp);
 extern void tty_init_termios(struct tty_struct *tty);
+extern void tty_save_termios(struct tty_struct *tty);
 extern int tty_standard_install(struct tty_driver *driver,
 		struct tty_struct *tty);
 
@@ -757,8 +767,6 @@ static inline int tty_audit_push(void)
 
 /* tty_ioctl.c */
 extern int n_tty_ioctl_helper(struct tty_struct *tty, struct file *file,
-		       unsigned int cmd, unsigned long arg);
-extern long n_tty_compat_ioctl_helper(struct tty_struct *tty, struct file *file,
 		       unsigned int cmd, unsigned long arg);
 
 /* vt.c */

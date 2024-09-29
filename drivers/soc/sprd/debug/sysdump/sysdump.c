@@ -13,6 +13,7 @@
 
 #define pr_fmt(fmt)  "sprd-sysdump: " fmt
 
+#include <linux/atomic.h>
 #include <asm/cacheflush.h>
 #include <linux/delay.h>
 #include <linux/elf.h>
@@ -26,6 +27,7 @@
 #include <linux/miscdevice.h>
 #include <linux/mm.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/of.h>
 #include <linux/proc_fs.h>
 #include <linux/reboot.h>
@@ -41,9 +43,13 @@
 #ifdef CONFIG_SPRD_SIPC
 #include <linux/sipc.h>
 #endif
+/* sysdump */
 #include "sysdump.h"
 #include "sysdumpdb.h"
 #include "sprd_vmcoreinfo.h"
+#include "native_hang_monitor.h"
+#include <linux/soc/sprd/sprd_sysdump.h>
+
 #include <linux/kallsyms.h>
 #include <asm/stacktrace.h>
 #include <asm-generic/kdebug.h>
@@ -65,7 +71,7 @@
 #define ELF_CORE_EFLAGS	0
 #endif
 
-
+#define CPU_NUM_MAX	8
 #define SYSDUMP_MAGIC	"SPRD_SYSDUMP_119"
 #define SYSDUMP_MAGIC_VOLUP  (0x766f7570) // v-l-u-p
 #define SYSDUMP_MAGIC_VOLDN  (0X766f646e) // v-l-d-n
@@ -81,16 +87,14 @@
 #define ANA_RST_STATUS_OFFSET_2721 (0xed8)  /* pmic 2721 rst status register offset */
 static unsigned int pmic_reg;
 
-#ifdef CONFIG_SPRD_MINI_SYSDUMP /*	minidump code start	*/
+/* minidump common data */
+#define MINIDUMP_MAGIC	"SPRD_MINIDUMP"
 #define REG_SP_INDEX	31
 #define REG_PC_INDEX	32
+#define REG_MEM_SIZE	(PAGE_SIZE * 2)
 extern void stext(void);
 struct pt_regs pregs_die_g;
-int  die_notify_flag;
 struct pt_regs minidump_regs_g;
-static int prepare_minidump_info(struct pt_regs *regs);
-struct info_desc minidump_info_desc_g;
-unsigned int pt_data_len;
 
 struct minidump_info  minidump_info_g =	{
 	.kernel_magic			=	KERNEL_MAGIC,
@@ -112,7 +116,7 @@ struct minidump_info  minidump_info_g =	{
 #endif
 	},
 	.regs_memory_info		=	{
-		.per_reg_memory_size	=	256,
+		.per_reg_memory_size	=	REG_MEM_SIZE,
 		.valid_reg_num	=	0,
 	},
 	.section_info_total		=	{
@@ -122,15 +126,8 @@ struct minidump_info  minidump_info_g =	{
 			{"bss", (unsigned long)__bss_start, (unsigned long)__bss_stop, 0, 0, 0},
 			{"init", (unsigned long)__init_begin, (unsigned long)__init_end, 0, 0, 0},
 			{"inittext", (unsigned long)_sinittext, (unsigned long)_einittext, 0, 0, 0},
-			{"rodata", (unsigned long)__start_rodata, (unsigned long)__end_rodata, 0, 0, 0},
-			{"per_cpu", (unsigned long)__per_cpu_start, (unsigned long)__per_cpu_end, 0, 0, 0},
-//			{"log_buf", 0, 0, 0, 0, 0},
-			{"ylog_buf", 0, 0, 0, 0, 0},
-			{"kernel_pt", 0, 0, 0, 0, 0},
-#ifdef CONFIG_SPRD_NATIVE_HANG_MONITOR
-			{"nhang", 0, 0, 0, 0, 0},
-#endif
-			{"etbdata_uboot.bin", 0, 0, 0, 0, 0},
+			{"rodata", (unsigned long)__start_rodata, (unsigned long)__end_rodata, 0, 0,
+			0},
 			{"", 0, 0, 0, 0, 0},
 
 		},
@@ -139,14 +136,17 @@ struct minidump_info  minidump_info_g =	{
 	},
 	.compressed			=	1,
 };
-int vaddr_to_paddr_flag;
+static int vaddr_to_paddr_flag;
+static struct mutex section_mutex;
+static atomic_t mutex_init_flag = ATOMIC_INIT(0);
 
+#ifdef CONFIG_SPRD_MINI_SYSDUMP /*      minidump code start     */
+static int  die_notify_flag;
+static int prepare_minidump_info(struct pt_regs *regs);
+static struct info_desc minidump_info_desc_g;
 static int prepare_exception_info(struct pt_regs *regs,
 			struct task_struct *tsk, const char *reason);
 static char *ylog_buffer;
-#ifdef CONFIG_SPRD_NATIVE_HANG_MONITOR
-extern void get_native_hang_monitor_buffer(unsigned long *addr, unsigned long *size, unsigned long *start);
-#endif
 #endif /*	minidump code end	*/
 typedef char note_buf_t[SYSDUMP_NOTE_BYTES];
 
@@ -154,6 +154,7 @@ static DEFINE_PER_CPU(note_buf_t, crash_notes_temp);
 note_buf_t __percpu *crash_notes;
 
 DEFINE_PER_CPU(struct sprd_debug_mmu_reg_t, sprd_debug_mmu_reg);
+DEFINE_PER_CPU(struct sprd_debug_core_t, sprd_debug_core_reg);
 
 /* An ELF note in memory */
 struct memelfnote {
@@ -168,6 +169,11 @@ struct kaslr_info {
 	uint64_t phys_offset;
 	uint64_t vabits_actual;
 };
+struct minidump_info_record {
+	char magic[20];
+	uint64_t minidump_info_paddr;
+	int minidump_info_size;
+};
 struct log_buf_info {
 	uint64_t log_buf;
 	uint32_t log_buf_len;
@@ -175,14 +181,16 @@ struct log_buf_info {
 	uint64_t log_next_idx;
 	uint64_t vmcoreinfo_size;
 };
-#if 0
 struct mmu_regs_info {
 	int sprd_pcpu_offset;
 	int cpu_id;
 	int cpu_numbers;
 	uint64_t paddr_mmu_regs_t;
 };
-#endif
+struct core_regs_info {
+	uint64_t pcpu_start_paddr;
+	uint64_t paddr_core_regs_t;
+};
 struct sysdump_info {
 	char magic[16];
 	char time[32];
@@ -193,15 +201,17 @@ struct sysdump_info {
 	unsigned long dump_mem_paddr;
 	int crash_key;
 	struct kaslr_info sprd_kaslrinfo;
+	struct minidump_info_record sprd_minidump_info;
 	struct log_buf_info sprd_logbuf_info;
-//	struct mmu_regs_info sprd_mmuregs_info;
+	struct mmu_regs_info sprd_mmuregs_info;
+	struct core_regs_info sprd_coreregs_info;
 };
 
 struct sysdump_extra {
 	int enter_id;
 	int enter_cpu;
 	char reason[256];
-	struct pt_regs cpu_context[CONFIG_NR_CPUS];
+	struct pt_regs cpu_context[CPU_NUM_MAX];
 };
 
 struct sysdump_config {
@@ -213,6 +223,7 @@ struct sysdump_config {
 };
 
 static struct sysdump_info *sprd_sysdump_info;
+static unsigned long sprd_sysdump_info_paddr;
 static unsigned long sysdump_magic_paddr;
 static int sysdump_reflag;
 
@@ -236,6 +247,7 @@ static struct sysdump_config sysdump_conf = {
 };
 
 static int sprd_sysdump_init;
+static int sprd_sysdump_shash_init;
 
 int sysdump_status;
 struct regmap *regmap;
@@ -297,6 +309,136 @@ void sprd_debug_check_crash_key(unsigned int code, int value)
 			vol_pressed = 0;
 		}
 	}
+}
+
+/**
+ * save extend debug information of modules in minidump, such as: cm4, iram...
+ *
+ * @name:	the name of the modules, and the string will be a part
+ *		of the file name.
+ *		note: special characters can't be included in the file name,
+ *		such as:'?','*','/','\','<','>',':','"','|'.
+ *
+ * @paddr_start:the start paddr in memory of the modules debug information
+ * @paddr_end:	the end paddr in memory of the modules debug information
+ *
+ * Return: 0 means success, -1 means fail.
+ */
+int minidump_save_extend_information(const char *name, unsigned long paddr_start,
+								unsigned long paddr_end)
+{
+
+	int i, j, index;
+	struct section_info *extend_section;
+	char str_name[SECTION_NAME_MAX];
+	char tmp;
+
+	/* check name valid first */
+	if (strlen(name) > (SECTION_NAME_MAX - strlen(EXTEND_STRING) - 1)) {
+		pr_err("The length of name is too long!!, add extend section fail!!\n");
+		return -1;
+	}
+	if (!strlen(name)) {
+		pr_err("The name is empty, invalid!!\n");
+		return -1;
+	}
+	memcpy(str_name, name, strlen(name));
+	for (j = 0; j < (int)strlen(str_name); j++) {
+		tmp = str_name[j];
+		if (tmp == '?' || tmp == '*' || tmp == '/' || tmp == '>' || tmp == '<'
+								|| tmp == '"' || tmp == '|') {
+			pr_err("the name=%s include special character:%c that not supported!!\n",
+					name, tmp);
+			return -1;
+		}
+	}
+	/* section_mutex only be inited once */
+	if (atomic_read(&mutex_init_flag) == 0) {
+		mutex_init(&section_mutex);
+		atomic_inc(&mutex_init_flag);
+	}
+
+	mutex_lock(&section_mutex);
+	/* check insert repeatly and acquire total seciton num before insert new section */
+	for (i = 0; i < SECTION_NUM_MAX; i++) {
+		if (!memcmp(str_name,
+				minidump_info_g.section_info_total.section_info[i].section_name,
+				strlen(str_name))) {
+			mutex_unlock(&section_mutex);
+			return -1;
+		}
+		if (!strlen(minidump_info_g.section_info_total.section_info[i].section_name))
+			break;
+	}
+	minidump_info_g.section_info_total.total_num = i;
+	index = minidump_info_g.section_info_total.total_num;
+
+	if (index >= (SECTION_NUM_MAX - 1)) {
+		pr_err("No space for new section.\n");
+		mutex_unlock(&section_mutex);
+		return -1;
+	}
+	/* add new section in the tail of section_info */
+	extend_section = &minidump_info_g.section_info_total.section_info[index];
+	sprintf(extend_section->section_name, "%s_%s", EXTEND_STRING, name);
+	if (vaddr_to_paddr_flag == 0) {
+		extend_section->section_start_vaddr = (unsigned long)__va(paddr_start);
+		extend_section->section_end_vaddr = (unsigned long)__va(paddr_end);
+	} else {
+		extend_section->section_start_paddr = paddr_start;
+		extend_section->section_end_paddr = paddr_end;
+		extend_section->section_size = (int)(extend_section->section_end_paddr -
+						extend_section->section_start_paddr);
+		minidump_info_g.section_info_total.total_size += extend_section->section_size;
+		minidump_info_g.minidump_data_size += extend_section->section_size;
+	}
+	pr_info("%s added successfully in minidump section:paddr_start=%lx,paddr_end=%lx\n",
+			name, paddr_start, paddr_end);
+	minidump_info_g.section_info_total.total_num++;
+	mutex_unlock(&section_mutex);
+	return 0;
+}
+EXPORT_SYMBOL(minidump_save_extend_information);
+
+/**
+ * save extend debug information of modules in minidump, for AP CPU HANG
+ *
+ * @name:       the name of the modules, and the string will be a part
+ *              of the file name.
+ *              note:
+ *              special characters can't be included in the file name,
+ *              such as:'?','*','/','\','<','>',':','"','|'.
+ *
+ * @paddr_start:the start paddr in memory of the modules debug information
+ * @paddr_end:  the end paddr in memory of the modules debug information
+ * note: print function can't be used in this function
+ * Return: 0 means success, -1 means fail.
+ */
+int minidump_change_extend_information(const char *name, unsigned long paddr_start,
+		unsigned long paddr_end)
+{
+	int i;
+	char str_name[SECTION_NAME_MAX];
+
+	if (strlen(name) > (SECTION_NAME_MAX - strlen(EXTEND_STRING) - 1))
+		return -1;
+
+	sprintf(str_name, "%s_%s", EXTEND_STRING, name);
+
+	for (i = 0; i < SECTION_NUM_MAX; i++) {
+		if (!strlen(minidump_info_g.section_info_total.section_info[i].section_name))
+			return -1;
+		if (!memcmp(minidump_info_g.section_info_total.section_info[i].section_name, str_name,
+					strlen(str_name)))
+			break;
+	}
+	if (i >= SECTION_NUM_MAX)
+		return -1;
+
+	minidump_info_g.section_info_total.section_info[i].section_start_paddr = paddr_start;
+	minidump_info_g.section_info_total.section_info[i].section_end_paddr = paddr_end;
+
+	return 0;
 }
 
 static char *storenote(struct memelfnote *men, char *bufp)
@@ -368,7 +510,10 @@ void crash_note_save_cpu(struct pt_regs *regs, int cpu)
 	notes.data = &prstatus;
 
 	memset(&prstatus, 0, sizeof(struct elf_prstatus));
-	fill_prstatus(&prstatus, current, 0);
+	if (virt_addr_valid(current))
+		fill_prstatus(&prstatus, current, 0);
+	else
+		return;
 	memcpy(&prstatus.pr_reg, regs, DUMP_REGS_SIZE);
 	/* memcpy(&prstatus.pr_reg, regs, sizeof(struct pt_regs)); */
 	storenote(&notes, (char *)per_cpu_ptr(crash_notes, cpu));
@@ -384,7 +529,7 @@ static void sysdump_fill_core_hdr(struct pt_regs *regs, char *bufp)
 	/* setup ELF PT_NOTE program header */
 	nhdr = (struct elf_phdr *)bufp;
 	memset(nhdr, 0, sizeof(struct elf_phdr));
-	nhdr->p_memsz = SYSDUMP_NOTE_BYTES * NR_CPUS;
+	nhdr->p_memsz = SYSDUMP_NOTE_BYTES * CPU_NUM_MAX;
 
 	return;
 }
@@ -398,6 +543,7 @@ static int __init sysdump_magic_setup(char *str)
 		 __func__, sysdump_magic_paddr);
 	return 1;
 }
+__setup("sysdump_magic=", sysdump_magic_setup);
 /* get sysdump reserve flag from uboot
  * sysdump_reflag: 1 sysdump reserved in dts
  *		   0 sysdump don't reserved in dts
@@ -410,7 +556,6 @@ static int __init sysdump_reflag_setup(char *str)
 		__func__, sysdump_reflag);
 	return 1;
 }
-__setup("sysdump_magic=", sysdump_magic_setup);
 __setup("sysdump_re_flag=", sysdump_reflag_setup);
 
 static unsigned long get_sprd_sysdump_info_paddr(void)
@@ -449,16 +594,17 @@ static unsigned long get_sprd_sysdump_info_paddr(void)
 	}
 	return reg_phy;
 }
-static int kaslr_info_init(void)
+static int sysdump_info_init(void)
 {
 	/*get_sprd_sysdump_info_paddr(); */
-	unsigned long sprd_sysdump_info_paddr;
 	sprd_sysdump_info_paddr = get_sprd_sysdump_info_paddr();
 	if (!sprd_sysdump_info_paddr) {
 		pr_err("get sprd_sysdump_info_paddr failed.\n");
 		return -1;
 	}
 	sprd_sysdump_info = (struct sysdump_info *)phys_to_virt(sprd_sysdump_info_paddr);
+
+	sprd_sysdump_init = 1;
 
 	/* can't write anything at SPRD_SYSDUMP_MAGIC before rootfs init */
 	if (sysdump_reflag) {
@@ -470,7 +616,6 @@ static int kaslr_info_init(void)
 		sprd_sysdump_info->sprd_kaslrinfo.vabits_actual = (uint64_t)VA_BITS;
 		pr_emerg("[%s]vmcore info init end!\n", __func__);
 #endif
-
 		/* get log_buf info */
 #ifdef CONFIG_KALLSYMS
 		sprd_sysdump_info->sprd_logbuf_info.log_buf =
@@ -483,28 +628,33 @@ static int kaslr_info_init(void)
 		sprd_sysdump_info->sprd_logbuf_info.log_buf_len = log_buf_len_get();
 		sprd_sysdump_info->sprd_logbuf_info.vmcoreinfo_size =
 			__pa(&vmcoreinfo_size);
-#if 0
 		/* get mmu regs info */
 		sprd_sysdump_info->sprd_mmuregs_info.paddr_mmu_regs_t =
 			__pa(&per_cpu(sprd_debug_mmu_reg, smp_processor_id()));
 		sprd_sysdump_info->sprd_mmuregs_info.cpu_id = smp_processor_id();
 		sprd_sysdump_info->sprd_mmuregs_info.sprd_pcpu_offset = __per_cpu_offset[1] -
 			__per_cpu_offset[0];
-		sprd_sysdump_info->sprd_mmuregs_info.cpu_numbers = CONFIG_NR_CPUS;
-#endif
+		sprd_sysdump_info->sprd_mmuregs_info.cpu_numbers = CPU_NUM_MAX;
+		/* get core regs info */
+		sprd_sysdump_info->sprd_coreregs_info.paddr_core_regs_t =
+			 __pa(&per_cpu(sprd_debug_core_reg, smp_processor_id()));
 	}
+
 	return 0;
 
 }
 static void sysdump_prepare_info(int enter_id, const char *reason,
 				 struct pt_regs *regs)
 {
-	struct timex txc;
+	struct timespec64 ts;
 	struct rtc_time tm;
 
 	strncpy(sprd_sysdump_extra.reason,
 		reason, sizeof(sprd_sysdump_extra.reason)-1);
 	sprd_sysdump_extra.enter_id = enter_id;
+
+	if (!sprd_sysdump_info_paddr)
+		return;
 	memcpy(sprd_sysdump_info->magic, SYSDUMP_MAGIC,
 	       sizeof(sprd_sysdump_info->magic));
 
@@ -515,9 +665,8 @@ static void sysdump_prepare_info(int enter_id, const char *reason,
 
 	pr_info("reason: %s, sprd_sysdump_info->crash_key: %d\n",
 		 reason, sprd_sysdump_info->crash_key);
-	do_gettimeofday(&(txc.time));
-	txc.time.tv_sec -= sys_tz.tz_minuteswest * 60;
-	rtc_time_to_tm(txc.time.tv_sec, &tm);
+	ktime_get_ts64(&ts);
+	rtc_time_to_tm(ts.tv_sec, &tm);
 	sprintf(sprd_sysdump_info->time, "%04d-%02d-%02d_%02d:%02d:%02d",
 		tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour,
 		tm.tm_min, tm.tm_sec);
@@ -531,8 +680,6 @@ static void sysdump_prepare_info(int enter_id, const char *reason,
 	return;
 }
 
-DEFINE_PER_CPU(struct sprd_debug_core_t, sprd_debug_core_reg);
-//DEFINE_PER_CPU(struct sprd_debug_mmu_reg_t, sprd_debug_mmu_reg);
 
 static inline void sprd_debug_save_context(void)
 {
@@ -560,21 +707,20 @@ static int sysdump_panic_event(struct notifier_block *self,
 	pr_emerg("(%s) ------ in (%d)\n", __func__, enter_id);
 	bust_spinlocks(1);
 	if (sprd_sysdump_init == 0) {
-		unsigned long sprd_sysdump_info_paddr;
 		sprd_sysdump_info_paddr = get_sprd_sysdump_info_paddr();
 		if (!sprd_sysdump_info_paddr) {
 			pr_emerg("get sprd_sysdump_info_paddr failed!!!.\n");
-			return -1;
+		} else {
+			sprd_sysdump_info =
+				(struct sysdump_info *)phys_to_virt(sprd_sysdump_info_paddr);
+			pr_emerg("vaddr is %p, paddr is %p.\n", sprd_sysdump_info,
+				(void *)sprd_sysdump_info_paddr);
 		}
-
-		sprd_sysdump_info = (struct sysdump_info *)phys_to_virt(sprd_sysdump_info_paddr);
-		pr_emerg("vaddr is %p, paddr is %p.\n", sprd_sysdump_info, (void *)sprd_sysdump_info_paddr);
 		crash_notes = &crash_notes_temp;
 	}
 
 	/* this should before smp_send_stop() to make sysdump_ipi enable */
 	sprd_sysdump_extra.enter_cpu = smp_processor_id();
-
 	pregs = &sprd_sysdump_extra.cpu_context[sprd_sysdump_extra.enter_cpu];
 	crash_setup_regs((struct pt_regs *)pregs, NULL);
 
@@ -615,7 +761,7 @@ static int sysdump_panic_event(struct notifier_block *self,
 		prepare_exception_info(pregs, NULL, reason);
 	}
 #endif
-	if (sprd_sysdump_init) {
+	if (sprd_sysdump_shash_init) {
 		pr_emerg("KTXT VERIFY...\n");
 		crypto_shash_update(desc, (u8 *)_stext, _etext-_stext);
 		crypto_shash_final(desc, g_ktxt_hash_data);
@@ -746,11 +892,11 @@ static int sprd_sysdump_open(struct inode *inode, struct file *file)
 static ssize_t sprd_sysdump_write(struct file *file, const char __user *buf,
 				size_t count, loff_t *data)
 {
-	char sysdump_buf[5] = {0};
+	char sysdump_buf[SYSDUMP_PROC_BUF_LEN] = {0};
 	int *test = NULL;
 
-	pr_info("%s: start!!!\n", __func__);
-	if (count) {
+	pr_debug("%s: start!!!\n", __func__);
+	if (count && (count < SYSDUMP_PROC_BUF_LEN)) {
 		if (copy_from_user(sysdump_buf, buf, count)) {
 			pr_err("%s: copy_from_user failed!!!\n", __func__);
 			return -1;
@@ -774,7 +920,7 @@ static ssize_t sprd_sysdump_write(struct file *file, const char __user *buf,
 		}
 	}
 
-	pr_info("%s: End!!!\n", __func__);
+	pr_debug("%s: End!!!\n", __func__);
 	return count;
 }
 
@@ -935,14 +1081,14 @@ static int sysdump_shash_init(void)
 		goto error_no_desc;
 
 	desc->tfm = tfm;
-	desc->flags = CRYPTO_TFM_REQ_MAY_SLEEP;
+//	desc->flags = CRYPTO_TFM_REQ_MAY_SLEEP;
 
 	ret = crypto_shash_init(desc);
 	if (ret < 0) {
 		pr_err("crypto_shash_init fail(%d)!\n", ret);
 		return ret;
 	}
-
+	sprd_sysdump_shash_init = 1;
 	return 0;
 error_no_desc:
 	crypto_free_shash(tfm);
@@ -1002,7 +1148,8 @@ void prepare_minidump_reg_memory(struct pt_regs *regs)
 			pr_debug("addr: %lx\n", addr);
 
 		} else {
-			addr = regs->regs[i] - minidump_info_g.regs_memory_info.per_reg_memory_size / 2;
+			addr = regs->regs[i] - minidump_info_g.regs_memory_info.per_reg_memory_size
+				/ 2;
 			pr_debug("R%d: %llx\n", i, regs->regs[i]);
 			pr_debug("addr: %lx\n", addr);
 		}
@@ -1018,7 +1165,8 @@ void prepare_minidump_reg_memory(struct pt_regs *regs)
 		pr_debug("reg[%d] paddr: %lx\n",
 			 i, minidump_info_g.regs_memory_info.reg_paddr[i]);
 	}
-	minidump_info_g.regs_memory_info.size = minidump_info_g.regs_memory_info.valid_reg_num * minidump_info_g.regs_memory_info.per_reg_memory_size;
+	minidump_info_g.regs_memory_info.size = minidump_info_g.regs_memory_info.valid_reg_num *
+					 minidump_info_g.regs_memory_info.per_reg_memory_size;
 	pr_debug("size : %d\n", minidump_info_g.regs_memory_info.size);
 	set_fs(fs);
 	return;
@@ -1072,7 +1220,8 @@ void show_minidump_info(struct minidump_info *minidump_infop)
 }
 
 /*	Here we prepare minidump all info
-	| minidump_info | struct pt_regs | memory amount regs | sections | others(just like kernel logbuf ) |
+	| minidump_info | struct pt_regs | memory amount regs | sections | others(just like kernel
+	logbuf ) |
 */
 static int prepare_minidump_info(struct pt_regs *regs)
 {
@@ -1087,7 +1236,9 @@ static int prepare_minidump_info(struct pt_regs *regs)
 		pr_err("%s regs NULL .\n", __func__);
 	}
 
-	minidump_info_g.minidump_data_size =  minidump_info_g.regs_info.size + minidump_info_g.regs_memory_info.size + minidump_info_g.section_info_total.total_size;
+	minidump_info_g.minidump_data_size =  minidump_info_g.regs_info.size +
+				minidump_info_g.regs_memory_info.size +
+				minidump_info_g.section_info_total.total_size;
 
 	/*	sections part: we have got all info when init, here do nothing */
 	show_minidump_info(&minidump_info_g);
@@ -1108,161 +1259,63 @@ static int dump_die_cb(struct notifier_block *nb, unsigned long reason, void *ar
 static struct notifier_block dump_die_notifier = {
 	.notifier_call = dump_die_cb
 };
-void section_info_ylog_buf(int section_index)
+
+static void section_info_ylog_buf(void)
 {
-	int i = section_index;
+	int ret;
 	long vaddr = (long)(ylog_buffer);;
 
-	pr_info("%s in. vaddr : 0x%lx  len :0x%x  section_index: %d\n",
-		 __func__, vaddr, YLOG_BUF_SIZE, i);
-	minidump_info_g.section_info_total.section_info[i].section_start_vaddr = vaddr;
-	minidump_info_g.section_info_total.section_info[i].section_end_vaddr = vaddr + YLOG_BUF_SIZE;
-	minidump_info_g.section_info_total.section_info[i].section_start_paddr = __pa(minidump_info_g.section_info_total.section_info[i].section_start_vaddr);
-	minidump_info_g.section_info_total.section_info[i].section_end_paddr = __pa(minidump_info_g.section_info_total.section_info[i].section_end_vaddr);
-	minidump_info_g.section_info_total.section_info[i].section_size = YLOG_BUF_SIZE;
+	pr_info("%s in. vaddr : 0x%lx  len :0x%x\n",
+		 __func__, vaddr, YLOG_BUF_SIZE);
+	ret = minidump_save_extend_information("ylog_buf", __pa(vaddr),
+						__pa(vaddr + YLOG_BUF_SIZE));
+	if (!ret)
+		pr_info("ylog_buf added to minidump section ok!!\n");
 }
 
 #ifdef CONFIG_SPRD_NATIVE_HANG_MONITOR
-void section_native_hang(int section_index)
+static void section_native_hang(void)
 {
-	int i = section_index;
-	long vaddr, len, start;
+	int ret;
+	unsigned long vaddr, len, start;
 
 	get_native_hang_monitor_buffer(&vaddr, &len, &start);
-	pr_emerg("%s in. \n",  __func__);
-	minidump_info_g.section_info_total.section_info[i].section_start_vaddr = vaddr;
-	minidump_info_g.section_info_total.section_info[i].section_end_vaddr = vaddr + len;
-	minidump_info_g.section_info_total.section_info[i].section_start_paddr = __pa(minidump_info_g.section_info_total.section_info[i].section_start_vaddr);
-	minidump_info_g.section_info_total.section_info[i].section_end_paddr = __pa(minidump_info_g.section_info_total.section_info[i].section_end_vaddr);
-	minidump_info_g.section_info_total.section_info[i].section_size = len;
-	pr_emerg("%s out.\n", __func__);
+	pr_debug("%s in.\n", __func__);
+	ret = minidump_save_extend_information("nhang", __pa(vaddr), __pa(vaddr + len));
+	if (!ret)
+		pr_info("nhang added to minidump section ok!!\n");
+	pr_debug("%s out.\n", __func__);
 }
-
 #endif
-void section_info_pt(int section_index)
+
+static void section_info_pt(void)
 {
-	int i = section_index;
 	unsigned long vaddr;
 	int len;
+	int ret;
 	vaddr  = (unsigned long)swapper_pg_dir;
 
 #ifdef CONFIG_ARM
 		len = (unsigned long)stext - vaddr;
 #endif
 #ifdef CONFIG_ARM64
-		len = SWAPPER_DIR_SIZE;
+		len = 0x1000;
 #endif
-	minidump_info_g.section_info_total.section_info[i].section_start_vaddr = vaddr;
-	minidump_info_g.section_info_total.section_info[i].section_end_vaddr = vaddr + len;
-	minidump_info_g.section_info_total.section_info[i].section_start_paddr = __pa(vaddr);
-	minidump_info_g.section_info_total.section_info[i].section_end_paddr = __pa(vaddr + len);
-	minidump_info_g.section_info_total.section_info[i].section_size = len;
+	ret = minidump_save_extend_information("kernel_pt", __pa(vaddr), __pa(vaddr + len));
+	if (!ret)
+		pr_info("kernel pt added to minidump section ok!!\n");
 #ifdef CONFIG_ARM
-	pr_info("pgd vaddr start: 0x%lx  paddr start: 0x%x "
-		" len :0x%x  section_index: %d\n",
-		vaddr, __pa(vaddr), len, i);
+	pr_info("pgd vaddr start: 0x%lx  paddr start: 0x%x  len :0x%x\n",
+							vaddr, __pa(vaddr), len);
 #endif
 #ifdef CONFIG_ARM64
-	pr_info("pgd vaddr start: 0x%lx  paddr start: 0x%llx "
-		" len :0x%x  section_index: %d\n",
-		vaddr, __pa(vaddr), len, i);
+	pr_info("pgd vaddr start: 0x%lx  paddr start: 0x%llx  len :0x%x\n",
+							vaddr, __pa(vaddr), len);
 #endif
 	return;
 }
-/**
- * save extend debug information of modules in minidump, such as: cm4, iram...
- *
- * @name:	the name of the modules, and the string will be a part
- *		of the file name.
- *		note: special characters can't be included in the file name,
- *		such as:'?','*','/','\','<','>',':','"','|'.
- *
- * @paddr_start:the start paddr in memory of the modules debug information
- * @paddr_end:	the end paddr in memory of the modules debug information
- *
- * Return: 0 means success, -1 means fail.
- */
-int minidump_save_extend_information(const char *name, unsigned long paddr_start, unsigned long paddr_end)
-{
 
-	int i, j, index, section_tail;
-	struct section_info *extend_section, *tail_section;
-	char str_name[SECTION_NAME_MAX];
-	char tmp;
-
-	/* check name valid first */
-	if (strlen(name) > (SECTION_NAME_MAX - strlen(EXTEND_STRING) - 1)) {
-		pr_err("The length of name is too long!!, add extend section fail!!\n");
-		return -1;
-	}
-	if (!strlen(name)) {
-		pr_err("The name is empty, invalid!!\n");
-		return -1;
-	}
-	memcpy(str_name, name, strlen(name));
-	for (j = 0; j < strlen(str_name); j++) {
-		tmp = str_name[j];
-		if (tmp == '?' || tmp == '*' || tmp == '/' || tmp == '>' || tmp == '<' || tmp == '"' || tmp == '|') {
-			pr_err("the name=%s include special character:%c that not supported!!\n", name, tmp);
-			return -1;
-		}
-	}
-
-	/* check insert repeatly and acquire total seciton num before insert new section */
-	for (i = 0; i < SECTION_NUM_MAX; i++) {
-		if (!memcmp(str_name, minidump_info_g.section_info_total.section_info[i].section_name, strlen(str_name)))
-			return -1;
-		if (!strlen(minidump_info_g.section_info_total.section_info[i].section_name))
-			break;
-	}
-	minidump_info_g.section_info_total.total_num = i;
-	index = minidump_info_g.section_info_total.total_num;
-
-	/* add new section in the tail of section_info */
-	extend_section = &minidump_info_g.section_info_total.section_info[index];
-	if (SECTION_NUM_MAX <= index) {
-		pr_err("No space for new section \n");
-		return -1;
-	}
-	sprintf(extend_section->section_name, "%s_%s", EXTEND_STRING, name);
-	if (vaddr_to_paddr_flag == 0) {
-		extend_section->section_start_vaddr = (unsigned long)__va(paddr_start);
-		extend_section->section_end_vaddr = (unsigned long)__va(paddr_end);
-	} else {
-		extend_section->section_start_paddr = paddr_start;
-		extend_section->section_end_paddr = paddr_end;
-		extend_section->section_size = extend_section->section_end_paddr - extend_section->section_start_paddr;
-		minidump_info_g.section_info_total.total_size += extend_section->section_size;
-		minidump_info_g.minidump_data_size += extend_section->section_size;
-	}
-
-	/* add empty section in the section_info tail */
-	section_tail = minidump_info_g.section_info_total.total_num + 1;
-	if (section_tail > SECTION_NUM_MAX) {
-		pr_err("No space for new section\n");
-		return -1;
-	}
-	pr_emerg("%s added successfully in minidump section:paddr_start=%lx,paddr_end=%lx\n",
-			name, paddr_start, paddr_end);
-	minidump_info_g.section_info_total.total_num++;
-	tail_section = &minidump_info_g.section_info_total.section_info[section_tail];
-	sprintf(tail_section->section_name, "");
-	return 0;
-}
-EXPORT_SYMBOL(minidump_save_extend_information);
-void section_info_log_buf(void)
-{
-	int ret;
-	unsigned long vaddr = (unsigned long)(log_buf_addr_get());
-	int len = log_buf_len_get();
-
-	pr_info("%s in. vaddr : 0x%lx  len :0x%x\n",
-		__func__, vaddr, len);
-	ret = minidump_save_extend_information("log_buf", __pa(vaddr), __pa(vaddr + len));
-	if (!ret)
-		pr_info("add log_buf to minidump section ok!!\n");
-}
-int extend_section_cm4dump(int index)
+static int extend_section_cm4dump(void)
 {
 #define CM4_DUMP_IRAM "scproc"
 	struct device_node *node;
@@ -1279,7 +1332,8 @@ int extend_section_cm4dump(int index)
 		if (!ret) {
 			cm4_dump_start = res.start;
 			cm4_dump_end = res.end;
-			pr_err("cm4_dump_start : 0x%lx cm4_dump_end :0x%lx , size : 0x%lx \n", cm4_dump_start, cm4_dump_end, cm4_dump_end - cm4_dump_start + 1);
+			pr_err("cm4_dump_start : 0x%lx cm4_dump_end :0x%lx , size : 0x%lx\n",
+				cm4_dump_start, cm4_dump_end, cm4_dump_end - cm4_dump_start + 1);
 		} else {
 			pr_err("Not find cm4_reg property from %s node\n", CM4_DUMP_IRAM);
 			return -1;
@@ -1288,61 +1342,18 @@ int extend_section_cm4dump(int index)
 	minidump_save_extend_information(CM4_DUMP_IRAM, cm4_dump_start, cm4_dump_end);
 	return 0;
 }
-void section_info_per_cpu(int section_index)
-{
-	int i = section_index;
-	long vaddr = (long)(__per_cpu_start)+(long)(__per_cpu_offset[0]);
-	int len = (__per_cpu_offset[1] - __per_cpu_offset[0])*CONFIG_NR_CPUS;
-	minidump_info_g.section_info_total.section_info[i].section_start_vaddr = vaddr;
-	minidump_info_g.section_info_total.section_info[i].section_end_vaddr = vaddr + len;
-	minidump_info_g.section_info_total.section_info[i].section_start_paddr = __pa(minidump_info_g.section_info_total.section_info[i].section_start_vaddr);
-	minidump_info_g.section_info_total.section_info[i].section_end_paddr = __pa(minidump_info_g.section_info_total.section_info[i].section_end_vaddr);
-	minidump_info_g.section_info_total.section_info[i].section_size = len;
-	return;
-}
 /*	init section_info_all_item : name,paddr,size 	return: total_size */
-void minidump_info_init(void)
+static void section_extend_info_init(void)
 {
-	int i;
-
-	minidump_info_g.regs_info.paddr = __pa(&minidump_regs_g);
-	/*	regs_memory_info init*/
-	minidump_info_g.regs_memory_info.size = REGS_NUM_MAX * minidump_info_g.regs_memory_info.per_reg_memory_size;
-
-	/*	section info init*/
-	for (i = 0; i < SECTION_NUM_MAX; i++) {
-		/*	when section name is null, break*/
-		if (!strlen(minidump_info_g.section_info_total.section_info[i].section_name))
-			break;
-		/*      when section name is ylog_buf */
-		if (!memcmp(minidump_info_g.section_info_total.section_info[i].section_name, "ylog_buf", strlen("ylog_buf"))) {
-			section_info_ylog_buf(i);
-		} else if (!memcmp(minidump_info_g.section_info_total.section_info[i].section_name, "kernel_pt", strlen("kernel_pt"))) {
-			section_info_pt(i);
-		} else if (!memcmp(minidump_info_g.section_info_total.section_info[i].section_name, "per_cpu", strlen("per_cpu"))) {
-			section_info_per_cpu(i);
+	/* section info init */
+	section_info_ylog_buf();
+	section_info_pt();
 #ifdef CONFIG_SPRD_NATIVE_HANG_MONITOR
-		} else if (!memcmp(minidump_info_g.section_info_total.section_info[i].section_name, "nhang", strlen("nhang"))) {
-			section_native_hang(i);
+	section_native_hang();
 #endif
-		} else {
-			minidump_info_g.section_info_total.section_info[i].section_start_paddr = __pa(minidump_info_g.section_info_total.section_info[i].section_start_vaddr);
-			minidump_info_g.section_info_total.section_info[i].section_end_paddr = __pa(minidump_info_g.section_info_total.section_info[i].section_end_vaddr);
-			minidump_info_g.section_info_total.section_info[i].section_size = minidump_info_g.section_info_total.section_info[i].section_end_paddr - minidump_info_g.section_info_total.section_info[i].section_start_paddr;
-		}
-		minidump_info_g.section_info_total.total_size += minidump_info_g.section_info_total.section_info[i].section_size;
 
-	}
-	/* vaddr to paddr flag must nearby section info init */
-	vaddr_to_paddr_flag = 1;
+	extend_section_cm4dump();
 
-	minidump_info_g.section_info_total.total_num = i;
-
-	minidump_info_g.minidump_data_size =  minidump_info_g.regs_info.size + minidump_info_g.regs_memory_info.size + minidump_info_g.section_info_total.total_size;
-
-	extend_section_cm4dump(minidump_info_g.section_info_total.total_num);
-//	minidump_save_extend_information("vmcoreinfo", (unsigned long)__pa(vmcoreinfo_data), (unsigned long)__pa(vmcoreinfo_data + vmcoreinfo_size));
-	section_info_log_buf();
 	return;
 }
 static int ylog_buffer_open(struct inode *inode, struct file *file)
@@ -1410,7 +1421,8 @@ int minidump_init(void)
 	minidump_info_dir = proc_mkdir(MINIDUMP_INFO_DIR, NULL);
 	if (!minidump_info_dir)
 		return -ENOMEM;
-	minidump_info = proc_create(MINIDUMP_INFO_PROC, S_IRUGO | S_IWUGO, minidump_info_dir, &minidump_proc_fops);
+	minidump_info = proc_create(MINIDUMP_INFO_PROC, 0644, minidump_info_dir,
+				&minidump_proc_fops);
 	if (!minidump_info)
 		return -ENOMEM;
 	ylog_buffer_init();
@@ -1421,7 +1433,7 @@ int minidump_init(void)
 	}
 	minidump_info_desc_g.paddr = __pa(&minidump_info_g);
 	minidump_info_desc_g.size = sizeof(minidump_info_g);
-	minidump_info_init();
+	section_extend_info_init();
 	pr_info("%s out.\n", __func__);
 	return 0;
 }
@@ -1555,11 +1567,8 @@ static int prepare_exception_info(struct pt_regs *regs,
 				struct task_struct *tsk, const char *reason)
 {
 
-	struct timex txc;
+	struct timespec64 ts;
 	struct rtc_time tm;
-
-	if (!tsk)
-		tsk = current;
 	memset(&minidump_info_g.exception_info, 0,
 		sizeof(minidump_info_g.exception_info));
 	memcpy(minidump_info_g.exception_info.kernel_magic, KERNEL_MAGIC, 4);
@@ -1576,9 +1585,8 @@ static int prepare_exception_info(struct pt_regs *regs,
 	/*	exception_reboot_reason	 update in uboot */
 
 	/*	exception_time		*/
-	do_gettimeofday(&(txc.time));
-	txc.time.tv_sec -= sys_tz.tz_minuteswest * 60;
-	rtc_time_to_tm(txc.time.tv_sec, &tm);
+	ktime_get_ts64(&ts);
+	rtc_time_to_tm(ts.tv_sec, &tm);
 	snprintf(minidump_info_g.exception_info.exception_time,
 		EXCEPTION_INFO_SIZE_SHORT,
 		"%04d-%02d-%02d:%02d:%02d:%02d",
@@ -1592,6 +1600,12 @@ static int prepare_exception_info(struct pt_regs *regs,
 	/*	exception_file & exception_line		*/
 	get_file_line_info(regs);
 	/*	exception_task_id	*/
+	if (!tsk) {
+		if (virt_addr_valid(current))
+			tsk = current;
+		else
+			return 0;
+	}
 	minidump_info_g.exception_info.exception_task_id = tsk->pid;
 	/*	exception_stack		*/
 	get_exception_stack_info(regs);
@@ -1610,50 +1624,96 @@ EXPORT_SYMBOL(prepare_dump_info_for_wdh);
 #endif /*	CONFIG_SPRD_HANG_DEBUG end*/
 #endif  /*	minidump code end	*/
 
+/* common data init */
+static void section_info_per_cpu(void)
+{
+	int ret;
+	long vaddr = (long)(__per_cpu_start) + (long)(__per_cpu_offset[0]);
+	int len = (int)(__per_cpu_offset[1] - __per_cpu_offset[0]) * CPU_NUM_MAX;
+
+	if (sysdump_reflag)
+		sprd_sysdump_info->sprd_coreregs_info.pcpu_start_paddr = __pa(vaddr);
+	ret = minidump_save_extend_information("per_cpu", __pa(vaddr), __pa(vaddr + len));
+	if (!ret)
+		pr_info("per_cpu added to minidump section ok!!\n");
+}
+static void section_info_log_buf(void)
+{
+	int ret;
+	unsigned long vaddr = (unsigned long)(log_buf_addr_get());
+	int len = log_buf_len_get();
+
+	pr_info("%s in. vaddr : 0x%lx  len :0x%x\n",
+		__func__, vaddr, len);
+	ret = minidump_save_extend_information("log_buf", __pa(vaddr), __pa(vaddr + len));
+	if (!ret)
+		pr_info("add log_buf to minidump section ok!!\n");
+}
+static void minidump_addr_convert(int i)
+{
+	minidump_info_g.section_info_total.section_info[i].section_start_paddr =
+		__pa(minidump_info_g.section_info_total.section_info[i].section_start_vaddr);
+	minidump_info_g.section_info_total.section_info[i].section_end_paddr =
+		__pa(minidump_info_g.section_info_total.section_info[i].section_end_vaddr);
+	minidump_info_g.section_info_total.section_info[i].section_size =
+		(int)(minidump_info_g.section_info_total.section_info[i].section_end_paddr -
+		minidump_info_g.section_info_total.section_info[i].section_start_paddr);
+}
+static void minidump_info_init(void)
+{
+	int i;
+
+	/* section_mutex only be inited once */
+	if (atomic_read(&mutex_init_flag) == 0) {
+		mutex_init(&section_mutex);
+		atomic_inc(&mutex_init_flag);
+	}
+	/* section init */
+	mutex_lock(&section_mutex);
+	for (i = 0; i < SECTION_NUM_MAX; i++) {
+		/* when section name is null, break */
+		if (!strlen(minidump_info_g.section_info_total.section_info[i].section_name))
+			break;
+		minidump_addr_convert(i);
+		minidump_info_g.section_info_total.total_size +=
+			minidump_info_g.section_info_total.section_info[i].section_size;
+	}
+	minidump_info_g.section_info_total.total_num = i;
+	/* vaddr to paddr flag must nearby section info init */
+	vaddr_to_paddr_flag = 1;
+	mutex_unlock(&section_mutex);
+
+	/* regs init */
+	minidump_info_g.regs_info.paddr = __pa(&minidump_regs_g);
+	/* regs_memory_info init*/
+	minidump_info_g.regs_memory_info.size = REGS_NUM_MAX *
+			minidump_info_g.regs_memory_info.per_reg_memory_size;
+	/* update minidump data size */
+	minidump_info_g.minidump_data_size = minidump_info_g.regs_info.size +
+			minidump_info_g.regs_memory_info.size +
+			minidump_info_g.section_info_total.total_size;
+
+	section_info_log_buf();
+	section_info_per_cpu();
+	/* add etb section */
+	minidump_save_extend_information("etb_data", 0, 0);
+	/* update minidump info */
+	if (sysdump_reflag && sprd_sysdump_info_paddr) {
+		sprd_sysdump_info->sprd_minidump_info.minidump_info_paddr = __pa(&minidump_info_g);
+		sprd_sysdump_info->sprd_minidump_info.minidump_info_size = sizeof(minidump_info_g);
+		memcpy(sprd_sysdump_info->sprd_minidump_info.magic, MINIDUMP_MAGIC,
+									sizeof(MINIDUMP_MAGIC));
+	}
+
+}
 static struct notifier_block sysdump_panic_event_nb = {
 	.notifier_call	= sysdump_panic_event,
 	.priority	= INT_MAX - 2,
 };
 
-int sysdump_sysctl_init(void)
-{
-	struct proc_dir_entry *sysdump_proc;
-	sysdump_sysctl_hdr =
-	    register_sysctl_table((struct ctl_table *)sysdump_sysctl_root);
-	if (!sysdump_sysctl_hdr)
-		return -ENOMEM;
-
-	crash_notes = &crash_notes_temp;
-
-	if (input_register_handler(&sysdump_handler))
-		pr_err("regist sysdump_handler failed.\n");
-
-	sysdump_proc = proc_create("sprd_sysdump", S_IWUSR | S_IRUSR, NULL, &sysdump_proc_fops);
-	if (!sysdump_proc)
-		return -ENOMEM;
-
-	memset(g_ktxt_hash_data, 0x55, SHA1_DIGEST_SIZE);
-	if (sysdump_shash_init())
-		return -ENOMEM;
-#if 0
-	/*	register sysdump panic notifier  */
-	atomic_notifier_chain_register(&panic_notifier_list,
-					&sysdump_panic_event_nb);
-#endif
-	sprd_sysdump_init = 1;
-
-	sprd_sysdump_enable_prepare();
-#if defined(CONFIG_SPRD_DEBUG)
-	pr_info("userdebug enable sysdump in default !!!\n");
-	set_sysdump_enable(1);
-#endif
-#ifdef CONFIG_SPRD_MINI_SYSDUMP
-	minidump_init();
-#endif
-	return 0;
-}
 static int sysdump_panic_event_init(void)
 {
+	crash_notes = &crash_notes_temp;
 	/* register sysdump panic notifier */
 	atomic_notifier_chain_register(&panic_notifier_list,
 						&sysdump_panic_event_nb);
@@ -1665,13 +1725,15 @@ static __init int sysdump_early_init(void)
 	/* register sysdump panic notifier */
 	sysdump_panic_event_init();
 	/* init kaslr_offset if need */
-	ret = kaslr_info_init();
+	ret = sysdump_info_init();
 	if (ret)
-		pr_emerg("kaslr_info init failed!!!\n");
+		pr_emerg("sysdump_info init failed!!!\n");
+
+	minidump_info_init();
+
 	return 0;
 }
 early_initcall(sysdump_early_init);
-#if 0
 static void per_cpu_funcs_register(void *info)
 {
 	/* save mmu regs per cpu */
@@ -1679,19 +1741,42 @@ static void per_cpu_funcs_register(void *info)
 }
 static __init int per_cpu_funcs_init(void)
 {
-	int ret;
-
 	/* mmu regs init in all other cpus */
-	ret = smp_call_function(per_cpu_funcs_register, NULL, 1);
+	smp_call_function(per_cpu_funcs_register, NULL, 1);
 	/* mmu regs init in current cpu*/
 	sprd_debug_save_mmu_reg(&per_cpu(sprd_debug_mmu_reg, smp_processor_id()));
-
-	if (!ret)
-		pr_info("per cpu funcs init ok!\n");
-	return ret;
+	return 0;
 }
 pure_initcall(per_cpu_funcs_init);
+static int sysdump_sysctl_init(void)
+{
+	struct proc_dir_entry *sysdump_proc;
+	sysdump_sysctl_hdr =
+	    register_sysctl_table((struct ctl_table *)sysdump_sysctl_root);
+	if (!sysdump_sysctl_hdr)
+		return -ENOMEM;
+
+	if (input_register_handler(&sysdump_handler))
+		pr_err("regist sysdump_handler failed.\n");
+
+	sysdump_proc = proc_create("sprd_sysdump", S_IWUSR | S_IRUSR, NULL, &sysdump_proc_fops);
+	if (!sysdump_proc)
+		return -ENOMEM;
+
+	memset(g_ktxt_hash_data, 0x55, SHA1_DIGEST_SIZE);
+	if (sysdump_shash_init())
+		return -ENOMEM;
+
+	sprd_sysdump_enable_prepare();
+#if defined(CONFIG_SPRD_DEBUG)
+	pr_info("userdebug enable sysdump in default !!!\n");
+	set_sysdump_enable(1);
 #endif
+#ifdef CONFIG_SPRD_MINI_SYSDUMP
+	minidump_init();
+#endif
+	return 0;
+}
 void sysdump_sysctl_exit(void)
 {
 	if (sysdump_sysctl_hdr)
@@ -1707,6 +1792,7 @@ void sysdump_sysctl_exit(void)
 	ylog_buffer_exit();
 #endif
 }
+
 late_initcall_sync(sysdump_sysctl_init);
 module_exit(sysdump_sysctl_exit);
 

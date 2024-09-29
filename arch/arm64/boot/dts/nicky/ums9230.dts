@@ -16,9 +16,6 @@
 #include "ums9230-t616dvfs.dtsi"
 #include "sc2730.dtsi"
 #include "sprd-sound-fe-be.dtsi"
-#if __has_include ("audio/extra_sound_card_component.dtsi")
-#include "audio/extra_sound_card_component.dtsi"
-#endif
 #include "ums9230-mach.dtsi"
 #include "ums9230-modem.dtsi"
 
@@ -44,7 +41,7 @@
 
 	chosen: chosen {
 		stdout-path = "serial1:115200n8";
-		bootargs = "earlycon console=ttyS1,115200n8 loop.max_part=7 loglevel=1 init=/init root=/dev/ram0 rw printk.devkmsg=on swiotlb=1";
+		bootargs = "earlycon console=ttySPRD1,115200n8 loop.max_part=7 loglevel=1 init=/init root=/dev/ram0 rw printk.devkmsg=on swiotlb=1 dummy_hcd.num=0 initcall_debug=1";
 	};
 
 	sprd-iq {
@@ -73,6 +70,10 @@
 };
 
 &vsp {
+	status = "okay";
+};
+
+&vsp_pd {
 	status = "okay";
 };
 
