@@ -1,0 +1,107 @@
+diff --git a/Makefile b/Makefile
+index c55948615..f2520579e 100755
+--- a/Makefile
++++ b/Makefile
+@@ -484,7 +484,7 @@ LINUXINCLUDE    := \
+ 		$(USERINCLUDE)
+ 
+ KBUILD_AFLAGS   := -D__ASSEMBLY__ -fno-PIE
+-KBUILD_CFLAGS   := -Wall -Werror -Wundef -Werror=strict-prototypes -Wno-trigraphs \
++KBUILD_CFLAGS   := -Wall -Werror -Wundef -Werror=strict-prototypes -Wno-trigraphs -Wno-unused-function -Wno-unused-variable \
+ 		   -fno-strict-aliasing -fno-common -fshort-wchar -fno-PIE \
+ 		   -Werror=implicit-function-declaration -Werror=implicit-int \
+ 		   -Werror=return-type -Wno-format-security \
+diff --git a/arch/arm64/configs/sprd_qogirl6_defconfig b/arch/arm64/configs/sprd_qogirl6_defconfig
+index cdcab60fd..f5105337a 100755
+--- a/arch/arm64/configs/sprd_qogirl6_defconfig
++++ b/arch/arm64/configs/sprd_qogirl6_defconfig
+@@ -4773,12 +4773,12 @@ CONFIG_SPRD_POWER_DEBUG=m
+ # CONFIG_SPRD_SHARKL5PRO_POWER_DEBUG is not set
+ # CONFIG_SPRD_ROC1_POWER_DEBUG is not set
+ # CONFIG_SPRD_ORCA_POWER_DEBUG is not set
+-CONFIG_SPRD_SHARKL6_POWER_DEBUG=m
++# CONFIG_SPRD_SHARKL6_POWER_DEBUG=m
+ # CONFIG_SPRD_SHARKL6PRO_POWER_DEBUG is not set
+ CONFIG_SPRD_POWER_STAT=m
+ CONFIG_SPRD_POWER_STAT_CORE=m
+ # CONFIG_SPRD_POWER_STAT_SHARKL6PRO is not set
+-CONFIG_SPRD_POWER_STAT_SHARKL6=y
++# CONFIG_SPRD_POWER_STAT_SHARKL6=y
+ # CONFIG_SPRD_POWER_STAT_SHARKL5PRO is not set
+ # CONFIG_SPRD_POWER_STAT_SHARKL5 is not set
+ # CONFIG_SPRD_POWER_STAT_SHARKL3 is not set
+@@ -4791,7 +4791,7 @@ CONFIG_SPRD_AUTOTEST_PINCTRL=m
+ # CONFIG_SPRD_POWER_DOMAIN is not set
+ CONFIG_SPRD_VSP_PW_DOMAIN=m
+ CONFIG_SPRD_CAMSYS_PW_DOMAIN=m
+-CONFIG_SPRD_DISP_PM_DOMAIN_SHARKL3=m
++# CONFIG_SPRD_DISP_PM_DOMAIN_SHARKL3=m
+ 
+ #
+ # SPRD IQ modules
+@@ -6247,7 +6247,7 @@ CONFIG_DEBUG_FS=y
+ CONFIG_HEADERS_INSTALL=y
+ CONFIG_OPTIMIZE_INLINING=y
+ # CONFIG_DEBUG_SECTION_MISMATCH is not set
+-# CONFIG_SECTION_MISMATCH_WARN_ONLY is not set
++CONFIG_SECTION_MISMATCH_WARN_ONLY=y
+ CONFIG_ARCH_WANT_FRAME_POINTERS=y
+ CONFIG_FRAME_POINTER=y
+ # CONFIG_DEBUG_FORCE_WEAK_PER_CPU is not set
+diff --git a/drivers/block/zram/Makefile b/drivers/block/zram/Makefile
+index aa1d82d64..6879039f7 100644
+--- a/drivers/block/zram/Makefile
++++ b/drivers/block/zram/Makefile
+@@ -4,4 +4,4 @@ zram-$(CONFIG_ZRAM_DEDUP)	+=	zram_dedup.o
+ 
+ obj-$(CONFIG_ZRAM)	+=	zram.o
+ 
+-obj-$(CONFIG_ZRAM)      += hybridswap/
++#obj-$(CONFIG_ZRAM)      += hybridswap/
+diff --git a/drivers/power/supply/fan54015-charger.c b/drivers/power/supply/fan54015-charger.c
+index 9ae96ebe3..456c7ac7c 100755
+--- a/drivers/power/supply/fan54015-charger.c
++++ b/drivers/power/supply/fan54015-charger.c
+@@ -228,13 +228,19 @@ static int fan54015_charger_set_safety_cur(struct fan54015_charger_info *info, u
+ 				    reg_val << FAN54015_REG_CURRENT_MASK_SHIFT);
+ }
+ 
++extern int sc27xx_fgu_bat_id;
++
+ static int fan54015_charger_hw_init(struct fan54015_charger_info *info)
+ {
+ 	struct sprd_battery_info bat_info = {};
+ 	int voltage_max_microvolt;
+ 	int ret;
++	int num = 0;
++
++	if (sc27xx_fgu_bat_id == 2)
++		num = 1;
+ 
+-	ret = sprd_battery_get_battery_info(info->psy_usb, &bat_info);
++	ret = sprd_battery_get_battery_info(info->psy_usb, &bat_info, num);
+ 	if (ret) {
+ 		dev_warn(info->dev, "no battery information is supplied\n");
+ 
+diff --git a/drivers/soc/sprd/modem/iq/sprd_iq.c b/drivers/soc/sprd/modem/iq/sprd_iq.c
+index 949fddd3a..d34e36a91 100755
+--- a/drivers/soc/sprd/modem/iq/sprd_iq.c
++++ b/drivers/soc/sprd/modem/iq/sprd_iq.c
+@@ -111,7 +111,7 @@ static int sprd_iq_thread(void *data)
+ 	return 0;
+ }
+ 
+-#if IS_ENABLED(CONFIG_USB_F_VSERIAL)
++//#if IS_ENABLED(CONFIG_USB_F_VSERIAL)
+ static void sprd_iq_complete(char *buf,  unsigned int length, void *unused)
+ {
+ 	char *vaddr;
+@@ -130,7 +130,7 @@ static void sprd_iq_complete(char *buf,  unsigned int length, void *unused)
+ 			iq.header_info->head_2->data_len))
+ 		iq.header_info->head_2->WR_RD_FLAG = IQ_BUF_READ_FINISHED;
+ }
+-#endif
++//#endif
+ 
+ static long iq_mem_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+ {
